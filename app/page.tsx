@@ -1,105 +1,108 @@
-"use client"; // Esto le dice a Next.js que esta página tendrá botones interactivos
-import React, { useState } from 'react';
-import { Trophy, Users, DollarSign, Plus, X } from 'lucide-react';
+"use client";
+import React from "react";
+import Link from "next/link";
+import { Trophy, Shield, Calendar, DollarSign, ChevronRight, BarChart3, Smartphone } from "lucide-react";
 
-export default function Dashboard() {
-  // Aquí creamos el "interruptor" para abrir y cerrar la ventana de Nuevo Torneo
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
+export default function LandingPage() {
   return (
-    <div className="p-8">
-      <header className="flex justify-between items-center mb-8">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-800">Resumen General</h2>
-          <p className="text-gray-500">Bienvenido al panel de control de tus campeonatos.</p>
-        </div>
-        {/* El botón ahora tiene una acción (onClick) */}
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-lg"
-        >
-          <Plus size={20} />
-          Nuevo Torneo
-        </button>
-      </header>
-
-      {/* Tarjetas de Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <StatCard title="Torneos Activos" value="2" icon={<Trophy className="text-blue-500" />} />
-        <StatCard title="Total Equipos" value="32" icon={<Users className="text-green-500" />} />
-        <StatCard title="Recaudación Pendiente" value="$450.00" icon={<DollarSign className="text-red-500" />} />
-      </div>
-
-      {/* Lista de Torneos Recientes */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Torneos Recientes</h3>
-        <div className="space-y-4">
-          <TournamentRow name="Copa Game-Legal 2026" teams={16} status="En Curso" />
-          <TournamentRow name="Torneo Relámpago Jr" teams={8} status="Pendiente" />
-        </div>
-      </div>
-
-      {/* --- LA MAGIA: LA VENTANA EMERGENTE (MODAL) --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md relative">
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"
-            >
-              <X size={24} />
-            </button>
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">Crear Nuevo Torneo</h3>
-            <p className="text-gray-500 text-sm mb-6">Configura los datos iniciales del campeonato.</p>
-            
-            <form className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Campeonato</label>
-                <input type="text" className="w-full border border-gray-300 rounded-lg p-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Ej. Liga Sur 2026" />
-              </div>
-              <button 
-                type="button" 
-                onClick={() => alert("¡Pronto conectaremos esto a Supabase!")}
-                className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors mt-4"
-              >
-                Guardar y Continuar
-              </button>
-            </form>
+    <div className="min-h-screen bg-white font-sans selection:bg-blue-200">
+      {/* BARRA DE NAVEGACIÓN */}
+      <nav className="fixed w-full bg-white/90 backdrop-blur-md z-50 border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center text-xl shadow-md">🏆</div>
+            <span className="font-black text-xl tracking-tighter text-gray-900">GAME-LEGAL</span>
+          </div>
+          <div className="hidden md:flex gap-8 text-sm font-bold text-gray-500">
+            <a href="#caracteristicas" className="hover:text-blue-600 transition">Características</a>
+            <a href="#seguridad" className="hover:text-blue-600 transition">Seguridad</a>
+            <a href="#precios" className="hover:text-blue-600 transition">Planes</a>
+          </div>
+          <div className="flex gap-3">
+            {/* Este botón llevará a tu pantalla de Login que ya creamos */}
+            <Link href="/login" className="px-5 py-2.5 text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition">
+              Iniciar Sesión
+            </Link>
           </div>
         </div>
-      )}
+      </nav>
+
+      {/* SECCIÓN HERO (Principal) */}
+      <section className="pt-32 pb-20 px-6 bg-gradient-to-b from-slate-50 to-white">
+        <div className="max-w-7xl mx-auto text-center mt-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold mb-6">
+            <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse"></span>
+            Lanzamiento Oficial 2026 — Ecuador
+          </div>
+          <h1 className="text-5xl md:text-7xl font-black text-gray-900 tracking-tight leading-tight mb-6">
+            Lleva tu campeonato al <br className="hidden md:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-400">siguiente nivel.</span>
+          </h1>
+          <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed">
+            La primera plataforma SaaS en Ecuador diseñada exclusivamente para organizadores de fútbol. Controla equipos, finanzas, sanciones y calendarios desde un entorno seguro y automatizado.
+          </p>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <Link href="/login" className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 transition-transform hover:-translate-y-1">
+              Comenzar a Administrar <ChevronRight size={20} />
+            </Link>
+            <button className="px-8 py-4 bg-white hover:bg-gray-50 text-gray-800 font-black rounded-2xl shadow-sm border border-gray-200 flex items-center justify-center gap-2 transition">
+              <Smartphone size={20} className="text-gray-400" /> Ver Demo en Vivo
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* SECCIÓN CARACTERÍSTICAS */}
+      <section id="caracteristicas" className="py-24 bg-white px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-4">Todo lo que necesitas, en un solo lugar.</h2>
+            <p className="text-gray-500">Diseñado por expertos legales y deportivos para evitar fraudes y problemas organizativos.</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <FeatureCard 
+              icon={<Shield className="text-emerald-500" size={32} />}
+              title="Sistema Anti-Fraude"
+              desc="Validación de cédulas en tiempo real. Un jugador no podrá registrarse en dos equipos del mismo torneo."
+            />
+            <FeatureCard 
+              icon={<DollarSign className="text-blue-500" size={32} />}
+              title="Control Financiero USD"
+              desc="Seguimiento de inscripciones, multas y pagos parciales. Bloquea a equipos deudores automáticamente."
+            />
+            <FeatureCard 
+              icon={<Calendar className="text-purple-500" size={32} />}
+              title="Generador de Fixture"
+              desc="Sorteos automáticos, fase de grupos o eliminación directa. Exportación de planillas de partido a PDF."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="bg-[#0a1628] text-white py-12 px-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-sm shadow-md">🏆</div>
+            <span className="font-black text-lg tracking-tighter">GAME-LEGAL</span>
+          </div>
+          <p className="text-gray-400 text-sm font-medium">© 2026 GAME-LEGAL Tournament Pro. Loja, Ecuador.</p>
+        </div>
+      </footer>
     </div>
   );
 }
 
-// --- Componentes Reutilizables ---
-function StatCard({ title, value, icon }: { title: string, value: string, icon: React.ReactNode }) {
+// Componente para las tarjetas de características
+function FeatureCard({ icon, title, desc }: { icon: React.ReactNode, title: string, desc: string }) {
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
-      <div>
-        <p className="text-gray-500 text-sm font-medium mb-1">{title}</p>
-        <p className="text-2xl font-bold text-gray-800">{value}</p>
+    <div className="bg-slate-50 border border-slate-100 p-8 rounded-3xl hover:shadow-lg transition-all hover:-translate-y-1">
+      <div className="w-14 h-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-6">
+        {icon}
       </div>
-      <div className="p-3 bg-slate-50 rounded-lg">{icon}</div>
-    </div>
-  );
-}
-
-function TournamentRow({ name, teams, status }: { name: string, teams: number, status: string }) {
-  return (
-    <div className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
-      <div className="flex items-center gap-4">
-        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
-          {name.charAt(0)}
-        </div>
-        <div>
-          <p className="font-bold text-gray-800">{name}</p>
-          <p className="text-sm text-gray-500">{teams} Equipos registrados</p>
-        </div>
-      </div>
-      <span className={`px-3 py-1 rounded-full text-xs font-bold ${status === 'En Curso' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-        {status}
-      </span>
+      <h3 className="text-xl font-black text-gray-900 mb-3">{title}</h3>
+      <p className="text-gray-500 leading-relaxed text-sm font-medium">{desc}</p>
     </div>
   );
 }
