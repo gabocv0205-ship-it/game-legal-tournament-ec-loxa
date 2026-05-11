@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Link from "next/link";
-import { Trophy, Shield, Calendar, DollarSign, ChevronRight, BarChart3, Smartphone } from "lucide-react";
+import { Trophy, Shield, Calendar, DollarSign, ChevronRight, Smartphone } from "lucide-react";
 
 export default function LandingPage() {
   return (
