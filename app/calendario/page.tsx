@@ -1,7 +1,10 @@
-import React from 'react';
+"use client";
+import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function CalendarioPage() {
+  const [fixtureGenerado, setFixtureGenerado] = useState(false);
+
   return (
     <div className="min-h-screen bg-slate-50 p-8 font-sans">
       <div className="max-w-6xl mx-auto">
@@ -18,10 +21,27 @@ export default function CalendarioPage() {
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 text-center">
           <div className="text-4xl mb-4">📅</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Sorteo de Fixture</h2>
-          <p className="text-slate-500 mb-6 text-sm">El torneo activo aún no cuenta con equipos suficientes para generar el calendario.</p>
-          <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md transition-colors text-sm">
-            Generar Fixture Automático
-          </button>
+          
+          {!fixtureGenerado ? (
+            <>
+              <p className="text-slate-500 mb-6 text-sm">Sistema listo para la automatización de cruces de fase de grupos.</p>
+              <button onClick={() => setFixtureGenerado(true)} className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md transition-colors text-sm">
+                Generar Fixture Automático
+              </button>
+            </>
+          ) : (
+            <div className="mt-6 p-6 bg-purple-50 border border-purple-200 rounded-2xl text-left">
+              <h3 className="font-bold text-purple-900 mb-4">Jornada 1 - Confirmada</h3>
+              <div className="space-y-2">
+                <div className="p-3 bg-white rounded-lg border border-purple-100 flex justify-between font-medium text-sm text-gray-700">
+                  <span>Equipo A</span> <span>vs</span> <span>Equipo B</span>
+                </div>
+                <div className="p-3 bg-white rounded-lg border border-purple-100 flex justify-between font-medium text-sm text-gray-700">
+                  <span>Equipo C</span> <span>vs</span> <span>Equipo D</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
