@@ -1,13 +1,23 @@
 import React from 'react';
 import Link from 'next/link';
+import { createClient } from '../lib/server';
 
-export default function DashboardPage() {
-  // Estos son torneos de prueba (Mock data)
-  // Pronto los traeremos directamente desde tu base de datos Supabase
-  const torneos = [
-    { id: 1, nombre: "Copa Apertura 2026", estado: "En Juego", color: "bg-green-100 text-green-700" },
-    { id: 2, nombre: "Liga Nocturna", estado: "Inscripciones", color: "bg-blue-100 text-blue-700" },
-  ];
+// Función para darle color a la etiqueta según el estado del torneo
+function getColorEstado(estado: string) {
+  if (estado === 'En Juego') return 'bg-green-100 text-green-700';
+  if (estado === 'Inscripciones') return 'bg-blue-100 text-blue-700';
+  return 'bg-slate-100 text-slate-700';
+}
+
+export default async function DashboardPage() {
+  // 1. Nos conectamos a la base de datos
+  const supabase = await createClient();
+
+  // 2. Traemos todos los torneos reales
+  const { data: torneos, error } = await supabase.from('torneos').select('*');
+
+  // Si no hay datos por alguna razón, usamos un arreglo vacío para que no falle
+  const listaTorneos = torneos || [];
 
   return (
     <div className="p-8 min-h-screen bg-slate-50">
@@ -23,31 +33,40 @@ export default function DashboardPage() {
           </button>
         </header>
 
-        {/* SECCIÓN: SELECTOR DE TORNEOS */}
+        {/* SECCIÓN: SELECTOR DE TORNEOS REALES */}
         <div className="mb-12">
           <h2 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
             🏆 Mis Torneos Activos
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {torneos.map((torneo) => (
-              <div key={torneo.id} className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group">
-                <div className="flex justify-between items-start mb-3">
-                  <h3 className="font-bold text-gray-900 text-lg group-hover:text-blue-600 transition-colors">{torneo.nombre}</h3>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-md ${torneo.color}`}>
-                    {torneo.estado}
-                  </span>
+          
+          {listaTorneos.length === 0 ? (
+            <div className="p-8 bg-white rounded-2xl border border-dashed border-slate-300 text-center">
+              <p className="text-slate-500">Aún no tienes torneos creados.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {listaTorneos.map((torneo) => (
+                <div key={torneo.id} className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="font-bold text-gray-900 text-lg group-hover:text-blue-600 transition-colors">
+                      {torneo.nombre}
+                    </h3>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-md ${getColorEstado(torneo.estado)}`}>
+                      {torneo.estado}
+                    </span>
+                  </div>
+                  <button className="w-full py-2 bg-slate-50 group-hover:bg-blue-50 text-slate-600 group-hover:text-blue-700 font-medium rounded-lg text-sm transition-colors">
+                    Administrar
+                  </button>
                 </div>
-                <button className="w-full py-2 bg-slate-50 group-hover:bg-blue-50 text-slate-600 group-hover:text-blue-700 font-medium rounded-lg text-sm transition-colors">
-                  Administrar
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <hr className="border-slate-200 mb-8" />
         
-        {/* SECCIÓN: ACCESOS RÁPIDOS (Las 4 tarjetas) */}
+        {/* SECCIÓN: ACCESOS RÁPIDOS */}
         <h2 className="text-lg font-bold text-gray-700 mb-4">Herramientas Globales</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Link href="/equipos" className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all hover:-translate-y-1 hover:border-blue-500 group">
