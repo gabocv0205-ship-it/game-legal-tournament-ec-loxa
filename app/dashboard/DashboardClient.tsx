@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Trophy, Shield, Calendar, DollarSign, Settings, User, Sparkles, Layers } from "lucide-react";
+import { Trophy, Shield, Calendar, DollarSign, Settings, User, Sparkles, Layers, Loader2 } from "lucide-react";
+import { registrarTorneoBackend } from "../actions"; // Importamos el motor de persistencia
 
 interface Torneo {
   id: number;
@@ -16,12 +17,11 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ torneosIniciales, usuarioNombre }: DashboardClientProps) {
-  // Estados para la interactividad
   const [numEquipos, setNumEquipos] = useState<string>("");
   const [formatoSeleccionado, setFormatoSeleccionado] = useState<string>("");
   const [recomendacion, setRecomendacion] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false); // Estado de procesamiento
 
-  // Motor de recomendación automática por volumen de equipos
   useEffect(() => {
     const equipos = parseInt(numEquipos);
     if (!equipos || equipos <= 0) {
@@ -44,17 +44,35 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
     }
   }, [numEquipos]);
 
+  // Función ejecutora al hacer clic en el botón principal
+  const procesarCreacionTorneo = async () => {
+    if (!numEquipos || !formatoSeleccionado) {
+      alert("Por favor, ingresa el número de equipos para seleccionar un formato.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    // Llamada al Backend (Server Action)
+    const result = await registrarTorneoBackend(parseInt(numEquipos), formatoSeleccionado);
+    
+    if (result.success) {
+      setNumEquipos(""); // Limpiamos el formulario
+      setFormatoSeleccionado("");
+    } else {
+      alert("Ocurrió un error en la base de datos: " + result.error);
+    }
+    
+    setIsSubmitting(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      
-      {/* BARRA SUPERIOR CON CONTROL DE SESIÓN DINÁMICA */}
       <nav className="bg-white border-b border-slate-200 fixed w-full z-30 top-0 left-0 h-16 flex items-center justify-between px-8 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-bold">🏆</div>
           <span className="font-black text-lg tracking-tighter text-gray-900">GAME-LEGAL</span>
         </div>
-
-        {/* Indicador de Sesión Dinámico obligatorio */}
         <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">
           <User size={16} className="text-blue-600" />
           <span className="text-xs font-bold text-gray-700 tracking-wide uppercase">
@@ -64,23 +82,18 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
       </nav>
 
       <div className="pt-24 px-8 max-w-7xl mx-auto pb-12">
-        
-        {/* ENCABEZADO */}
         <header className="mb-8">
           <h1 className="text-3xl font-black text-gray-900">Panel de Control</h1>
           <p className="text-slate-500 font-medium text-sm">Configuración arquitectónica y gestión de formatos.</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* COLUMNA IZQUIERDA: ASISTENTE INTERACTIVO DE TORNEOS */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Sparkles size={20} className="text-blue-600" /> Asistente de Formato Automatizado
               </h2>
               
-              {/* Input de Equipos */}
               <div className="mb-6">
                 <label className="block text-xs font-bold uppercase text-gray-500 mb-2">
                   Número Total de Equipos Participantes
@@ -94,7 +107,6 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
                 />
               </div>
 
-              {/* Alerta de Recomendación Automática */}
               {recomendacion && (
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
                   <div className="text-xl">🤖</div>
@@ -105,54 +117,49 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
                 </div>
               )}
 
-              {/* Módulo de Selección de Torneo Obligatorio */}
               <div>
                 <label className="block text-xs font-bold uppercase text-gray-500 mb-3">
                   Estructura del Campeonato Seleccionada
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Botón Grupos 32 */}
                   <button
                     onClick={() => setFormatoSeleccionado("grupos-32")}
                     className={`p-4 rounded-xl border text-left transition-all ${
-                      formatoSeleccionado === "grupos-32"
-                        ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20"
-                        : "border-slate-200 bg-white hover:border-slate-300"
+                      formatoSeleccionado === "grupos-32" ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20" : "border-slate-200 bg-white hover:border-slate-300"
                     }`}
                   >
                     <div className="font-bold text-gray-900 text-sm">Fase de grupos con 32 equipos</div>
-                    <div className="text-xs text-slate-500 mt-1 font-medium">8 llaves de 4 escuadras con eliminación directa posterior.</div>
+                    <div className="text-xs text-slate-500 mt-1 font-medium">8 llaves de 4 escuadras con eliminación directa.</div>
                   </button>
 
+                  {/* Botón Grupos 5 */}
                   <button
                     onClick={() => setFormatoSeleccionado("grupos-5")}
                     className={`p-4 rounded-xl border text-left transition-all ${
-                      formatoSeleccionado === "grupos-5"
-                        ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20"
-                        : "border-slate-200 bg-white hover:border-slate-300"
+                      formatoSeleccionado === "grupos-5" ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20" : "border-slate-200 bg-white hover:border-slate-300"
                     }`}
                   >
                     <div className="font-bold text-gray-900 text-sm">Fase de grupos con 5 equipos</div>
                     <div className="text-xs text-slate-500 mt-1 font-medium">Todos contra todos, un club descansa por jornada.</div>
                   </button>
 
+                  {/* Botón Grupos 6 */}
                   <button
                     onClick={() => setFormatoSeleccionado("grupos-6")}
                     className={`p-4 rounded-xl border text-left transition-all ${
-                      formatoSeleccionado === "grupos-6"
-                        ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20"
-                        : "border-slate-200 bg-white hover:border-slate-300"
+                      formatoSeleccionado === "grupos-6" ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20" : "border-slate-200 bg-white hover:border-slate-300"
                     }`}
                   >
                     <div className="font-bold text-gray-900 text-sm">Fase de grupos con 6 equipos</div>
                     <div className="text-xs text-slate-500 mt-1 font-medium">Dos grupos de tres o una etapa única de todos contra todos.</div>
                   </button>
 
+                  {/* Botón Liguilla */}
                   <button
                     onClick={() => setFormatoSeleccionado("liguilla")}
                     className={`p-4 rounded-xl border text-left transition-all ${
-                      formatoSeleccionado === "liguilla"
-                        ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20"
-                        : "border-slate-200 bg-white hover:border-slate-300"
+                      formatoSeleccionado === "liguilla" ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20" : "border-slate-200 bg-white hover:border-slate-300"
                     }`}
                   >
                     <div className="font-bold text-gray-900 text-sm">Formato tipo liguilla</div>
@@ -161,12 +168,17 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
                 </div>
               </div>
 
-              <button className="w-full mt-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/10 transition-colors text-sm">
-                Confirmar y Configurar Fixture
+              {/* Botón Principal Ejecutor */}
+              <button 
+                onClick={procesarCreacionTorneo}
+                disabled={isSubmitting}
+                className="w-full mt-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-xl shadow-md shadow-blue-600/10 transition-colors text-sm flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : null}
+                {isSubmitting ? "Persistiendo en Base de Datos..." : "Confirmar y Configurar Fixture"}
               </button>
             </div>
 
-            {/* LISTA DE TORNEOS DESDE LA BD */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Layers size={20} className="text-slate-700" /> Campeonatos en Producción
@@ -178,7 +190,7 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {torneosIniciales.map((t) => (
-                    <div key={t.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
+                    <div key={t.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center hover:border-blue-300 transition-colors cursor-pointer">
                       <div>
                         <div className="font-bold text-gray-900 text-sm">{t.nombre}</div>
                         <div className="text-xs text-slate-500 mt-0.5 font-medium">Estado: {t.estado}</div>
@@ -191,7 +203,6 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
             </div>
           </div>
 
-          {/* COLUMNA DERECHA: HERRAMIENTAS GLOBALES (BOTONES COMPONENENTES) */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Herramientas Globales</h3>
             
@@ -203,6 +214,7 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
               </div>
             </Link>
 
+            {/* Enlace habilitado al Módulo Financiero */}
             <Link href="/finanzas" className="flex items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all group">
               <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold group-hover:scale-105 transition-transform">💰</div>
               <div>
@@ -227,7 +239,6 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
               </div>
             </Link>
           </div>
-
         </div>
       </div>
     </div>
