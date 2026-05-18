@@ -6,14 +6,21 @@ import { revalidatePath } from "next/cache";
 export async function registrarTorneoBackend(equipos: number, formato: string) {
   const supabase = await createClient();
   
-  // Generamos un nombre dinámico basado en los datos si el usuario no lo provee
+  // 1. Extraemos la credencial del usuario autenticado
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { success: false, error: "Usuario no autenticado o sesión expirada." };
+  }
+
   const nombreGenerado = `Campeonato Formato ${formato.toUpperCase()} - ${equipos} Equipos`;
 
-  // Persistencia de datos en la tabla 'torneos'
+  // 2. Persistencia enviando explícitamente el organizador_id
   const { data, error } = await supabase.from("torneos").insert([
     {
       nombre: nombreGenerado,
       estado: "Configuración Inicial",
+      organizador_id: user.id // <- Esta firma autoriza la transacción en la base de datos
     }
   ]);
 
@@ -22,7 +29,7 @@ export async function registrarTorneoBackend(equipos: number, formato: string) {
     return { success: false, error: error.message };
   }
 
-  // Revalidamos la ruta para que la lista de la pantalla se actualice al instante sin recargar
+  // 3. Actualizamos la interfaz
   revalidatePath("/dashboard");
   return { success: true };
 }
