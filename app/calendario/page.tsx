@@ -1,48 +1,27 @@
-"use client";
-import React from "react";
-import { FileText, Edit2 } from "lucide-react";
+import React from 'react';
+import Link from 'next/link';
 
-export default function Calendario() {
+export default function CalendarioPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-        <div>
-          <h2 className="text-2xl font-black text-gray-900">Fixture y Horarios</h2>
-          <p className="text-sm text-gray-500">Ajusta horarios antes de generar el PDF oficial.</p>
-        </div>
-        <button className="bg-blue-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-blue-700 shadow-md transition">
-          <FileText size={18} /> Generar PDF Oficial
-        </button>
-      </div>
-
-      <div className="grid gap-4">
-        {/* Partido Ejemplo */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
-          <div className="flex flex-col items-start gap-2 w-1/4">
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800">Jornada 1</span>
-            <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 group cursor-pointer hover:border-blue-400 transition-colors">
-              <span className="text-sm font-bold text-gray-700">06 jun 2026 · 10:00</span>
-              <Edit2 size={14} className="text-gray-400 group-hover:text-blue-500" />
-            </div>
+    <div className="min-h-screen bg-slate-50 p-8 font-sans">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-10 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 mb-2">Calendario Automático</h1>
+            <p className="text-slate-500 font-medium text-sm">Generación de fixtures y programación de fechas.</p>
           </div>
+          <Link href="/dashboard" className="px-5 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-slate-50 transition-colors">
+            Volver al Panel
+          </Link>
+        </header>
 
-          <div className="flex items-center justify-center gap-6 flex-1">
-            <div className="flex items-center gap-3 w-1/3 justify-end">
-              <span className="font-bold text-lg text-gray-900">FC Celtic Loja</span>
-              <span className="text-3xl">🍀</span>
-            </div>
-            <div className="bg-gray-100 text-gray-400 rounded-xl px-4 py-2 font-black text-sm">VS</div>
-            <div className="flex items-center gap-3 w-1/3">
-              <span className="text-3xl">💎</span>
-              <span className="font-bold text-lg text-gray-900">Sporting Cristal</span>
-            </div>
-          </div>
-
-          <div className="w-1/4 flex justify-end">
-            <button className="text-blue-600 font-bold text-sm bg-blue-50 px-4 py-2 rounded-lg hover:bg-blue-100 flex items-center gap-2 transition">
-              <FileText size={16} /> Ver Planilla
-            </button>
-          </div>
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 text-center">
+          <div className="text-4xl mb-4">📅</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Sorteo de Fixture</h2>
+          <p className="text-slate-500 mb-6 text-sm">El torneo activo aún no cuenta con equipos suficientes para generar el calendario.</p>
+          <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md transition-colors text-sm">
+            Generar Fixture Automático
+          </button>
         </div>
       </div>
     </div>
