@@ -87,25 +87,22 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre }: Das
           <p className="text-slate-500 font-medium text-sm">Configuración arquitectónica y gestión de formatos.</p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Sparkles size={20} className="text-blue-600" /> Asistente de Formato Automatizado
-              </h2>
-              
-              <div className="mb-6">
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">
-                  Número Total de Equipos Participantes
-                </label>
-                <input
-                  type="number"
-                  placeholder="Ej. 32, 5, 6..."
-                  value={numEquipos}
-                  onChange={(e) => setNumEquipos(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-gray-900 focus:outline-none focus:border-blue-500 transition-colors font-medium"
-                />
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {torneosIniciales.map((t) => (
+                    <Link href={`/equipos?torneoId=${t.id}`} key={t.id} className="p-5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between hover:border-blue-500 hover:shadow-md transition-all group">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <div className="font-bold text-gray-900 text-sm">{t.nombre}</div>
+                          <div className="text-xs text-slate-500 mt-0.5 font-medium">Estado: {t.estado}</div>
+                        </div>
+                        <span className="text-xs font-bold bg-green-100 text-green-800 px-2 py-1 rounded-md">Activo</span>
+                      </div>
+                      <button className="w-full py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        Administrar Torneo
+                      </button>
+                    </Link>
+                  ))}
+                </div>
 
               {recomendacion && (
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
