@@ -1,35 +1,24 @@
 "use server";
-
 import { createClient } from "./lib/server";
 import { revalidatePath } from "next/cache";
 
-export async function registrarTorneoBackend(equipos: number, formato: string) {
+// El backend ahora exige recibir el organizadorId de forma directa y segura
+export async function registrarTorneoBackend(equipos: number, formato: string, organizadorId: string) {
   const supabase = await createClient();
-  
-  // 1. Extraemos la credencial del usuario autenticado
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { success: false, error: "Usuario no autenticado o sesión expirada." };
-  }
-
   const nombreGenerado = `Campeonato Formato ${formato.toUpperCase()} - ${equipos} Equipos`;
 
-  // 2. Persistencia enviando explícitamente el organizador_id
-  const { data, error } = await supabase.from("torneos").insert([
+  const { error } = await supabase.from("torneos").insert([
     {
       nombre: nombreGenerado,
       estado: "Configuración Inicial",
-      organizador_id: user.id // <- Esta firma autoriza la transacción en la base de datos
+      organizador_id: organizadorId // Sello de autoría inyectado directamente
     }
   ]);
 
   if (error) {
-    console.error("Error al persistir torneo:", error);
     return { success: false, error: error.message };
   }
 
-  // 3. Actualizamos la interfaz
   revalidatePath("/dashboard");
   return { success: true };
 }
