@@ -22,3 +22,18 @@ export async function registrarTorneoBackend(equipos: number, formato: string, o
   revalidatePath("/dashboard");
   return { success: true };
 }
+// Motor de autenticación desde el servidor (Sella las cookies correctamente)
+export async function loginBackend(email: string, password: string) {
+  const supabase = await createClient();
+  
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
