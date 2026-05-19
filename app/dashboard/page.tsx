@@ -110,20 +110,41 @@ export default function TournamentProDashboard() {
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       
-      {/* SIDEBAR: Ancho fijo (w-64), no se encoge (shrink-0) */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0a1628] text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} shrink-0`}>
-        <div className="p-6 border-b border-white/10 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center text-xl shadow-lg">⚽</div>
-          <div><p className="font-black text-sm tracking-widest">GAME-LEGAL</p></div>
-        </div>
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {MENU.map(item => (
-            <button key={item.key} onClick={() => { setView(item.key); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${view === item.key ? "bg-blue-600 text-white shadow-lg" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}>
-              {/* Renderiza tu Icono aquí */} {item.label}
-            </button>
-          ))}
-        </nav>
-      </aside>
+      {/* Menú Lateral Premium (Dark & Gold) */}
+<aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#141414] text-white flex flex-col transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#2E2E2E]`}>
+  <div className="p-6 border-b border-[#2E2E2E] flex items-center gap-3">
+    <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C]">
+      C
+    </div>
+    <div>
+      <p className="font-black text-sm tracking-widest text-white">GAME-LEGAL</p>
+      <p className="text-xs text-[#D4A017] font-bold uppercase tracking-widest">Pro Admin</p>
+    </div>
+  </div>
+  
+  <nav className="flex-1 p-4 space-y-2 mt-2 overflow-y-auto">
+    {MENU.map(item => (
+      <button key={item.key} onClick={() => { setView(item.key); setSidebarOpen(false); }} 
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
+          view === item.key 
+          ? "bg-[#D4A017] text-black shadow-[0_4px_20px_rgba(212,160,23,0.4)]" 
+          : "text-[#8A8A8A] hover:bg-[#1C1C1C] hover:text-white"
+        }`}>
+        <Icon path={item.icon} size={18} /> {item.label}
+      </button>
+    ))}
+  </nav>
+
+  {/* Botón añadido para ir a Configuración de Torneo */}
+  <div className="p-4 border-t border-[#2E2E2E]">
+    <button onClick={() => { setView("configuracion"); setSidebarOpen(false); }} className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-[#D4A017] rounded-lg text-sm text-[#D4A017] font-bold hover:bg-[#D4A017] hover:text-black transition-all mb-3">
+      <Icon path={Icons.trophy} size={16}/> Configurar Torneo
+    </button>
+    <Link href="/" target="_blank" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#1C1C1C] hover:bg-[#242424] rounded-lg text-sm text-white font-bold transition-all border border-[#2E2E2E]">
+       <Icon path={Icons.eye} size={16}/> Ver Portal Público
+    </Link>
+  </div>
+</aside>
 
       {/* CONTENIDO PRINCIPAL: Toma el resto del espacio (flex-1), con scroll interno */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
