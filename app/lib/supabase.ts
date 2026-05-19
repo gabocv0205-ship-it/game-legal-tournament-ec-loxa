@@ -1,8 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Aquí la aplicación va y lee las llaves secretas que guardaste en el .env.local
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Variables de entorno estrictas (Next.js)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Creamos la conexión oficial
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Cliente Singleton para evitar múltiples instancias
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: { 'x-application-name': 'game-legal-tournament' },
+  },
+});
