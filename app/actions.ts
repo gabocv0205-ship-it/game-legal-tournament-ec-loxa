@@ -1,17 +1,22 @@
 "use server";
-import { createClient } from "./lib/server";
 import { revalidatePath } from "next/cache";
+import { createClient } from '@supabase/supabase-js';
 
-// El backend ahora exige recibir el organizadorId de forma directa y segura
-export async function registrarTorneoBackend(equipos: number, formato: string, organizadorId: string) {
-  const supabase = await createClient();
+// Usamos una conexión directa y pura, sin cookies que traben el proceso
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export async function registrarTorneoBackend(equipos: number, formato: string, usuarioId: string) {
   const nombreGenerado = `Campeonato Formato ${formato.toUpperCase()} - ${equipos} Equipos`;
 
+  // Insertamos directo en la base de datos
   const { error } = await supabase.from("torneos").insert([
     {
       nombre: nombreGenerado,
       estado: "Configuración Inicial",
-      organizador_id: organizadorId // Sello de autoría inyectado directamente
+      organizador_id: usuarioId
     }
   ]);
 
@@ -19,21 +24,7 @@ export async function registrarTorneoBackend(equipos: number, formato: string, o
     return { success: false, error: error.message };
   }
 
+  // Refrescamos la pantalla para que aparezca el torneo
   revalidatePath("/dashboard");
-  return { success: true };
-}
-// Motor de autenticación desde el servidor (Sella las cookies correctamente)
-export async function loginBackend(email: string, password: string) {
-  const supabase = await createClient();
-  
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
   return { success: true };
 }
