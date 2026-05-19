@@ -1,13 +1,19 @@
 import React from "react";
 import DashboardClient from "./DashboardClient";
+import { createClient } from "@supabase/supabase-js";
 
-export default function DashboardPage() {
-  // Cargamos la interfaz directamente de forma segura sin consultar la base de datos
+export default async function DashboardPage() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  const { data: torneos } = await supabase.from("torneos").select("*");
+
   return (
     <DashboardClient 
-      torneosIniciales={[]} 
+      torneosIniciales={torneos || []} 
       usuarioNombre="GABRIEL CALVA" 
-      usuarioId="admin-gabo-123" 
     />
   );
 }
