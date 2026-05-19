@@ -1,81 +1,65 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function FinanzasPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
-  const [config, setConfig] = useState({ inscripcion: 150 });
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const eq = localStorage.getItem('gl_equipos');
-    if (eq) setEquipos(JSON.parse(eq));
-    const conf = localStorage.getItem('gl_config');
-    if (conf) setConfig(JSON.parse(conf));
-  }, []);
+  const loadData = async () => {
+    const { data: tourney } = await supabase.from("tournaments").select("id, registration_fee").order("created_at", { ascending: false }).limit(1).single();
+    if (tourney) {
+      const { data: teams } = await supabase
+        .from("teams")
+        .select(`*, payments(amount)`)
+        .eq("tournament_id", tourney.id);
+      
+      const equiposCalculados = teams?.map(t => ({
+        ...t,
+        pagado: t.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0),
+        deuda: Number(tourney.registration_fee) - t.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+      }));
+      setEquipos(equiposCalculados || []);
+    }
+  };
 
-  // Cálculos financieros
-  const totalEsperado = equipos.length * config.inscripcion;
-  const totalRecaudado = equipos.reduce((sum, eq) => sum + (eq.abono || 0), 0);
-  const totalPorCobrar = totalEsperado - totalRecaudado;
+  useEffect(() => { loadData(); }, []);
+
+  const registrarPago = async (teamId: string) => {
+    const amount = prompt("Ingrese el valor del abono:");
+    if (!amount) return;
+    setLoading(true);
+    await supabase.from("payments").insert([{ team_id: teamId, amount: Number(amount), payment_type: 'abono' }]);
+    loadData();
+    setLoading(false);
+  };
 
   return (
     <div className="space-y-6">
       <h2 className="text-3xl font-black text-gray-900">Control Financiero</h2>
-      
-      {/* Tarjetas de Resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-blue-500">
-          <p className="text-sm font-bold text-gray-500 uppercase">Total Esperado</p>
-          <p className="text-3xl font-black text-gray-900 mt-2">${totalEsperado}</p>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500">
-          <p className="text-sm font-bold text-gray-500 uppercase">Recaudado (Abonos)</p>
-          <p className="text-3xl font-black text-green-600 mt-2">${totalRecaudado}</p>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-red-500">
-          <p className="text-sm font-bold text-gray-500 uppercase">Por Cobrar</p>
-          <p className="text-3xl font-black text-red-600 mt-2">${totalPorCobrar}</p>
-        </div>
-      </div>
-
-      {/* Detalle por Equipo */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-        <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-          <h3 className="font-bold text-gray-800">Estado de Cuenta por Equipo</h3>
-          <span className="text-xs font-bold text-gray-500">Inscripción fijada: ${config.inscripcion}</span>
-        </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-left text-sm">
-          <thead className="bg-white text-gray-500 border-b border-gray-100">
+          <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
             <tr>
               <th className="p-4">Equipo</th>
-              <th className="p-4 text-center">Abonado</th>
-              <th className="p-4 text-center">Deuda</th>
-              <th className="p-4 text-center">Estado</th>
+              <th className="p-4 text-center">Pagado</th>
+              <th className="p-4 text-center">Saldo Pendiente</th>
+              <th className="p-4 text-center">Acción</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {equipos.length === 0 ? (
-              <tr><td colSpan={4} className="p-8 text-center text-gray-400">No hay equipos registrados</td></tr>
-            ) : (
-              equipos.map(eq => {
-                const deuda = config.inscripcion - (eq.abono || 0);
-                return (
-                  <tr key={eq.id} className={deuda > 0 ? 'bg-red-50/30' : ''}>
-                    <td className="p-4 font-bold flex items-center gap-2">
-                      <span>{eq.logo}</span> {eq.nombre}
-                    </td>
-                    <td className="p-4 text-center font-mono text-green-600">${eq.abono || 0}</td>
-                    <td className="p-4 text-center font-mono text-red-500 font-bold">${deuda > 0 ? deuda : 0}</td>
-                    <td className="p-4 text-center">
-                      {deuda <= 0 ? (
-                        <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full">Al Día</span>
-                      ) : (
-                        <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full">Pendiente</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
+            {equipos.map(eq => (
+              <tr key={eq.id}>
+                <td className="p-4 font-bold">{eq.name}</td>
+                <td className="p-4 text-center text-green-600 font-mono font-bold">${eq.pagado}</td>
+                <td className="p-4 text-center text-red-600 font-mono font-bold">${eq.deuda > 0 ? eq.deuda : 0}</td>
+                <td className="p-4 text-center">
+                  <button onClick={() => registrarPago(eq.id)} className="px-3 py-1 bg-black text-white rounded-lg text-xs font-bold hover:bg-gray-800 transition-all">
+                    Registrar Abono
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
