@@ -9,7 +9,6 @@ export default function CalendarioPage() {
   const [generado, setGenerado] = useState(false);
   const [proyeccion, setProyeccion] = useState("");
 
-  // Cargar fecha guardada al entrar
   useEffect(() => {
     const guardado = localStorage.getItem('game_legal_fecha');
     if (guardado) {
@@ -26,20 +25,16 @@ export default function CalendarioPage() {
       alert("Selecciona la fecha y hora."); return;
     }
     const fechaObj = new Date(fechaInicio);
-    fechaObj.setDate(fechaObj.getDate() + 56); // 8 semanas
+    fechaObj.setDate(fechaObj.getDate() + 56); 
     const proyTexto = `Finalización aproximada: ${fechaObj.toLocaleDateString()}`;
     
-    // Guardamos la configuración para que no se borre
     localStorage.setItem('game_legal_fecha', JSON.stringify({ fecha: fechaInicio, hora: horaInicio, proy: proyTexto }));
     
     setProyeccion(proyTexto);
     setGenerado(true);
   };
 
-  // Función Nativa y 100% segura para generar PDF
-  const imprimirPDF = () => {
-    window.print(); // Abre el diálogo nativo para Guardar como PDF
-  };
+  const imprimirPDF = () => { window.print(); };
 
   return (
     <div className="min-h-screen bg-slate-50 p-8 font-sans print:bg-white print:p-0">
@@ -58,7 +53,6 @@ export default function CalendarioPage() {
           </button>
         </header>
 
-        {/* CONTENIDO EXPORTABLE */}
         <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm print:border-none print:shadow-none">
           <div className="text-center mb-8 pb-4 border-b">
             <h2 className="text-2xl font-black text-gray-900">COPA GAME-LEGAL 2026</h2>
@@ -100,18 +94,7 @@ export default function CalendarioPage() {
           </div>
         </div>
       </div>
-      
-      {/* Estilos para que el PDF se vea perfecto al imprimir */}
-      <style dangerouslySetInnerHTML={{__html: `
-        @media print {
-          body { -webkit-print-color-adjust: exact; }
-          .print\\:hidden { display: none !important; }
-          .print\\:border-none { border: none !important; }
-          .print\\:shadow-none { box-shadow: none !important; }
-          .print\\:bg-white { background: white !important; }
-          .print\\:p-0 { padding: 0 !important; }
-        }
-      `}} />
+      <style dangerouslySetInnerHTML={{__html: `@media print { body { -webkit-print-color-adjust: exact; } .print\\:hidden { display: none !important; } .print\\:border-none { border: none !important; } .print\\:shadow-none { box-shadow: none !important; } .print\\:bg-white { background: white !important; } .print\\:p-0 { padding: 0 !important; } }`}} />
     </div>
   );
 }
