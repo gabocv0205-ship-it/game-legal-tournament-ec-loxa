@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Shield, UserPlus, Users, ArrowLeft, AlertTriangle } from 'lucide-react';
 
@@ -7,14 +7,29 @@ interface Jugador { nombre: string; cedula: string; }
 interface Equipo { id: number; nombre: string; plantilla: Jugador[]; }
 
 export default function EquiposPage() {
-  const [equipos, setEquipos] = useState<Equipo[]>([
-    { id: 1, nombre: "FC Barcelona SC", plantilla: [] }
-  ]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [nuevoEquipo, setNuevoEquipo] = useState("");
   const [nombreJugador, setNombreJugador] = useState("");
   const [cedulaJugador, setCedulaJugador] = useState("");
-  const [equipoSel, setEquipoSel] = useState<number>(1);
+  const [equipoSel, setEquipoSel] = useState<number | null>(null);
   const [alerta, setAlerta] = useState("");
+
+  // Cargar datos al iniciar
+  useEffect(() => {
+    const dataGuardada = localStorage.getItem('gl_equipos');
+    if (dataGuardada) {
+      const parsed = JSON.parse(dataGuardada);
+      setEquipos(parsed);
+      if (parsed.length > 0) setEquipoSel(parsed[0].id);
+    }
+  }, []);
+
+  // Guardar cada vez que los equipos cambien
+  useEffect(() => {
+    if (equipos.length > 0) {
+      localStorage.setItem('gl_equipos', JSON.stringify(equipos));
+    }
+  }, [equipos]);
 
   const agregarEquipo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,10 +43,8 @@ export default function EquiposPage() {
   const ficharJugador = (e: React.FormEvent) => {
     e.preventDefault();
     setAlerta("");
-
     if (!nombreJugador || !cedulaJugador) return;
     
-    // Verificador Anti-Doble Inscripción
     const duplicado = equipos.some(eq => eq.plantilla.some(j => j.cedula === cedulaJugador));
     if (duplicado) {
       setAlerta(`⚠️ ILEGAL: La cédula ${cedulaJugador} ya está registrada en otro club.`);
@@ -39,12 +52,9 @@ export default function EquiposPage() {
     }
     
     setEquipos(equipos.map(eq => {
-      if (eq.id === equipoSel) {
-        return { ...eq, plantilla: [...eq.plantilla, { nombre: nombreJugador, cedula: cedulaJugador }] };
-      }
+      if (eq.id === equipoSel) return { ...eq, plantilla: [...eq.plantilla, { nombre: nombreJugador, cedula: cedulaJugador }] };
       return eq;
     }));
-    
     setNombreJugador(""); setCedulaJugador("");
   };
 
@@ -65,7 +75,8 @@ export default function EquiposPage() {
             </form>
 
             <div className="bg-white p-6 rounded-2xl border shadow-sm">
-              <h2 className="font-bold mb-3"><Users size={16} className="inline mr-2"/> Clubes</h2>
+              <h2 className="font-bold mb-3"><Users size={16} className="inline mr-2"/> Clubes Guardados</h2>
+              {equipos.length === 0 && <p className="text-xs text-gray-500">No hay clubes registrados.</p>}
               {equipos.map(eq => (
                 <div key={eq.id} onClick={() => setEquipoSel(eq.id)} className={`p-3 border rounded cursor-pointer mb-2 ${equipoSel === eq.id ? 'bg-blue-50 border-blue-500' : ''}`}>
                   <span className="font-bold">{eq.nombre}</span> <span className="text-xs text-gray-500">({eq.plantilla.length} Jugs)</span>
@@ -75,25 +86,27 @@ export default function EquiposPage() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-white p-6 rounded-3xl border shadow-sm">
-              <h2 className="text-xl font-bold mb-4">Nómina: {equipos.find(e => e.id === equipoSel)?.nombre}</h2>
-              {alerta && <div className="mb-4 p-3 bg-red-100 text-red-700 font-bold rounded border border-red-300">{alerta}</div>}
+            {equipoSel && (
+              <div className="bg-white p-6 rounded-3xl border shadow-sm">
+                <h2 className="text-xl font-bold mb-4">Nómina: {equipos.find(e => e.id === equipoSel)?.nombre}</h2>
+                {alerta && <div className="mb-4 p-3 bg-red-100 text-red-700 font-bold rounded border border-red-300">{alerta}</div>}
 
-              <form onSubmit={ficharJugador} className="flex gap-2 mb-6">
-                <input type="text" placeholder="Nombre Jugador" value={nombreJugador} onChange={e=>setNombreJugador(e.target.value)} className="flex-1 p-2 border rounded" />
-                <input type="text" placeholder="Cédula" value={cedulaJugador} onChange={e=>setCedulaJugador(e.target.value)} className="flex-1 p-2 border rounded" />
-                <button type="submit" className="px-4 bg-slate-900 text-white font-bold rounded">Fichar</button>
-              </form>
+                <form onSubmit={ficharJugador} className="flex gap-2 mb-6">
+                  <input type="text" placeholder="Nombre Jugador" value={nombreJugador} onChange={e=>setNombreJugador(e.target.value)} className="flex-1 p-2 border rounded" />
+                  <input type="text" placeholder="Cédula" value={cedulaJugador} onChange={e=>setCedulaJugador(e.target.value)} className="flex-1 p-2 border rounded" />
+                  <button type="submit" className="px-4 bg-slate-900 text-white font-bold rounded">Fichar</button>
+                </form>
 
-              <table className="w-full text-left">
-                <thead><tr className="bg-slate-100 text-sm"><th className="p-2">Cédula</th><th className="p-2">Nombre</th></tr></thead>
-                <tbody>
-                  {equipos.find(e => e.id === equipoSel)?.plantilla.map((j, i) => (
-                    <tr key={i} className="border-b"><td className="p-2 font-mono text-blue-600">{j.cedula}</td><td className="p-2">{j.nombre}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                <table className="w-full text-left border-collapse">
+                  <thead><tr className="bg-slate-100 text-sm"><th className="p-2 border">Cédula</th><th className="p-2 border">Nombre</th></tr></thead>
+                  <tbody>
+                    {equipos.find(e => e.id === equipoSel)?.plantilla.map((j, i) => (
+                      <tr key={i} className="border-b"><td className="p-2 font-mono text-blue-600">{j.cedula}</td><td className="p-2">{j.nombre}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>
