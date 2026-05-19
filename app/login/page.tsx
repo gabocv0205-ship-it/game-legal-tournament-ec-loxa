@@ -1,13 +1,7 @@
 "use client";
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { Shield, Lock, Mail, AlertCircle } from 'lucide-react';
-
-// Usamos el cliente estándar para el formulario de login (lado del cliente)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { loginBackend } from '../actions'; // Importamos el motor del servidor
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,16 +14,14 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // El servidor hace el trabajo pesado y asegura la credencial
+    const result = await loginBackend(email, password);
 
-    if (authError) {
+    if (!result.success) {
       setError("Credenciales incorrectas o usuario no autorizado.");
       setLoading(false);
     } else {
-      // SALTO DIRECTO: Obliga al navegador a recargar y llevar las cookies de seguridad
+      // Salto directo y seguro al panel
       window.location.href = '/dashboard';
     }
   };
@@ -90,7 +82,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors mt-2 disabled:opacity-70"
             >
-              {loading ? 'Verificando...' : 'Iniciar Sesión Segura'}
+              {loading ? 'Verificando y Autenticando...' : 'Iniciar Sesión Segura'}
             </button>
           </form>
           
