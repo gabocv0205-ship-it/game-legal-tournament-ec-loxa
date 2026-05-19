@@ -14,10 +14,9 @@ interface Torneo {
 interface DashboardClientProps {
   torneosIniciales: Torneo[];
   usuarioNombre: string;
-  usuarioId: string; 
 }
 
-export default function DashboardClient({ torneosIniciales, usuarioNombre, usuarioId }: DashboardClientProps) {
+export default function DashboardClient({ torneosIniciales, usuarioNombre }: DashboardClientProps) {
   const [numEquipos, setNumEquipos] = useState<string>("");
   const [formatoSeleccionado, setFormatoSeleccionado] = useState<string>("");
   const [recomendacion, setRecomendacion] = useState<string>("");
@@ -53,14 +52,14 @@ export default function DashboardClient({ torneosIniciales, usuarioNombre, usuar
 
     setIsSubmitting(true);
     
-    // Inyectamos el ID de forma segura al backend
-    const result = await registrarTorneoBackend(parseInt(numEquipos), formatoSeleccionado, usuarioId);
+    // Llamamos al backend SIN enviar el ID problemático
+    const result = await registrarTorneoBackend(parseInt(numEquipos), formatoSeleccionado);
     
     if (result.success) {
       setNumEquipos(""); 
       setFormatoSeleccionado("");
     } else {
-      alert("Error crítico del sistema: " + result.error);
+      alert("Ocurrió un error: " + result.error);
     }
     
     setIsSubmitting(false);
