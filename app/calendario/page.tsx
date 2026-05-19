@@ -1,9 +1,7 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Calendar, Trophy, AlertTriangle, ArrowLeft, Download, FileImage, Clock } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+import { Calendar, Trophy, AlertTriangle, ArrowLeft, Download, Clock } from 'lucide-react';
 
 export default function CalendarioPage() {
   const [fechaInicio, setFechaInicio] = useState("");
@@ -11,144 +9,109 @@ export default function CalendarioPage() {
   const [generado, setGenerado] = useState(false);
   const [proyeccion, setProyeccion] = useState("");
 
+  // Cargar fecha guardada al entrar
+  useEffect(() => {
+    const guardado = localStorage.getItem('game_legal_fecha');
+    if (guardado) {
+      const data = JSON.parse(guardado);
+      setFechaInicio(data.fecha);
+      setHoraInicio(data.hora);
+      setProyeccion(data.proy);
+      setGenerado(true);
+    }
+  }, []);
+
   const procesarCalendario = () => {
     if(!fechaInicio || !horaInicio) {
-      alert("Debes seleccionar la fecha y hora del primer partido.");
-      return;
+      alert("Selecciona la fecha y hora."); return;
     }
-    // Proyección: Asumimos un torneo promedio que dura 8 fines de semana
     const fechaObj = new Date(fechaInicio);
-    fechaObj.setDate(fechaObj.getDate() + (8 * 7)); // Suma 8 semanas
-    setProyeccion(`Proyección de finalización: ${fechaObj.toLocaleDateString()}`);
+    fechaObj.setDate(fechaObj.getDate() + 56); // 8 semanas
+    const proyTexto = `Finalización aproximada: ${fechaObj.toLocaleDateString()}`;
+    
+    // Guardamos la configuración para que no se borre
+    localStorage.setItem('game_legal_fecha', JSON.stringify({ fecha: fechaInicio, hora: horaInicio, proy: proyTexto }));
+    
+    setProyeccion(proyTexto);
     setGenerado(true);
   };
 
-  // Función para exportar la sección deseada a PDF
-  const exportarPDF = async (elementoId: string, titulo: string) => {
-    const input = document.getElementById(elementoId);
-    if (!input) return;
-    const canvas = await html2canvas(input, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.text(`GAME-LEGAL: ${titulo}`, 10, 10);
-    pdf.addImage(imgData, 'PNG', 0, 20, pdfWidth, pdfHeight);
-    pdf.save(`GameLegal_${titulo.replace(/\s+/g, '_')}.pdf`);
-  };
-
-  // Función para exportar a Imagen (PNG)
-  const exportarImagen = async (elementoId: string, titulo: string) => {
-    const input = document.getElementById(elementoId);
-    if (!input) return;
-    const canvas = await html2canvas(input, { scale: 2 });
-    const link = document.createElement('a');
-    link.download = `GameLegal_${titulo.replace(/\s+/g, '_')}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+  // Función Nativa y 100% segura para generar PDF
+  const imprimirPDF = () => {
+    window.print(); // Abre el diálogo nativo para Guardar como PDF
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 font-sans">
+    <div className="min-h-screen bg-slate-50 p-8 font-sans print:bg-white print:p-0">
       <div className="max-w-6xl mx-auto">
-        <header className="mb-8 flex justify-between items-center">
+        <header className="mb-8 flex justify-between items-center print:hidden">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-100">
               <ArrowLeft size={18} className="text-gray-600" />
             </Link>
             <div>
-              <h1 className="text-3xl font-black text-gray-900">Calendario Oficial y Proyecciones</h1>
+              <h1 className="text-3xl font-black text-gray-900">Calendario Oficial</h1>
             </div>
           </div>
+          <button onClick={imprimirPDF} className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-slate-800">
+            <Download size={16}/> Exportar PDF Oficial
+          </button>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* MÓDULO DE FIXTURE */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
-            <h2 className="text-sm font-bold uppercase text-gray-700 mb-4 flex items-center gap-2"><Calendar size={16} /> Configurar Fixture</h2>
-            
-            {!generado ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Día de Inicio</label>
-                  <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Hora Primer Partido</label>
-                  <input type="time" value={horaInicio} onChange={e => setHoraInicio(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
-                </div>
-                <button onClick={procesarCalendario} className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-sm">
-                  Proyectar y Generar
-                </button>
-              </div>
-            ) : (
-              <div>
-                <div className="mb-4 bg-purple-50 text-purple-800 p-3 rounded-xl text-xs font-bold border border-purple-200">
-                  <Clock size={14} className="inline mr-1"/> {proyeccion} (Fines de Semana)
-                </div>
-                
-                {/* ESTE DIV SE EXPORTARÁ */}
-                <div id="fixture-export" className="p-4 bg-white border-2 border-slate-100 rounded-xl mb-4">
-                  <div className="text-center mb-4 border-b pb-2">
-                    <h3 className="font-black text-gray-900">COPA GAME-LEGAL 2026</h3>
-                    <p className="text-xs text-gray-500">Jornada 1 Oficial</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                    <span className="text-[10px] font-black text-purple-700 uppercase block mb-1">
-                      {new Date(fechaInicio).toLocaleDateString()} - {horaInicio}H
-                    </span>
-                    <div className="flex justify-between items-center text-xs font-bold text-gray-800">
-                      <span>FC Barcelona SC</span> <span className="text-gray-400">vs</span> <span>Liga Nocturna</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button onClick={() => exportarPDF('fixture-export', 'Fixture')} className="flex-1 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1"><Download size={14}/> PDF</button>
-                  <button onClick={() => exportarImagen('fixture-export', 'Fixture')} className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1"><FileImage size={14}/> PNG</button>
-                </div>
-              </div>
-            )}
+        {/* CONTENIDO EXPORTABLE */}
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm print:border-none print:shadow-none">
+          <div className="text-center mb-8 pb-4 border-b">
+            <h2 className="text-2xl font-black text-gray-900">COPA GAME-LEGAL 2026</h2>
+            <p className="text-gray-500">Documento Oficial de Competición</p>
           </div>
 
-          {/* MÓDULO TABLAS Y ESTADÍSTICAS */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-sm font-bold uppercase text-gray-700 flex items-center gap-2"><Trophy size={16} /> Tablas Generales</h2>
-                <div className="flex gap-2">
-                  <button onClick={() => exportarPDF('tablas-export', 'Estadisticas')} className="px-3 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold rounded-lg flex items-center gap-1"><Download size={14}/> PDF</button>
-                  <button onClick={() => exportarImagen('tablas-export', 'Estadisticas')} className="px-3 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold rounded-lg flex items-center gap-1"><FileImage size={14}/> PNG</button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="font-bold text-gray-700 uppercase mb-4 flex items-center gap-2"><Calendar size={18}/> Fixture Jornada 1</h3>
+              {!generado ? (
+                <div className="space-y-3 print:hidden">
+                  <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="w-full p-2 border rounded" />
+                  <input type="time" value={horaInicio} onChange={e => setHoraInicio(e.target.value)} className="w-full p-2 border rounded" />
+                  <button onClick={procesarCalendario} className="w-full p-2 bg-purple-600 text-white font-bold rounded">Fijar Horario</button>
                 </div>
+              ) : (
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                  <span className="text-xs font-black text-purple-700 uppercase block mb-2">{fechaInicio} | {horaInicio}H</span>
+                  <div className="flex justify-between items-center font-bold text-gray-800">
+                    <span>FC Barcelona SC</span> <span className="text-gray-400">vs</span> <span>Liga Nocturna</span>
+                  </div>
+                  <div className="mt-4 pt-2 border-t text-xs text-gray-500"><Clock size={12} className="inline"/> {proyeccion}</div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="font-bold text-gray-700 uppercase mb-4 flex items-center gap-2"><Trophy size={18}/> Estadísticas Actuales</h3>
+              <div className="divide-y divide-slate-100 border rounded-xl p-3">
+                <div className="flex justify-between py-2"><span className="font-bold">1. Andrés Calva</span><span className="text-blue-600 font-bold">8 Goles</span></div>
+                <div className="flex justify-between py-2"><span className="font-bold">2. Gabriel Vásquez</span><span className="text-blue-600 font-bold">6 Goles</span></div>
               </div>
-
-              {/* ESTE DIV SE EXPORTARÁ */}
-              <div id="tablas-export" className="p-4 bg-white border border-slate-100 rounded-xl">
-                <div className="text-center mb-4">
-                  <h3 className="font-black text-gray-900">ESTADÍSTICAS GAME-LEGAL</h3>
-                </div>
-                
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Goleadores</h4>
-                <div className="divide-y divide-slate-100 mb-6 border rounded-xl overflow-hidden">
-                  <div className="flex justify-between items-center p-3 bg-slate-50">
-                    <div><div className="font-bold text-sm text-gray-900">Andrés Calva</div><div className="text-xs text-slate-500">FC Barcelona SC</div></div>
-                    <span className="text-sm font-black text-blue-700">8 Goles</span>
-                  </div>
-                </div>
-
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Reporte Disciplinario</h4>
-                <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden">
-                  <div className="flex justify-between items-center p-3 bg-slate-50">
-                    <div><div className="font-bold text-sm text-gray-900">Luis Medina</div><div className="text-xs text-slate-500">C.I: 1109876543 (🟨 3)</div></div>
-                    <span className="text-[10px] font-black bg-red-100 text-red-700 px-2 py-1 rounded">SUSPENDIDO</span>
-                  </div>
-                </div>
+              
+              <h3 className="font-bold text-gray-700 uppercase mt-6 mb-4 flex items-center gap-2"><AlertTriangle size={18}/> Disciplina</h3>
+              <div className="border rounded-xl p-3 bg-red-50 text-red-800 font-medium text-sm">
+                Luis Medina (FC Barcelona) - <span className="font-black">SUSPENDIDO</span> (3 Amarillas)
               </div>
             </div>
           </div>
-
         </div>
       </div>
+      
+      {/* Estilos para que el PDF se vea perfecto al imprimir */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          body { -webkit-print-color-adjust: exact; }
+          .print\\:hidden { display: none !important; }
+          .print\\:border-none { border: none !important; }
+          .print\\:shadow-none { box-shadow: none !important; }
+          .print\\:bg-white { background: white !important; }
+          .print\\:p-0 { padding: 0 !important; }
+        }
+      `}} />
     </div>
   );
 }
