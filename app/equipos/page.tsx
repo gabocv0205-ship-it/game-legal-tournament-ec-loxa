@@ -21,7 +21,7 @@ export default function EquiposPage() {
     if (!nuevoEquipo) return;
     const nuevo = { id: Date.now(), nombre: nuevoEquipo, plantilla: [] };
     setEquipos([...equipos, nuevo]);
-    setEquipoSel(nuevo.id); // Auto-selecciona el equipo nuevo
+    setEquipoSel(nuevo.id); 
     setNuevoEquipo("");
   };
 
