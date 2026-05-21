@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTournamentData } from "@/hooks/useTournamentData";
+import { useTournamentData } from "./useTournamentData";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Icon path={Icons.chart} size={16}/> Configurar Torneo
           </Link>
           <Link href="/" target="_blank" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#1C1C1C] hover:bg-[#242424] rounded-lg text-sm text-white font-bold transition-all border border-[#2E2E2E]">
-             <Icon path={Icons.eye} size={16}/> Ver Portal Público
+             <Icon path={Icons.eye} size={16}/> Ver App Pública
           </Link>
         </div>
       </aside>
