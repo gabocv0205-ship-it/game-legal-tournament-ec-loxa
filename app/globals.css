@@ -1,7 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+/* CSS de emergencia para asegurar el fondo */
 body {
   background-color: #0a0a0a;
   color: #ffffff;
