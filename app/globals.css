@@ -1,15 +1,24 @@
-/* CSS de emergencia para asegurar el fondo */
+/* CSS de emergencia para asegurar el fondo general */
 body {
   background-color: #0a0a0a;
   color: #ffffff;
 }
+
 /* Fuerza el modo oscuro en los calendarios nativos del navegador */
 input[type="date"],
 input[type="datetime-local"],
 input[type="time"] {
   color-scheme: dark;
 }
-/* Solución: Forzar texto negro por defecto en todas las casillas para evitar el "blanco sobre blanco" */
-input, select, textarea {
-  color: #000000;
+
+/* Solución Definitiva: Fuerza a que TODAS las casillas tengan el diseño Dark de GAME-LEGAL */
+input[type="text"], 
+input[type="number"], 
+input[type="datetime-local"], 
+input[type="date"], 
+select, 
+textarea {
+  background-color: #1c1c1c !important;
+  color: #ffffff !important;
+  border: 1px solid #2e2e2e !important;
 }
