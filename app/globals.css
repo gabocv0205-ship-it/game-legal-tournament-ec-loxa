@@ -9,3 +9,7 @@ input[type="datetime-local"],
 input[type="time"] {
   color-scheme: dark;
 }
+/* Solución: Forzar texto negro por defecto en todas las casillas para evitar el "blanco sobre blanco" */
+input, select, textarea {
+  color: #000000;
+}
