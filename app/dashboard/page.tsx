@@ -1,69 +1,59 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import React from "react";
+import { useTournamentData } from "./useTournamentData";
 
-export default function ConfiguracionPage() {
-  const [nombre, setNombre] = useState("");
-  const [costo, setCosto] = useState("150");
-  const [loading, setLoading] = useState(false);
-  const [mensaje, setMensaje] = useState("");
+const StatCard = ({ icon, label, value, sub }: any) => (
+  <div className="bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group hover:border-[#D4A017] transition-all duration-300">
+    <div className="absolute -right-6 -top-6 w-24 h-24 bg-[#D4A017]/5 rounded-full blur-2xl group-hover:bg-[#D4A017]/20 transition-all"></div>
+    <div className="flex justify-between items-start relative z-10">
+      <div>
+        <p className="text-sm text-gray-400 font-medium uppercase tracking-wider">{label}</p>
+        <p className="text-4xl font-black mt-2 text-white">{value}</p>
+        <p className="text-xs text-[#D4A017] mt-2 font-bold">{sub}</p>
+      </div>
+      <div className="text-3xl bg-[#1C1C1C] p-3 rounded-xl border border-[#2E2E2E]">{icon}</div>
+    </div>
+  </div>
+);
 
-  useEffect(() => {
-    async function fetchTorneo() {
-      const { data } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false }).limit(1).single();
-      if (data) {
-        setNombre(data.name);
-        setCosto(data.registration_fee?.toString() || "150");
-      }
-    }
-    fetchTorneo();
-  }, []);
+export default function DashboardInicio() {
+  const { players, teams, matches, stats, loading } = useTournamentData();
 
-  const guardarTorneo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setMensaje("");
-
-    const { error } = await supabase.from('tournaments').insert([{
-      name: nombre,
-      registration_fee: Number(costo)
-    }]);
-
-    if (error) {
-      setMensaje("🚫 Error: " + error.message);
-    } else {
-      setMensaje("✓ Torneo guardado en la base de datos. Ya puedes registrar equipos.");
-    }
-    setLoading(false);
-  };
+  if (loading) return <div className="text-center p-10 text-[#D4A017] font-bold animate-pulse">Sincronizando con Supabase...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h2 className="text-3xl font-black text-white">Configurar Torneo Oficial</h2>
-        <p className="text-gray-400">Crea el torneo base. Este paso es obligatorio para habilitar las demás funciones.</p>
+    <div className="space-y-8 max-w-7xl mx-auto">
+      <div className="bg-gradient-to-r from-[#141414] to-[#1c1c1c] border border-[#2E2E2E] rounded-3xl p-8 md:p-12 relative overflow-hidden shadow-2xl">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A017]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl filter drop-shadow-[0_0_10px_rgba(212,160,23,0.8)]">🏆</span>
+            <span className="text-xs font-bold text-[#D4A017] uppercase tracking-[0.3em] border border-[#D4A017]/30 px-3 py-1 rounded-full bg-[#D4A017]/10">
+              Gestión Oficial
+            </span>
+          </div>
+          <h1 className="text-5xl md:text-6xl font-black mb-4 text-white tracking-tight">GAME-LEGAL <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D4A017] to-yellow-200">2026</span></h1>
+          <p className="text-gray-400 text-sm md:text-base max-w-xl leading-relaxed">
+            Centro de mando del torneo. Los datos presentados a continuación se extraen en tiempo real de la base de datos oficial.
+          </p>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard icon="🛡️" label="Clubes" value={teams?.length || 0} sub="Equipos Inscritos" />
+        <StatCard icon="👥" label="Jugadores" value={players?.length || 0} sub="Identidades Verificadas" />
+        <StatCard icon="📅" label="Partidos" value={matches?.length || 0} sub="Encuentros Generados" />
+        <StatCard icon="⚠️" label="Sancionados" value={stats?.suspended || 0} sub="Jugadores Inhabilitados" />
       </div>
 
-      {mensaje && (
-        <div className={`p-4 rounded-xl font-bold text-sm ${mensaje.includes('✓') ? 'bg-[#D4A017]/20 text-[#D4A017] border border-[#D4A017]/50' : 'bg-red-900/40 text-red-400 border border-red-500/50'}`}>
-          {mensaje}
+      <div className="pt-8 border-t border-[#2E2E2E]">
+        <h3 className="text-center text-xs font-bold text-gray-500 uppercase tracking-[0.2em] mb-6">Patrocinadores Oficiales del Torneo</h3>
+        <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+          <div className="flex items-center gap-2 text-xl font-black tracking-tighter text-white"><span className="text-[#D4A017]">⚡</span> ASTRO CLUB</div>
+          <div className="flex items-center gap-2 text-xl font-black tracking-widest text-white"><span className="text-blue-500">⚕️</span> FARMACIAS SUR</div>
+          <div className="flex items-center gap-2 text-xl font-black text-white italic">PUERTA DEL SOL</div>
+          <div className="flex items-center gap-2 text-xl font-black text-white">⚖️ GAME-LEGAL STUDIO</div>
         </div>
-      )}
-
-      <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
-        <form onSubmit={guardarTorneo} className="space-y-4">
-          <div>
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Nombre del Campeonato</label>
-            <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} required className="w-full p-3 bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl mt-1 text-white outline-none focus:border-[#D4A017]" placeholder="Ej: Copa GAME-LEGAL 2026" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Costo de Inscripción ($)</label>
-            <input type="number" value={costo} onChange={e => setCosto(e.target.value)} required className="w-full p-3 bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl mt-1 text-white outline-none focus:border-[#D4A017]" />
-          </div>
-          <button type="submit" disabled={loading} className="w-full py-3 bg-[#D4A017] text-black font-black uppercase tracking-widest rounded-xl hover:bg-yellow-500 transition-all shadow-[0_0_15px_rgba(212,160,23,0.3)]">
-            {loading ? "Conectando con Supabase..." : "Guardar Torneo"}
-          </button>
-        </form>
       </div>
     </div>
   );
