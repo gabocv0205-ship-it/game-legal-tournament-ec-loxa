@@ -6,25 +6,25 @@ export default function JugadoresPage() {
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
   
-  // Formulario
+  // Formulario con Cédula restaurada
   const [nombre, setNombre] = useState("");
+  const [cedula, setCedula] = useState("");
   const [equipoId, setEquipoId] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Estados para Edición
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nombreEditado, setNombreEditado] = useState("");
+  const [cedulaEditada, setCedulaEditada] = useState("");
 
   useEffect(() => {
     cargarDatos();
   }, []);
 
   const cargarDatos = async () => {
-    // Cargar Equipos para el selector
     const { data: teamsData } = await supabase.from("teams").select("id, name").order("name");
     if (teamsData) setEquipos(teamsData);
 
-    // Cargar Jugadores con el nombre de su equipo
     const { data: playersData } = await supabase.from("players").select("*, teams(name)").order("created_at", { ascending: false });
     if (playersData) setJugadores(playersData);
   };
@@ -36,19 +36,21 @@ export default function JugadoresPage() {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
       if (!tourney) throw new Error("Debes configurar un torneo primero.");
 
+      // Se vuelve a insertar con DNI/Cédula
       const { error } = await supabase.from("players").insert([{ 
         name: nombre, 
+        dni: cedula, // Si tu columna en Supabase se llama "cedula", cambia "dni" por "cedula"
         team_id: equipoId,
         tournament_id: tourney.id
       }]);
       if (error) throw error;
 
       setNombre("");
+      setCedula("");
       cargarDatos();
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
-  // --- FUNCIONES ELIMINAR Y EDITAR ---
   const eliminarJugador = async (id: string) => {
     if (!window.confirm("¿Eliminar a este jugador del torneo?")) return;
     try {
@@ -59,7 +61,10 @@ export default function JugadoresPage() {
 
   const guardarEdicion = async (id: string) => {
     try {
-      await supabase.from("players").update({ name: nombreEditado }).eq("id", id);
+      await supabase.from("players").update({ 
+        name: nombreEditado,
+        dni: cedulaEditada 
+      }).eq("id", id);
       setEditandoId(null);
       cargarDatos();
     } catch (error) { alert("Error al actualizar."); }
@@ -70,7 +75,11 @@ export default function JugadoresPage() {
       <h2 className="text-3xl font-black text-white">Gestión de Jugadores</h2>
 
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
-        <form onSubmit={guardarJugador} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <form onSubmit={guardarJugador} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cédula / Pasaporte</label>
+            <input type="text" value={cedula} onChange={e => setCedula(e.target.value)} required className="w-full p-3 mt-1" placeholder="Ej: 1101234567" />
+          </div>
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Nombre Completo</label>
             <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} required className="w-full p-3 mt-1" placeholder="Ej: Lionel Messi" />
@@ -84,8 +93,8 @@ export default function JugadoresPage() {
               ))}
             </select>
           </div>
-          <button type="submit" disabled={loading} className="w-full md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl hover:bg-yellow-500 transition-all shadow-[0_0_15px_rgba(212,160,23,0.3)]">
-            {loading ? "Guardando..." : "Registrar Jugador"}
+          <button type="submit" disabled={loading} className="w-full md:col-span-3 py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl hover:bg-yellow-500 transition-all shadow-[0_0_15px_rgba(212,160,23,0.3)]">
+            {loading ? "Guardando..." : "Registrar Jugador Oficial"}
           </button>
         </form>
       </div>
@@ -94,6 +103,7 @@ export default function JugadoresPage() {
         <table className="w-full text-left text-sm">
           <thead className="bg-[#141414] text-gray-400 text-xs uppercase font-bold border-b border-[#2E2E2E]">
             <tr>
+              <th className="p-4">Cédula</th>
               <th className="p-4">Jugador</th>
               <th className="p-4">Club</th>
               <th className="p-4 text-right">Acciones</th>
@@ -102,14 +112,21 @@ export default function JugadoresPage() {
           <tbody className="divide-y divide-[#2E2E2E]">
             {jugadores.map(jugador => (
               <tr key={jugador.id} className="hover:bg-[#242424] transition-all">
+                <td className="p-4 text-gray-300 font-mono">
+                  {editandoId === jugador.id ? (
+                    <input type="text" value={cedulaEditada} onChange={e => setCedulaEditada(e.target.value)} className="w-full p-2 text-sm rounded bg-[#0a0a0a] border border-[#D4A017] text-white" />
+                  ) : (
+                    jugador.dni || jugador.cedula || "N/A"
+                  )}
+                </td>
                 <td className="p-4">
                   {editandoId === jugador.id ? (
-                    <input type="text" value={nombreEditado} onChange={e => setNombreEditado(e.target.value)} className="w-full p-2 text-sm rounded bg-[#0a0a0a] border border-[#D4A017] text-white" autoFocus />
+                    <input type="text" value={nombreEditado} onChange={e => setNombreEditado(e.target.value)} className="w-full p-2 text-sm rounded bg-[#0a0a0a] border border-[#D4A017] text-white" />
                   ) : (
                     <span className="font-bold text-white">{jugador.name}</span>
                   )}
                 </td>
-                <td className="p-4 text-gray-400">{jugador.teams?.name || "Sin Club"}</td>
+                <td className="p-4 text-[#D4A017] font-bold">{jugador.teams?.name || "Sin Club"}</td>
                 <td className="p-4 text-right space-x-3">
                   {editandoId === jugador.id ? (
                     <>
@@ -118,7 +135,11 @@ export default function JugadoresPage() {
                     </>
                   ) : (
                     <>
-                      <button onClick={() => { setEditandoId(jugador.id); setNombreEditado(jugador.name); }} className="text-[#D4A017] font-bold hover:text-yellow-300">Editar</button>
+                      <button onClick={() => { 
+                        setEditandoId(jugador.id); 
+                        setNombreEditado(jugador.name); 
+                        setCedulaEditada(jugador.dni || jugador.cedula || ""); 
+                      }} className="text-[#D4A017] font-bold hover:text-yellow-300">Editar</button>
                       <button onClick={() => eliminarJugador(jugador.id)} className="text-red-500 font-bold hover:text-red-400">Eliminar</button>
                     </>
                   )}
