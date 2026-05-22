@@ -13,6 +13,7 @@
     "react": "^18",
     "react-dom": "^18",
     "@supabase/supabase-js": "^2.39.3",
+    "@supabase/ssr": "latest",
     "html2canvas": "^1.4.1",
     "lucide-react": "latest"
   },
