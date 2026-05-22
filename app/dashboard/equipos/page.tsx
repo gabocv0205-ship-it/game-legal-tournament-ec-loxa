@@ -44,7 +44,7 @@ export default function EquiposPage() {
           }, "image/webp", 0.6);
         };
       };
-    };
+    }); // <-- Aquí estaba el error, faltaba el paréntesis de cierre
   };
 
   const guardarEquipo = async (e: React.FormEvent) => {
