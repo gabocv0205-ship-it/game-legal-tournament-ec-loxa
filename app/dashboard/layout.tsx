@@ -7,6 +7,7 @@ import { useTournamentData } from "./useTournamentData";
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
 );
+
 const Icons = {
   home: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10",
   users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
@@ -16,7 +17,8 @@ const Icons = {
   chart: "M3 3v18h18M18 17V9M13 17V5M8 17v-3",
   bars: "M3 12h18M3 6h18M3 18h18",
   alert: "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
-  eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+  eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  grid: "M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z" // Ícono nuevo para los grupos
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -24,9 +26,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { stats, loading } = useTournamentData();
 
+  // Se ha insertado el enlace de Sorteo y Grupos
   const MENU = [
     { href: "/dashboard", label: "Inicio", icon: Icons.home },
     { href: "/dashboard/equipos", label: "Equipos", icon: Icons.users },
+    { href: "/dashboard/sorteo", label: "Fase de Grupos", icon: Icons.grid },
     { href: "/dashboard/jugadores", label: "Jugadores", icon: Icons.shield },
     { href: "/dashboard/partidos", label: "Partidos", icon: Icons.calendar },
     { href: "/dashboard/finanzas", label: "Finanzas", icon: Icons.dollar },
