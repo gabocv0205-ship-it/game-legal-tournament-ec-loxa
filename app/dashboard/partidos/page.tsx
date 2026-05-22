@@ -48,6 +48,10 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
+      
+      // ESTA ES LA LÍNEA QUE EXIGE VERCEL (Seguridad anti-nulos)
+      if (!tourney) throw new Error("Debes configurar un torneo primero.");
+
       const { error } = await supabase.from("matches").insert([{
         tournament_id: tourney.id,
         home_team_id: localId,
@@ -56,6 +60,7 @@ export default function PartidosPage() {
         status: "scheduled"
       }]);
       if (error) throw error;
+      
       setLocalId(""); setVisitanteId(""); setFecha("");
       cargarDatos();
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
