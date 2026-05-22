@@ -44,31 +44,42 @@ export default function PartidosPage() {
 
   const programarPartido = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
+    
+    if (localId === visitanteId) {
+      return alert("Un equipo no puede jugar contra sí mismo.");
+    }
+    
     setLoading(true);
+    
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero.");
+      
+      if (!tourney) {
+        throw new Error("Debes configurar un torneo primero.");
+      }
 
-      // SOLUCIÓN: Dejamos que Supabase ponga el estado por defecto válido para no romper su candado de seguridad
       const { error } = await supabase.from("matches").insert([{
         tournament_id: tourney.id,
         home_team_id: localId,
         away_team_id: visitanteId,
         match_date: fecha
       }]);
-      if (error) throw error;
-      
-      setLocalId(""); setVisitanteId(""); setFecha("");
-      cargarDatos();
-    } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
-  };
-      
-      setLocalId(""); setVisitanteId(""); setFecha("");
-      cargarDatos();
-    } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
-  };
 
+      if (error) {
+        throw error;
+      }
+      
+      setLocalId(""); 
+      setVisitanteId(""); 
+      setFecha("");
+      cargarDatos();
+      
+    } catch (error: any) { 
+      alert("Error: " + error.message); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
   // --- LÓGICA DE PARTIDO EN VIVO ---
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
