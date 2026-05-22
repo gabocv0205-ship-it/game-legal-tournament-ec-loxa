@@ -5,99 +5,124 @@ import { supabase } from "@/lib/supabase";
 export default function EquiposPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [nombre, setNombre] = useState("");
-  const [shield, setShield] = useState("⚽");
-  const [tournamentId, setTournamentId] = useState<string | null>(null);
+  const [escudo, setEscudo] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mensaje, setMensaje] = useState("");
 
-  const loadEquipos = async () => {
-    const { data: tourney } = await supabase.from('tournaments').select('id').order('created_at', { ascending: false }).limit(1).single();
-    if (tourney) {
-      setTournamentId(tourney.id);
-      const { data } = await supabase.from('teams').select('*').eq('tournament_id', tourney.id).order('created_at', { ascending: false });
-      if (data) setEquipos(data);
-    }
+  useEffect(() => {
+    cargarEquipos();
+  }, []);
+
+  const cargarEquipos = async () => {
+    const { data } = await supabase.from("teams").select("*").order("created_at", { ascending: false });
+    if (data) setEquipos(data);
   };
 
-  useEffect(() => { loadEquipos(); }, []);
+  // 🚀 MOTOR DE COMPRESIÓN A 50KB (Cero dependencias)
+  const comprimirImagen = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 400; // Tamaño ideal para escudos
+          const scaleSize = MAX_WIDTH / img.width;
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleSize;
 
-  const handleGuardar = async (e: React.FormEvent) => {
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          // Convertir a WebP con calidad 0.6 para garantizar ~50KB
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const newFile = new File([blob], `escudo-${Date.now()}.webp`, { type: "image/webp" });
+              resolve(newFile);
+            }
+          }, "image/webp", 0.6);
+        };
+      };
+    };
+  };
+
+  const guardarEquipo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tournamentId) return setMensaje("Error: No hay un torneo activo configurado.");
     setLoading(true);
-    setMensaje("");
 
-    const { error } = await supabase.from('teams').insert([{
-      tournament_id: tournamentId,
-      name: nombre,
-      shield_url: shield
-    }]);
+    try {
+      // 1. Obtener el ID del torneo activo
+      const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
+      if (!tourney) throw new Error("Debes configurar un torneo primero.");
 
-    if (error) {
-      if (error.code === '23505') setMensaje("🚫 Este nombre de equipo ya existe en el torneo.");
-      else setMensaje("🚫 Error al guardar: " + error.message);
-    } else {
-      setMensaje("✓ Equipo registrado exitosamente.");
+      let escudoUrl = "";
+
+      // 2. Si hay imagen, comprimir y subir a Storage
+      if (escudo) {
+        const imagenComprimida = await comprimirImagen(escudo);
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("escudos")
+          .upload(imagenComprimida.name, imagenComprimida);
+
+        if (uploadError) throw uploadError;
+
+        // Obtener el link público de la imagen
+        const { data: publicUrlData } = supabase.storage.from("escudos").getPublicUrl(imagenComprimida.name);
+        escudoUrl = publicUrlData.publicUrl;
+      }
+
+      // 3. Guardar en la base de datos
+      const { error: insertError } = await supabase.from("teams").insert([{
+        name: nombre,
+        shield_url: escudoUrl,
+        tournament_id: tourney.id
+      }]);
+
+      if (insertError) throw insertError;
+
+      // Limpiar y recargar
       setNombre("");
-      setShield("⚽");
-      loadEquipos(); // Recarga los datos reales al instante
+      setEscudo(null);
+      cargarEquipos();
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h2 className="text-3xl font-black text-white">Gestión de Clubes</h2>
-        <p className="text-gray-400">Registra los equipos participantes. Sus escudos y nombres se sincronizarán en todo el torneo.</p>
+    <div className="space-y-6">
+      <h2 className="text-3xl font-black text-white">Gestión de Clubes</h2>
+      
+      <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
+        <form onSubmit={guardarEquipo} className="space-y-4">
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Nombre del Club</label>
+            <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} required className="w-full p-3 mt-1" placeholder="Ej: GAME-LEGAL FC" />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Escudo del Club (Se comprimirá automáticamente)</label>
+            <input type="file" accept="image/*" onChange={e => setEscudo(e.target.files?.[0] || null)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl" />
+          </div>
+          <button type="submit" disabled={loading} className="w-full py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl hover:bg-yellow-500 transition-all">
+            {loading ? "Procesando Escudo..." : "Registrar Club"}
+          </button>
+        </form>
       </div>
 
-      {mensaje && (
-        <div className={`p-4 rounded-xl font-bold text-sm ${mensaje.includes('✓') ? 'bg-[#D4A017]/20 text-[#D4A017] border border-[#D4A017]/50' : 'bg-red-900/40 text-red-400 border border-red-500/50'}`}>
-          {mensaje}
-        </div>
-      )}
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* FORMULARIO DE REGISTRO */}
-        <div className="bg-[#141414] p-6 rounded-2xl shadow-lg border border-[#2E2E2E] h-fit">
-          <h3 className="font-bold mb-4 text-white flex items-center gap-2">🛡️ Nuevo Club</h3>
-          <form onSubmit={handleGuardar} className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Nombre del Equipo</label>
-              <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} className="w-full p-3 bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl mt-1 text-white outline-none focus:border-[#D4A017] transition-all" required placeholder="Ej: Águilas de Loja" />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Escudo (Emoji/Sigla)</label>
-              <input type="text" value={shield} onChange={e=>setShield(e.target.value)} className="w-full p-3 bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl mt-1 text-center text-2xl outline-none focus:border-[#D4A017] transition-all" />
-            </div>
-            <button type="submit" disabled={loading} className="w-full py-3 bg-[#D4A017] hover:bg-yellow-500 text-black font-black uppercase tracking-widest rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(212,160,23,0.3)] disabled:opacity-50">
-              {loading ? "Sincronizando..." : "Inscribir Club"}
-            </button>
-          </form>
-        </div>
-
-        {/* LISTADO DE EQUIPOS REALES */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {equipos.map(eq => (
-            <div key={eq.id} className="bg-[#141414] p-5 rounded-2xl shadow-sm border border-[#2E2E2E] flex items-center justify-between hover:border-[#D4A017] transition-all">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-[#1C1C1C] border border-[#2E2E2E] rounded-full flex items-center justify-center text-3xl shadow-inner">
-                  {eq.shield_url || "⚽"}
-                </div>
-                <div>
-                  <h4 className="font-black text-white text-lg leading-tight">{eq.name}</h4>
-                  <p className="text-xs text-[#D4A017] font-bold mt-1">Conectado a DB</p>
-                </div>
-              </div>
-            </div>
-          ))}
-          {equipos.length === 0 && (
-            <div className="col-span-2 text-center py-12 border border-[#2E2E2E] border-dashed rounded-2xl text-gray-500 font-medium">
-              Aún no hay equipos reales en la base de datos.
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {equipos.map(eq => (
+          <div key={eq.id} className="bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-4 flex items-center gap-4">
+            {eq.shield_url ? (
+              <img src={eq.shield_url} alt="Escudo" className="w-12 h-12 object-contain rounded-full bg-white/5" />
+            ) : (
+              <div className="w-12 h-12 bg-[#2E2E2E] rounded-full flex items-center justify-center text-xs font-black text-gray-500">🛡️</div>
+            )}
+            <p className="font-bold text-white">{eq.name}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
