@@ -6,7 +6,7 @@ export default function JugadoresPage() {
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
   
-  // Formulario con Cédula restaurada
+  // Formulario alineado con la base de datos (full_name y cedula)
   const [nombre, setNombre] = useState("");
   const [cedula, setCedula] = useState("");
   const [equipoId, setEquipoId] = useState("");
@@ -36,19 +36,25 @@ export default function JugadoresPage() {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
       if (!tourney) throw new Error("Debes configurar un torneo primero.");
 
-      // Se vuelve a insertar con DNI/Cédula
       const { error } = await supabase.from("players").insert([{ 
-        name: nombre, 
-        dni: cedula, // Si tu columna en Supabase se llama "cedula", cambia "dni" por "cedula"
+        full_name: nombre, 
+        cedula: cedula, 
         team_id: equipoId,
         tournament_id: tourney.id
       }]);
-      if (error) throw error;
+      
+      // Manejo del candado de cédulas duplicadas que creaste
+      if (error) {
+        if (error.message.includes("unique") || error.message.includes("cedula")) {
+          throw new Error("Esta cédula ya está registrada en el torneo actual.");
+        }
+        throw error;
+      }
 
       setNombre("");
       setCedula("");
       cargarDatos();
-    } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
+    } catch (error: any) { alert("Aviso: " + error.message); } finally { setLoading(false); }
   };
 
   const eliminarJugador = async (id: string) => {
@@ -61,13 +67,21 @@ export default function JugadoresPage() {
 
   const guardarEdicion = async (id: string) => {
     try {
-      await supabase.from("players").update({ 
-        name: nombreEditado,
-        dni: cedulaEditada 
+      const { error } = await supabase.from("players").update({ 
+        full_name: nombreEditado,
+        cedula: cedulaEditada 
       }).eq("id", id);
+
+      if (error) {
+        if (error.message.includes("unique") || error.message.includes("cedula")) {
+          throw new Error("Esta cédula ya pertenece a otro jugador.");
+        }
+        throw error;
+      }
+
       setEditandoId(null);
       cargarDatos();
-    } catch (error) { alert("Error al actualizar."); }
+    } catch (error: any) { alert("Aviso: " + error.message); }
   };
 
   return (
@@ -116,14 +130,14 @@ export default function JugadoresPage() {
                   {editandoId === jugador.id ? (
                     <input type="text" value={cedulaEditada} onChange={e => setCedulaEditada(e.target.value)} className="w-full p-2 text-sm rounded bg-[#0a0a0a] border border-[#D4A017] text-white" />
                   ) : (
-                    jugador.dni || jugador.cedula || "N/A"
+                    jugador.cedula
                   )}
                 </td>
                 <td className="p-4">
                   {editandoId === jugador.id ? (
                     <input type="text" value={nombreEditado} onChange={e => setNombreEditado(e.target.value)} className="w-full p-2 text-sm rounded bg-[#0a0a0a] border border-[#D4A017] text-white" />
                   ) : (
-                    <span className="font-bold text-white">{jugador.name}</span>
+                    <span className="font-bold text-white">{jugador.full_name}</span>
                   )}
                 </td>
                 <td className="p-4 text-[#D4A017] font-bold">{jugador.teams?.name || "Sin Club"}</td>
@@ -137,8 +151,8 @@ export default function JugadoresPage() {
                     <>
                       <button onClick={() => { 
                         setEditandoId(jugador.id); 
-                        setNombreEditado(jugador.name); 
-                        setCedulaEditada(jugador.dni || jugador.cedula || ""); 
+                        setNombreEditado(jugador.full_name); 
+                        setCedulaEditada(jugador.cedula); 
                       }} className="text-[#D4A017] font-bold hover:text-yellow-300">Editar</button>
                       <button onClick={() => eliminarJugador(jugador.id)} className="text-red-500 font-bold hover:text-red-400">Eliminar</button>
                     </>
