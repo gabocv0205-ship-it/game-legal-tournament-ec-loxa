@@ -17,10 +17,11 @@ export default function PartidosPage() {
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
   
-  // Estados para nuevo evento
+  // Estados para nuevo evento y Edición
   const [eventoTipo, setEventoTipo] = useState("gol");
   const [eventoJugador, setEventoJugador] = useState("");
   const [eventoMinuto, setEventoMinuto] = useState("");
+  const [editandoEventoId, setEditandoEventoId] = useState<string | null>(null); // NUEVO ESTADO PARA EDITAR
 
   useEffect(() => {
     cargarDatos();
@@ -80,21 +81,23 @@ export default function PartidosPage() {
       setLoading(false); 
     }
   };
+
   // --- LÓGICA DE PARTIDO EN VIVO ---
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
-    // Cargar solo los jugadores de los dos equipos que se enfrentan
+    // CORRECCIÓN: Usar full_name en lugar de name
     const { data: playersData } = await supabase.from("players")
-      .select("id, name, team_id, teams(name)")
+      .select("id, full_name, team_id, teams(name)")
       .in("team_id", [partido.home_team_id, partido.away_team_id])
-      .order("name");
+      .order("full_name");
     if (playersData) setJugadores(playersData);
     cargarEventos(partido.id);
   };
 
   const cargarEventos = async (matchId: string) => {
+    // CORRECCIÓN: Usar players(full_name) en lugar de players(name)
     const { data } = await supabase.from("match_events")
-      .select("*, players(name), teams(name)")
+      .select("*, players(full_name), teams(name)")
       .eq("match_id", matchId)
       .order("created_at", { ascending: false });
     if (data) setEventos(data);
@@ -118,6 +121,20 @@ export default function PartidosPage() {
       setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol");
       cargarEventos(partidoActivo.id);
     } catch (error: any) { alert("Error al registrar evento."); }
+  };
+
+  // NUEVA FUNCIÓN: Actualizar evento si el usuario se equivocó
+  const actualizarEvento = async (id: string, nuevoTipo: string, nuevoMinuto: string) => {
+    try {
+      await supabase.from("match_events").update({ 
+        event_type: nuevoTipo, 
+        minute: nuevoMinuto ? parseInt(nuevoMinuto) : null 
+      }).eq("id", id);
+      setEditandoEventoId(null);
+      cargarEventos(partidoActivo.id);
+    } catch (error) {
+      alert("Error al actualizar evento.");
+    }
   };
 
   const eliminarEvento = async (id: string) => {
@@ -191,10 +208,12 @@ export default function PartidosPage() {
                   <select value={eventoJugador} onChange={e => setEventoJugador(e.target.value)} required className="w-full p-2 mt-1 rounded bg-[#1c1c1c] border border-[#2e2e2e] text-white">
                     <option value="" disabled>Selecciona el jugador</option>
                     <optgroup label={partidoActivo.home?.name}>
-                      {jugadores.filter(j => j.team_id === partidoActivo.home_team_id).map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+                      {/* CORRECCIÓN: j.full_name */}
+                      {jugadores.filter(j => j.team_id === partidoActivo.home_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}
                     </optgroup>
                     <optgroup label={partidoActivo.away?.name}>
-                      {jugadores.filter(j => j.team_id === partidoActivo.away_team_id).map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+                      {/* CORRECCIÓN: j.full_name */}
+                      {jugadores.filter(j => j.team_id === partidoActivo.away_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}
                     </optgroup>
                   </select>
                 </div>
@@ -232,21 +251,47 @@ export default function PartidosPage() {
               ) : (
                 eventos.map(ev => (
                   <div key={ev.id} className="flex items-center justify-between bg-[#141414] p-3 rounded-xl border border-[#2E2E2E]">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-[#0a0a0a] rounded-lg border border-[#2E2E2E] flex items-center justify-center text-lg">
-                        {ev.event_type === 'gol' && '⚽'}
-                        {ev.event_type === 'amarilla' && '🟨'}
-                        {ev.event_type === 'roja' && '🟥'}
-                        {ev.event_type === 'mvp' && '🌟'}
+                    
+                    {/* INICIO MODO EDICIÓN O VISTA NORMAL */}
+                    {editandoEventoId === ev.id ? (
+                      <div className="flex items-center gap-4 w-full">
+                        <select id={`edit-t-${ev.id}`} defaultValue={ev.event_type} className="bg-black p-2 text-white rounded border border-[#2e2e2e]">
+                          <option value="gol">⚽ Gol</option>
+                          <option value="amarilla">🟨 Amarilla</option>
+                          <option value="roja">🟥 Roja</option>
+                          <option value="mvp">🌟 MVP</option>
+                        </select>
+                        <input id={`edit-m-${ev.id}`} type="number" defaultValue={ev.minute || ""} placeholder="Minuto" className="bg-black p-2 text-white w-20 rounded border border-[#2e2e2e]" />
+                        <div className="flex gap-2 ml-auto">
+                          <button onClick={() => actualizarEvento(ev.id, (document.getElementById(`edit-t-${ev.id}`) as HTMLSelectElement).value, (document.getElementById(`edit-m-${ev.id}`) as HTMLInputElement).value)} className="text-green-500 hover:text-green-400 text-xs font-bold px-3 py-2 bg-green-900/20 rounded">Guardar</button>
+                          <button onClick={() => setEditandoEventoId(null)} className="text-gray-500 hover:text-gray-400 text-xs font-bold px-3 py-2 bg-gray-900/20 rounded">Cancelar</button>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-white font-bold">{ev.players?.name} <span className="text-gray-500 font-normal text-xs ml-2">({ev.teams?.name})</span></p>
-                        <p className="text-xs text-[#D4A017] font-bold uppercase tracking-wider">{ev.event_type} {ev.minute ? `- Min ${ev.minute}'` : ''}</p>
-                      </div>
-                    </div>
-                    {partidoActivo.status !== 'finished' && (
-                      <button onClick={() => eliminarEvento(ev.id)} className="text-red-500 hover:text-red-400 text-xs font-bold px-2 py-1 bg-red-900/20 rounded">Anular</button>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-[#0a0a0a] rounded-lg border border-[#2E2E2E] flex items-center justify-center text-lg">
+                            {ev.event_type === 'gol' && '⚽'}
+                            {ev.event_type === 'amarilla' && '🟨'}
+                            {ev.event_type === 'roja' && '🟥'}
+                            {ev.event_type === 'mvp' && '🌟'}
+                          </div>
+                          <div>
+                            {/* CORRECCIÓN: ev.players?.full_name */}
+                            <p className="text-white font-bold">{ev.players?.full_name} <span className="text-gray-500 font-normal text-xs ml-2">({ev.teams?.name})</span></p>
+                            <p className="text-xs text-[#D4A017] font-bold uppercase tracking-wider">{ev.event_type} {ev.minute ? `- Min ${ev.minute}'` : ''}</p>
+                          </div>
+                        </div>
+                        {partidoActivo.status !== 'finished' && (
+                          <div className="flex gap-2">
+                            <button onClick={() => setEditandoEventoId(ev.id)} className="text-[#D4A017] hover:text-yellow-300 text-xs font-bold px-2 py-1 bg-[#D4A017]/10 rounded">Editar</button>
+                            <button onClick={() => eliminarEvento(ev.id)} className="text-red-500 hover:text-red-400 text-xs font-bold px-2 py-1 bg-red-900/20 rounded">Anular</button>
+                          </div>
+                        )}
+                      </>
                     )}
+                    {/* FIN MODO EDICIÓN */}
+
                   </div>
                 ))
               )}
