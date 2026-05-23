@@ -9,9 +9,7 @@ export default function PartidosPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // ==========================================
-  // NUEVO: Tabs de Programación
-  // ==========================================
+  // Tabs de Programación
   const [modoProgramacion, setModoProgramacion] = useState<"manual" | "automatico">("manual");
 
   // Estados para nuevo partido (MANUAL)
@@ -25,11 +23,11 @@ export default function PartidosPage() {
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
   const [autoHoraInicio, setAutoHoraInicio] = useState("09:30");
-  const [autoDuracion, setAutoDuracion] = useState<number>(60); // 25 + 25 + 10 descanso
+  const [autoDuracion, setAutoDuracion] = useState<number>(60);
   const [autoCancha, setAutoCancha] = useState("Cancha 1");
 
   // Estados para Filtro y Descarga
-  const [filtroJornada, setFiltroJornada] = useState<number | "">(""); // Actualizado a Jornada para coincidir con el póster
+  const [filtroJornada, setFiltroJornada] = useState<number | "">("");
   const capturaRef = useRef<HTMLDivElement>(null);
   const [appUrl, setAppUrl] = useState("");
 
@@ -37,8 +35,6 @@ export default function PartidosPage() {
   const [partidoActivo, setPartidoActivo] = useState<any>(null);
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
-  
-  // Estados para nuevo evento y Edición
   const [eventoTipo, setEventoTipo] = useState("gol");
   const [eventoJugador, setEventoJugador] = useState("");
   const [eventoMinuto, setEventoMinuto] = useState("");
@@ -65,14 +61,13 @@ export default function PartidosPage() {
     if (matchesData) setPartidos(matchesData);
   };
 
-  // PROGRAMACIÓN MANUAL ORIGINAL (Con Jornada y Cancha añadidas)
   const programarPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero.");
+      if (!tourney) throw new Error("Debes configurar un torneo primero."); // TS Safe
 
       const { error } = await supabase.from("matches").insert([{
         tournament_id: tourney.id,
@@ -89,9 +84,6 @@ export default function PartidosPage() {
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
-  // ==========================================
-  // NUEVO MOTOR: GENERACIÓN AUTOMÁTICA
-  // ==========================================
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!autoDia || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
@@ -100,12 +92,12 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      
+      if (!tourney) throw new Error("Debes configurar un torneo primero."); // SOLUCIÓN ERROR VERCEL TS
+
       let equiposDisponibles = [...equipos];
       let matchesToInsert = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
 
-      // Emparejamiento aleatorio simple (no repite en la misma fecha)
       while (equiposDisponibles.length >= 2) {
         const idx1 = Math.floor(Math.random() * equiposDisponibles.length);
         const homeTeam = equiposDisponibles.splice(idx1, 1)[0];
@@ -119,11 +111,9 @@ export default function PartidosPage() {
           away_team_id: awayTeam.id,
           matchday: autoJornada,
           court: autoCancha,
-          // Guardamos la hora exacta calculada
           match_date: new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString()
         });
 
-        // Sumamos la duración para el horario del siguiente partido
         currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
       }
 
@@ -132,14 +122,14 @@ export default function PartidosPage() {
       
       alert(`¡Fecha ${autoJornada} generada con éxito!`);
       cargarDatos();
-    } catch (error) {
-      alert("Error al generar fixture.");
+    } catch (error: any) {
+      alert("Error: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- LÓGICA DE PARTIDO EN VIVO (INTACTA) ---
+  // --- LÓGICA DE PARTIDO EN VIVO ---
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
     const { data: playersData } = await supabase.from("players")
@@ -202,14 +192,14 @@ export default function PartidosPage() {
     } catch (error) { alert("Error al finalizar."); } finally { setLoading(false); }
   };
 
-  // 📸 FUNCIÓN: Descargar Calendario de la Fecha (CON ESTILO CALIB)
+  // 📸 FUNCIÓN: Descargar Calendario GAME-LEGAL PRO
   const descargarCalendario = async () => {
     if (!capturaRef.current) return;
     setLoading(true);
     try {
       capturaRef.current.style.display = "block";
       const canvas = await html2canvas(capturaRef.current, {
-        backgroundColor: "#020f26", // Fondo azul oscuro
+        backgroundColor: "#0a0a0a",
         scale: 2,
         useCORS: true
       });
@@ -227,13 +217,12 @@ export default function PartidosPage() {
     }
   };
 
-  // Filtrar partidos por la JORNADA seleccionada
   const partidosFiltrados = filtroJornada 
     ? partidos.filter(p => p.matchday === filtroJornada)
     : partidos;
 
   // ============================================================================
-  // VISTA 2: PANEL DE CONTROL EN VIVO (MANTENIDO INTACTO)
+  // VISTA 2: PANEL DE CONTROL EN VIVO
   // ============================================================================
   if (partidoActivo) {
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
@@ -241,7 +230,6 @@ export default function PartidosPage() {
     return (
       <div className="space-y-6">
         <button onClick={() => setPartidoActivo(null)} className="text-[#D4A017] font-bold text-sm hover:text-white transition-all">← Volver al Calendario</button>
-        {/* Marcador en Vivo */}
         <div className="bg-gradient-to-r from-[#141414] to-[#1c1c1c] rounded-2xl border border-[#2E2E2E] p-8 flex items-center justify-between shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4A017]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           <div className="text-center flex-1 z-10">
@@ -265,7 +253,6 @@ export default function PartidosPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Panel de Registro */}
           {partidoActivo.status !== 'finished' && (
             <div className="lg:col-span-1 bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 h-fit">
               <h4 className="text-[#D4A017] font-black uppercase tracking-widest text-sm mb-4 border-b border-[#2E2E2E] pb-2">Registrar Evento</h4>
@@ -300,7 +287,6 @@ export default function PartidosPage() {
             </div>
           )}
 
-          {/* Línea de Tiempo */}
           <div className="lg:col-span-2 bg-[#1C1C1C] border border-[#2E2E2E] rounded-2xl p-6">
             <h4 className="text-white font-black uppercase tracking-widest text-sm mb-4">Minuto a Minuto</h4>
             <div className="space-y-3">
@@ -361,7 +347,7 @@ export default function PartidosPage() {
         <h2 className="text-3xl font-black text-white uppercase tracking-wider">Programación de Fechas</h2>
         <div className="bg-[#1C1C1C] p-1 rounded-lg border border-[#2E2E2E] flex">
           <button onClick={() => setModoProgramacion("manual")} className={`px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "manual" ? "bg-[#D4A017] text-black shadow-lg" : "text-gray-400 hover:text-white"}`}>Manual</button>
-          <button onClick={() => setModoProgramacion("automatico")} className={`px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "automatico" ? "bg-blue-600 text-white shadow-lg" : "text-gray-400 hover:text-white"}`}>⚡ Motor Automático</button>
+          <button onClick={() => setModoProgramacion("automatico")} className={`px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "automatico" ? "bg-[#2E2E2E] text-[#D4A017] border border-[#D4A017]/30 shadow-lg" : "text-gray-400 hover:text-white"}`}>⚡ Motor Automático</button>
         </div>
       </div>
       
@@ -377,12 +363,12 @@ export default function PartidosPage() {
             <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar 1 a 1"}</button>
           </form>
         ) : (
-          <form onSubmit={generarFechaAutomatica} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-blue-900/10 p-6 border border-blue-900/50 rounded-xl">
-            <div><label className="text-xs font-bold text-blue-400 uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-blue-900/50 rounded" /></div>
-            <div><label className="text-xs font-bold text-blue-400 uppercase">Inicio 1er Partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-blue-900/50 rounded" /></div>
-            <div><label className="text-xs font-bold text-blue-400 uppercase">Minutos x Partido</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} title="Incluye ambos tiempos y descanso" className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-blue-900/50 rounded" /></div>
-            <div><label className="text-xs font-bold text-blue-400 uppercase">Número de Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-blue-900/50 rounded" /></div>
-            <button type="submit" disabled={loading} className="py-3 bg-blue-600 text-white font-black uppercase rounded shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:bg-blue-500 transition-all">⚡ Auto Generar</button>
+          <form onSubmit={generarFechaAutomatica} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-[#1C1C1C] p-6 border border-[#D4A017]/30 rounded-xl">
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Inicio 1er Partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Minutos x Partido</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} title="Incluye ambos tiempos y descanso" className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número de Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <button type="submit" disabled={loading} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.4)] hover:bg-yellow-500 transition-all">⚡ Auto Generar</button>
           </form>
         )}
       </div>
@@ -399,8 +385,8 @@ export default function PartidosPage() {
                 {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>Fecha {n}</option>)}
               </select>
             </div>
-            <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-gradient-to-r from-orange-600 to-orange-500 text-white font-black uppercase text-xs px-4 py-2 rounded shadow-lg hover:scale-105 transition-all flex items-center gap-2">
-              📸 Descargar Póster (Estilo Calib)
+            <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
+              📸 Descargar Póster Original
             </button>
           </div>
         </div>
@@ -434,72 +420,67 @@ export default function PartidosPage() {
       </div>
 
       {/* ==============================================================================
-          📸 LIENZO DE CAPTURA TIPO "CALIB" (Invisible)
+          📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO" (Invisible)
           ============================================================================== */}
       <div style={{ display: "none" }} ref={capturaRef}>
-        <div className="bg-[#020f26] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-orange-500">
+        <div className="bg-[#0a0a0a] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-[#D4A017]">
           
-          <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-blue-900/50 to-transparent"></div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A017]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
 
           {/* CABECERA (LOGOS, TÍTULO, QR) */}
-          <div className="flex justify-between items-start mb-10 relative z-10">
-            <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/20">
-               <div className="text-center text-white font-black leading-none">
-                 <span className="text-4xl text-orange-500">FUT</span><br/><span className="text-6xl">7</span>
-               </div>
-            </div>
-            
-            <div className="text-center mt-4">
-              <h1 className="text-4xl font-black text-white tracking-widest uppercase mb-2">
-                {filtroJornada ? `FECHA ${filtroJornada}` : "CRONOGRAMA OFICIAL"}
-              </h1>
+          <div className="flex justify-between items-start mb-10 relative z-10 border-b border-[#2E2E2E] pb-6">
+            <div>
+              <h1 className="text-4xl font-black text-white tracking-widest uppercase">CRONOGRAMA OFICIAL</h1>
+              <p className="text-[#D4A017] font-bold text-xl tracking-widest uppercase mt-2">
+                {filtroJornada ? `FECHA ${filtroJornada}` : "TODOS LOS PARTIDOS"}
+              </p>
               {partidosFiltrados.length > 0 && (
-                <p className="text-white font-bold text-lg tracking-widest uppercase mt-4">
+                <p className="text-gray-400 font-bold text-sm tracking-widest uppercase mt-2">
                   {new Date(partidosFiltrados[0].match_date).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               )}
             </div>
 
-            <div className="bg-white p-2 rounded-xl flex flex-col items-center shadow-2xl border-4 border-orange-500">
-              {appUrl && <QRCodeSVG value={appUrl} size={90} level={"H"} />}
-              <span className="text-[10px] text-black font-black uppercase mt-1">Ver en Vivo</span>
+            <div className="bg-[#1C1C1C] p-2 rounded-xl flex flex-col items-center shadow-2xl border border-[#D4A017]">
+              {appUrl && <QRCodeSVG value={appUrl} size={90} level={"H"} fgColor="#D4A017" bgColor="#1C1C1C" />}
+              <span className="text-[10px] text-white font-black uppercase mt-1">Ver en Vivo</span>
             </div>
           </div>
 
-          {/* GRILLA DE PARTIDOS - ESTILO TRIÁNGULO NARANJA */}
+          {/* GRILLA DE PARTIDOS - ESTILO GAME-LEGAL */}
           <div className="space-y-4 relative z-10">
             {partidosFiltrados.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-gradient-to-r from-blue-900/80 to-blue-800/80 rounded-full pr-6 pl-6 py-2 shadow-lg relative h-20">
+              <div key={p.id} className="flex items-center justify-between bg-[#141414] border border-[#2e2e2e] rounded-full pr-6 pl-6 py-2 shadow-lg relative h-20">
                 
                 <div className="flex-1 flex items-center justify-end gap-4">
                   <span className="font-black text-white text-xl uppercase tracking-wider">{p.home?.name}</span>
-                  {p.home?.shield_url ? <img src={p.home.shield_url} crossOrigin="anonymous" className="w-14 h-14 object-contain drop-shadow-xl" /> : <div className="w-14 h-14 bg-white/10 rounded-full"></div>}
+                  {p.home?.shield_url ? <img src={p.home.shield_url} crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
                 </div>
                 
-                {/* Triángulo Naranja Invertido */}
+                {/* Triángulo Dorado Invertido */}
                 <div className="w-32 flex flex-col items-center justify-center relative z-20 mx-4 h-full">
-                   <div className="w-24 h-24 bg-gradient-to-b from-orange-500 to-orange-600 flex flex-col items-center justify-start shadow-2xl absolute -top-2" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}>
-                      <span className="text-white font-black text-2xl italic mt-2">VS</span>
+                   <div className="w-24 h-24 bg-gradient-to-b from-[#D4A017] to-yellow-600 flex flex-col items-center justify-start shadow-2xl absolute -top-2" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}>
+                      <span className="text-black font-black text-2xl italic mt-2">VS</span>
                    </div>
-                   <div className="bg-[#020f26] px-4 py-1 rounded-full border border-orange-500 absolute -bottom-4 z-30 shadow-lg">
-                     <span className="text-white font-black text-sm">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' }).replace(':', 'H')}</span>
+                   <div className="bg-[#0a0a0a] px-4 py-1 rounded-full border border-[#D4A017] absolute -bottom-4 z-30 shadow-lg">
+                     <span className="text-[#D4A017] font-black text-sm">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' }).replace(':', 'H')}</span>
                    </div>
                 </div>
 
                 <div className="flex-1 flex items-center justify-start gap-4">
-                  {p.away?.shield_url ? <img src={p.away.shield_url} crossOrigin="anonymous" className="w-14 h-14 object-contain drop-shadow-xl" /> : <div className="w-14 h-14 bg-white/10 rounded-full"></div>}
+                  {p.away?.shield_url ? <img src={p.away.shield_url} crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
                   <span className="font-black text-white text-xl uppercase tracking-wider">{p.away?.name}</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="text-center mt-16 mb-4 bg-orange-600 py-3 rounded-xl mx-10 shadow-2xl">
-            <h2 className="text-2xl font-black text-white uppercase tracking-widest italic">TODOS LOS EQUIPOS JUEGAN, LOS ESPERAMOS</h2>
+          <div className="text-center mt-16 mb-4 bg-[#D4A017] py-3 rounded-xl mx-10 shadow-2xl">
+            <h2 className="text-xl font-black text-black uppercase tracking-widest">Organización Deportiva Profesional</h2>
           </div>
           
           <div className="text-center mt-6">
-             <p className="text-gray-400 text-xs tracking-[0.3em] uppercase">Powered by GAME-LEGAL PRO</p>
+             <p className="text-gray-500 text-xs tracking-[0.3em] uppercase">Powered by GAME-LEGAL PRO</p>
           </div>
         </div>
       </div>
