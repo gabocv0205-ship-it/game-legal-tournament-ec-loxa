@@ -71,6 +71,8 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
+      if (!tourney) throw new Error("Debes configurar un torneo primero."); // SOLUCIÓN ERROR VERCEL TS
+
       const { error } = await supabase.from("matches").insert([{
         tournament_id: tourney.id, home_team_id: localId, away_team_id: visitanteId,
         match_date: fecha, matchday: jornadaManual, court: canchaManual, stage: faseManual
@@ -87,6 +89,8 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
+      if (!tourney) throw new Error("Debes configurar un torneo primero.");
+
       const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
       const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
       let matchesToInsert = [];
@@ -131,7 +135,7 @@ export default function PartidosPage() {
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
-  // 🏆 NUEVO: MOTOR INTELIGENTE DE FASES FINALES (LLAVES)
+  // 🏆 MOTOR INTELIGENTE DE FASES FINALES (LLAVES)
   const generarLlavesAutomaticas = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!autoDia || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
@@ -140,8 +144,8 @@ export default function PartidosPage() {
 
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
+      if (!tourney) throw new Error("Debes configurar un torneo primero."); // SOLUCIÓN ERROR VERCEL TS
       
-      // 1. Calcular Tabla de Posiciones Interna (Cerebro Matemático)
       const matchesGrupos = partidos.filter(p => p.stage === "Fase de Grupos" && p.status === "finished");
       const stats: Record<string, any> = {};
       equipos.forEach(t => { stats[t.id] = { id: t.id, gf: 0, gc: 0, pts: 0 }; });
@@ -156,12 +160,10 @@ export default function PartidosPage() {
         }
       });
 
-      // Ordenar por Puntos, luego Gol Diferencia, luego Goles a Favor
       const clasificacionGlobal = Object.values(stats)
         .map(s => ({ ...s, gd: s.gf - s.gc }))
         .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
 
-      // 2. Determinar la cantidad de equipos que pasan según la fase
       let numEquipos = 0;
       if (faseGenerar === "Octavos de Final") numEquipos = 16;
       else if (faseGenerar === "Cuartos de Final") numEquipos = 8;
@@ -170,7 +172,6 @@ export default function PartidosPage() {
 
       if (clasificacionGlobal.length < numEquipos) throw new Error("No hay suficientes equipos en el torneo para armar esta fase.");
 
-      // 3. Tomar los clasificados y cruzar (1ro vs Último, 2do vs Penúltimo...)
       const clasificados = clasificacionGlobal.slice(0, numEquipos);
       let matchesToInsert = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
@@ -179,7 +180,6 @@ export default function PartidosPage() {
         const mejor = clasificados[i];
         const peor = clasificados[numEquipos - 1 - i];
 
-        // Partido de Ida (o Único)
         const fechaAsignadaIda = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
         matchesToInsert.push({
           tournament_id: tourney.id, home_team_id: mejor.id, away_team_id: peor.id,
@@ -187,7 +187,6 @@ export default function PartidosPage() {
         });
         currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
 
-        // Si es Ida y Vuelta, programar el segundo partido inmediatamente después o al final de la jornada
         if (formatoEliminatoria === "Ida y Vuelta (Estilo Libertadores)") {
            const fechaAsignadaVuelta = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
            matchesToInsert.push({
@@ -416,7 +415,6 @@ export default function PartidosPage() {
                  </select>
                </div>
                
-               {/* Fechas para las eliminatorias */}
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
