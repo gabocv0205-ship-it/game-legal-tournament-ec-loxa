@@ -12,12 +12,16 @@ export default function PartidosPage() {
   // Tabs de Programación
   const [modoProgramacion, setModoProgramacion] = useState<"manual" | "automatico">("manual");
 
+  // Opciones de Fases del Torneo
+  const opcionesFase = ["Fase de Grupos", "16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Tercer Lugar", "Final"];
+
   // Estados para nuevo partido (MANUAL)
   const [localId, setLocalId] = useState("");
   const [visitanteId, setVisitanteId] = useState("");
   const [fecha, setFecha] = useState("");
   const [jornadaManual, setJornadaManual] = useState<number>(1);
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
+  const [faseManual, setFaseManual] = useState("Fase de Grupos");
 
   // Estados para nuevo partido (AUTOMÁTICO)
   const [autoJornada, setAutoJornada] = useState<number>(1);
@@ -25,6 +29,7 @@ export default function PartidosPage() {
   const [autoHoraInicio, setAutoHoraInicio] = useState("09:30");
   const [autoDuracion, setAutoDuracion] = useState<number>(60);
   const [autoCancha, setAutoCancha] = useState("Cancha 1");
+  const [autoFase, setAutoFase] = useState("Fase de Grupos");
 
   // Estados para Filtro y Descarga
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
@@ -67,7 +72,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero."); // TS Safe
+      if (!tourney) throw new Error("Debes configurar un torneo primero.");
 
       const { error } = await supabase.from("matches").insert([{
         tournament_id: tourney.id,
@@ -75,7 +80,8 @@ export default function PartidosPage() {
         away_team_id: visitanteId,
         match_date: fecha,
         matchday: jornadaManual,
-        court: canchaManual
+        court: canchaManual,
+        stage: faseManual
       }]);
       if (error) throw error;
       
@@ -84,46 +90,92 @@ export default function PartidosPage() {
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
+  // 🤖 MOTOR AUTOMÁTICO ANTIRREPETICIÓN
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!autoDia || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
-    if (!window.confirm(`¿Generar automáticamente la Fecha ${autoJornada}?`)) return;
+    if (!window.confirm(`¿Generar Fecha ${autoJornada} de ${autoFase}?`)) return;
     
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero."); // SOLUCIÓN ERROR VERCEL TS
+      if (!tourney) throw new Error("Debes configurar un torneo primero.");
 
-      let equiposDisponibles = [...equipos];
+      // Crear un registro de partidos ya jugados para no repetirlos
+      const historialCruces = new Set(
+        partidos.map(p => `${p.home_team_id}-${p.away_team_id}`)
+      );
+      const historialCrucesInverso = new Set(
+        partidos.map(p => `${p.away_team_id}-${p.home_team_id}`)
+      );
+
       let matchesToInsert = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
+      let maxIntentos = 100; // Evitar bucles infinitos si no hay combinaciones posibles
+      let exito = false;
 
-      while (equiposDisponibles.length >= 2) {
-        const idx1 = Math.floor(Math.random() * equiposDisponibles.length);
-        const homeTeam = equiposDisponibles.splice(idx1, 1)[0];
+      // Algoritmo de emparejamiento con reintentos
+      while (maxIntentos > 0 && !exito) {
+        let equiposDisponibles = [...equipos];
+        let combinacionValida = true;
+        let tempMatches = [];
+
+        // Desordenar equipos aleatoriamente (Fisher-Yates)
+        for (let i = equiposDisponibles.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [equiposDisponibles[i], equiposDisponibles[j]] = [equiposDisponibles[j], equiposDisponibles[i]];
+        }
+
+        while (equiposDisponibles.length >= 2) {
+          const homeTeam = equiposDisponibles.pop();
+          const awayTeam = equiposDisponibles.pop();
+
+          if (!homeTeam || !awayTeam) break;
+
+          const cruce1 = `${homeTeam.id}-${awayTeam.id}`;
+          const cruce2 = `${awayTeam.id}-${homeTeam.id}`;
+
+          // Validar si ya jugaron en este torneo
+          if (historialCruces.has(cruce1) || historialCrucesInverso.has(cruce1) || historialCruces.has(cruce2) || historialCrucesInverso.has(cruce2)) {
+            combinacionValida = false;
+            break; // Romper este intento, volver a mezclar
+          }
+
+          tempMatches.push({
+            tournament_id: tourney.id,
+            home_team_id: homeTeam.id,
+            away_team_id: awayTeam.id,
+            matchday: autoJornada,
+            court: autoCancha,
+            stage: autoFase,
+            match_date: null // Se asignará si la fecha completa es válida
+          });
+        }
+
+        if (combinacionValida) {
+          // Asignar horarios exactos a la combinación exitosa
+          matchesToInsert = tempMatches.map((match) => {
+             const fechaAsignada = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
+             currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
+             return { ...match, match_date: fechaAsignada };
+          });
+          exito = true;
+        }
         
-        const idx2 = Math.floor(Math.random() * equiposDisponibles.length);
-        const awayTeam = equiposDisponibles.splice(idx2, 1)[0];
+        maxIntentos--;
+      }
 
-        matchesToInsert.push({
-          tournament_id: tourney.id,
-          home_team_id: homeTeam.id,
-          away_team_id: awayTeam.id,
-          matchday: autoJornada,
-          court: autoCancha,
-          match_date: new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString()
-        });
-
-        currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
+      if (!exito) {
+        throw new Error("No se pudo generar la fecha. Es posible que todos los equipos ya hayan jugado contra todos (Fin de temporada regular).");
       }
 
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       
-      alert(`¡Fecha ${autoJornada} generada con éxito!`);
+      alert(`¡Fecha ${autoJornada} generada con éxito sin repetir cruces!`);
       cargarDatos();
     } catch (error: any) {
-      alert("Error: " + error.message);
+      alert(error.message);
     } finally {
       setLoading(false);
     }
@@ -357,17 +409,19 @@ export default function PartidosPage() {
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 text-black rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 text-black rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 text-black rounded" /></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 text-black rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 text-black rounded" /></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 text-black rounded" placeholder="Ej: Cancha 1" /></div>
-            <div className="md:col-span-4"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 text-black rounded" /></div>
-            <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar 1 a 1"}</button>
+            <div className="md:col-span-3"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 text-black rounded" /></div>
+            <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar"}</button>
           </form>
         ) : (
-          <form onSubmit={generarFechaAutomatica} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-[#1C1C1C] p-6 border border-[#D4A017]/30 rounded-xl">
+          <form onSubmit={generarFechaAutomatica} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end bg-[#1C1C1C] p-6 border border-[#D4A017]/30 rounded-xl">
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Inicio 1er Partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Minutos x Partido</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} title="Incluye ambos tiempos y descanso" className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número de Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración (Min)</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Instancia</label><select value={autoFase} onChange={e => setAutoFase(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <button type="submit" disabled={loading} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.4)] hover:bg-yellow-500 transition-all">⚡ Auto Generar</button>
           </form>
         )}
@@ -382,11 +436,11 @@ export default function PartidosPage() {
               <label className="text-xs font-bold text-gray-500 uppercase">Ver Fecha:</label>
               <select value={filtroJornada} onChange={e => setFiltroJornada(e.target.value ? Number(e.target.value) : "")} className="bg-[#141414] text-[#D4A017] font-black border border-[#2E2E2E] p-2 rounded outline-none">
                 <option value="">Todas</option>
-                {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>Fecha {n}</option>)}
+                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(n => <option key={n} value={n}>Fecha {n}</option>)}
               </select>
             </div>
             <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
-              📸 Descargar Póster Original
+              📸 Descargar Póster
             </button>
           </div>
         </div>
@@ -396,8 +450,15 @@ export default function PartidosPage() {
             <p className="text-gray-500 text-center py-8">No hay partidos para la fecha seleccionada.</p>
           ) : (
             partidosFiltrados.map(p => (
-              <div key={p.id} className="flex flex-col md:flex-row items-center justify-between bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl gap-4 hover:border-[#D4A017] transition-all">
-                <div className="flex-1 text-right font-bold text-white text-lg">
+              <div key={p.id} className="flex flex-col md:flex-row items-center justify-between bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl gap-4 hover:border-[#D4A017] transition-all relative overflow-hidden">
+                {/* Etiqueta de Fase (Ej: "Semifinal") */}
+                {p.stage !== 'Fase de Grupos' && (
+                  <div className="absolute top-0 left-0 bg-[#D4A017] text-black text-[9px] font-black uppercase px-3 py-1 rounded-br-lg shadow-lg">
+                    {p.stage}
+                  </div>
+                )}
+                
+                <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0">
                   <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {p.court || "Cancha 1"}</p>
                   {p.home?.name}
                 </div>
@@ -407,7 +468,7 @@ export default function PartidosPage() {
                     {p.status === 'finished' ? `${p.home_goals} - ${p.away_goals}` : "VS"}
                   </div>
                 </div>
-                <div className="flex-1 text-left font-bold text-white text-lg mt-3 md:mt-0">{p.away?.name}</div>
+                <div className="flex-1 text-left font-bold text-white text-lg">{p.away?.name}</div>
                 <div className="md:ml-4">
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
@@ -420,7 +481,7 @@ export default function PartidosPage() {
       </div>
 
       {/* ==============================================================================
-          📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO" (Invisible)
+          📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO"
           ============================================================================== */}
       <div style={{ display: "none" }} ref={capturaRef}>
         <div className="bg-[#0a0a0a] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-[#D4A017]">
@@ -432,7 +493,7 @@ export default function PartidosPage() {
             <div>
               <h1 className="text-4xl font-black text-white tracking-widest uppercase">CRONOGRAMA OFICIAL</h1>
               <p className="text-[#D4A017] font-bold text-xl tracking-widest uppercase mt-2">
-                {filtroJornada ? `FECHA ${filtroJornada}` : "TODOS LOS PARTIDOS"}
+                {partidosFiltrados.length > 0 ? partidosFiltrados[0].stage.toUpperCase() : "TODOS LOS PARTIDOS"} {filtroJornada ? ` - FECHA ${filtroJornada}` : ""}
               </p>
               {partidosFiltrados.length > 0 && (
                 <p className="text-gray-400 font-bold text-sm tracking-widest uppercase mt-2">
