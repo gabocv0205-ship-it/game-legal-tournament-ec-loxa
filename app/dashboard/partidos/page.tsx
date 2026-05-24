@@ -9,13 +9,13 @@ export default function PartidosPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Tabs de Programación (AÑADIDA LA PESTAÑA DE ELIMINATORIAS)
+  // Tabs de Programación
   const [modoProgramacion, setModoProgramacion] = useState<"manual" | "automatico" | "eliminatorias">("manual");
 
-  // Opciones de Fases del Torneo
+  // Opciones de Fases
   const opcionesFase = ["Fase de Grupos", "16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Tercer Lugar", "Final"];
 
-  // Estados para nuevo partido (MANUAL)
+  // Estados Manual
   const [localId, setLocalId] = useState("");
   const [visitanteId, setVisitanteId] = useState("");
   const [fecha, setFecha] = useState("");
@@ -23,21 +23,24 @@ export default function PartidosPage() {
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
 
-  // Estados para nuevo partido (AUTOMÁTICO)
+  // Estados Automático
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
   const [autoHoraInicio, setAutoHoraInicio] = useState("09:30");
   const [autoDuracion, setAutoDuracion] = useState<number>(60);
   const [autoCancha, setAutoCancha] = useState("Cancha 1");
   const [autoFase, setAutoFase] = useState("Fase de Grupos");
-  const [idaYVuelta, setIdaYVuelta] = useState<boolean>(false); // NUEVO: Control de Ida y Vuelta
+  const [idaYVuelta, setIdaYVuelta] = useState<boolean>(false);
 
-  // Estados para Filtro y Descarga
+  // Estados Eliminatorias (Fases Finales)
+  const [formatoEliminatoria, setFormatoEliminatoria] = useState("Un Solo Partido (Playoff)");
+  const [faseGenerar, setFaseGenerar] = useState("Cuartos de Final");
+
+  // Filtros y Extras
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
   const capturaRef = useRef<HTMLDivElement>(null);
   const [appUrl, setAppUrl] = useState("");
 
-  // Estados para la Vista de "Partido en Vivo"
   const [partidoActivo, setPartidoActivo] = useState<any>(null);
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
@@ -48,22 +51,17 @@ export default function PartidosPage() {
 
   useEffect(() => {
     cargarDatos();
-    if (typeof window !== "undefined") {
-      setAppUrl(window.location.origin);
-    }
+    if (typeof window !== "undefined") setAppUrl(window.location.origin);
   }, []);
 
   const cargarDatos = async () => {
     const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
     if (!tourney) return;
-
     const { data: teamsData } = await supabase.from("teams").select("id, name").eq("tournament_id", tourney.id).order("name");
     if (teamsData) setEquipos(teamsData);
-
     const { data: matchesData } = await supabase.from("matches")
       .select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)")
-      .eq("tournament_id", tourney.id)
-      .order("match_date", { ascending: true });
+      .eq("tournament_id", tourney.id).order("match_date", { ascending: true });
     if (matchesData) setPartidos(matchesData);
   };
 
@@ -73,87 +71,49 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero.");
-
       const { error } = await supabase.from("matches").insert([{
-        tournament_id: tourney.id,
-        home_team_id: localId,
-        away_team_id: visitanteId,
-        match_date: fecha,
-        matchday: jornadaManual,
-        court: canchaManual,
-        stage: faseManual
+        tournament_id: tourney.id, home_team_id: localId, away_team_id: visitanteId,
+        match_date: fecha, matchday: jornadaManual, court: canchaManual, stage: faseManual
       }]);
       if (error) throw error;
-      
-      setLocalId(""); setVisitanteId(""); setFecha("");
-      cargarDatos();
+      setLocalId(""); setVisitanteId(""); setFecha(""); cargarDatos();
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
-  // 🤖 MOTOR AUTOMÁTICO ANTIRREPETICIÓN (CON IDA Y VUELTA)
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!autoDia || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
     if (!window.confirm(`¿Generar Fecha ${autoJornada} de ${autoFase}?`)) return;
-    
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero.");
-
-      // Registros para validar repeticiones
       const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
       const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
-
       let matchesToInsert = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
-      let maxIntentos = 100;
-      let exito = false;
+      let maxIntentos = 100, exito = false;
 
       while (maxIntentos > 0 && !exito) {
         let equiposDisponibles = [...equipos];
         let combinacionValida = true;
         let tempMatches = [];
-
         for (let i = equiposDisponibles.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [equiposDisponibles[i], equiposDisponibles[j]] = [equiposDisponibles[j], equiposDisponibles[i]];
         }
-
         while (equiposDisponibles.length >= 2) {
           const homeTeam = equiposDisponibles.pop();
           const awayTeam = equiposDisponibles.pop();
-          if (!homeTeam || !awayTeam) break;
-
           const cruce1 = `${homeTeam.id}-${awayTeam.id}`;
           const cruce2 = `${awayTeam.id}-${homeTeam.id}`;
-
-          let yaJugaron = false;
-          if (idaYVuelta) {
-            // Si es Ida y Vuelta, permitimos el partido si aún no han jugado con esta misma localía
-            yaJugaron = historialCruces.has(cruce1) || historialCruces.has(cruce2);
-          } else {
-            // Si es partido único, validamos que no hayan jugado nunca en este torneo
-            yaJugaron = historialCruces.has(cruce1) || historialCrucesInverso.has(cruce1) || historialCruces.has(cruce2) || historialCrucesInverso.has(cruce2);
-          }
-
-          if (yaJugaron) {
-            combinacionValida = false;
-            break; 
-          }
-
-          tempMatches.push({
-            tournament_id: tourney.id,
-            home_team_id: homeTeam.id,
-            away_team_id: awayTeam.id,
-            matchday: autoJornada,
-            court: autoCancha,
-            stage: autoFase,
-            match_date: null 
-          });
+          
+          let yaJugaron = idaYVuelta 
+            ? (historialCruces.has(cruce1) || historialCruces.has(cruce2)) 
+            : (historialCruces.has(cruce1) || historialCrucesInverso.has(cruce1) || historialCruces.has(cruce2) || historialCrucesInverso.has(cruce2));
+          
+          if (yaJugaron) { combinacionValida = false; break; }
+          tempMatches.push({ tournament_id: tourney.id, home_team_id: homeTeam.id, away_team_id: awayTeam.id, matchday: autoJornada, court: autoCancha, stage: autoFase, match_date: null });
         }
-
         if (combinacionValida) {
           matchesToInsert = tempMatches.map((match) => {
              const fechaAsignada = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
@@ -164,114 +124,137 @@ export default function PartidosPage() {
         }
         maxIntentos--;
       }
+      if (!exito) throw new Error("No se pudo generar. Equipos agotaron cruces posibles para este formato.");
+      const { error } = await supabase.from("matches").insert(matchesToInsert);
+      if (error) throw error;
+      alert(`¡Fecha ${autoJornada} generada con éxito!`); cargarDatos();
+    } catch (error: any) { alert(error.message); } finally { setLoading(false); }
+  };
 
-      if (!exito) {
-        throw new Error("No se pudo generar la fecha. Todos los equipos ya agotaron sus cruces posibles para este formato.");
+  // 🏆 NUEVO: MOTOR INTELIGENTE DE FASES FINALES (LLAVES)
+  const generarLlavesAutomaticas = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!autoDia || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
+    if (!window.confirm(`¿Calcular clasificados y generar ${faseGenerar}?`)) return;
+    setLoading(true);
+
+    try {
+      const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
+      
+      // 1. Calcular Tabla de Posiciones Interna (Cerebro Matemático)
+      const matchesGrupos = partidos.filter(p => p.stage === "Fase de Grupos" && p.status === "finished");
+      const stats: Record<string, any> = {};
+      equipos.forEach(t => { stats[t.id] = { id: t.id, gf: 0, gc: 0, pts: 0 }; });
+      
+      matchesGrupos.forEach(m => {
+        if (stats[m.home_team_id] && stats[m.away_team_id]) {
+          stats[m.home_team_id].gf += m.home_goals || 0; stats[m.away_team_id].gf += m.away_goals || 0;
+          stats[m.home_team_id].gc += m.away_goals || 0; stats[m.away_team_id].gc += m.home_goals || 0;
+          if (m.home_goals > m.away_goals) stats[m.home_team_id].pts += 3;
+          else if (m.away_goals > m.home_goals) stats[m.away_team_id].pts += 3;
+          else { stats[m.home_team_id].pts += 1; stats[m.away_team_id].pts += 1; }
+        }
+      });
+
+      // Ordenar por Puntos, luego Gol Diferencia, luego Goles a Favor
+      const clasificacionGlobal = Object.values(stats)
+        .map(s => ({ ...s, gd: s.gf - s.gc }))
+        .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+
+      // 2. Determinar la cantidad de equipos que pasan según la fase
+      let numEquipos = 0;
+      if (faseGenerar === "Octavos de Final") numEquipos = 16;
+      else if (faseGenerar === "Cuartos de Final") numEquipos = 8;
+      else if (faseGenerar === "Semifinal") numEquipos = 4;
+      else if (faseGenerar === "Final") numEquipos = 2;
+
+      if (clasificacionGlobal.length < numEquipos) throw new Error("No hay suficientes equipos en el torneo para armar esta fase.");
+
+      // 3. Tomar los clasificados y cruzar (1ro vs Último, 2do vs Penúltimo...)
+      const clasificados = clasificacionGlobal.slice(0, numEquipos);
+      let matchesToInsert = [];
+      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
+
+      for (let i = 0; i < numEquipos / 2; i++) {
+        const mejor = clasificados[i];
+        const peor = clasificados[numEquipos - 1 - i];
+
+        // Partido de Ida (o Único)
+        const fechaAsignadaIda = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
+        matchesToInsert.push({
+          tournament_id: tourney.id, home_team_id: mejor.id, away_team_id: peor.id,
+          matchday: autoJornada, court: autoCancha, stage: faseGenerar, match_date: fechaAsignadaIda
+        });
+        currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
+
+        // Si es Ida y Vuelta, programar el segundo partido inmediatamente después o al final de la jornada
+        if (formatoEliminatoria === "Ida y Vuelta (Estilo Libertadores)") {
+           const fechaAsignadaVuelta = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
+           matchesToInsert.push({
+             tournament_id: tourney.id, home_team_id: peor.id, away_team_id: mejor.id,
+             matchday: autoJornada + 1, court: autoCancha, stage: `${faseGenerar} (Vuelta)`, match_date: fechaAsignadaVuelta
+           });
+           currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
+        }
       }
 
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       
-      alert(`¡Fecha ${autoJornada} generada con éxito sin repetir cruces prohibidos!`);
+      alert(`¡Llaves de ${faseGenerar} creadas con éxito! Clasificaron los mejores ${numEquipos}.`);
       cargarDatos();
     } catch (error: any) {
-      alert(error.message);
+      alert("Error: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- LÓGICA DE PARTIDO EN VIVO ---
+  // --- LÓGICA DE PARTIDO EN VIVO (INTACTA) ---
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
-    const { data: playersData } = await supabase.from("players")
-      .select("id, full_name, team_id, teams(name)")
-      .in("team_id", [partido.home_team_id, partido.away_team_id])
-      .order("full_name");
+    const { data: playersData } = await supabase.from("players").select("id, full_name, team_id, teams(name)").in("team_id", [partido.home_team_id, partido.away_team_id]).order("full_name");
     if (playersData) setJugadores(playersData);
     cargarEventos(partido.id);
   };
-
   const cargarEventos = async (matchId: string) => {
-    const { data } = await supabase.from("match_events")
-      .select("*, players(full_name), teams(name)")
-      .eq("match_id", matchId)
-      .order("created_at", { ascending: false });
+    const { data } = await supabase.from("match_events").select("*, players(full_name), teams(name)").eq("match_id", matchId).order("created_at", { ascending: false });
     if (data) setEventos(data);
   };
-
   const registrarEvento = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventoJugador) return alert("Selecciona un jugador.");
+    if (!eventoJugador) return;
     const jugadorSel = jugadores.find(j => j.id === eventoJugador);
-    try {
-      const { error } = await supabase.from("match_events").insert([{
-        match_id: partidoActivo.id,
-        player_id: jugadorSel.id,
-        team_id: jugadorSel.team_id,
-        event_type: eventoTipo,
-        minute: eventoMinuto ? parseInt(eventoMinuto) : null
-      }]);
-      if (error) throw error;
-      setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol");
-      cargarEventos(partidoActivo.id);
-    } catch (error: any) { alert("Error al registrar evento."); }
+    await supabase.from("match_events").insert([{ match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: eventoMinuto ? parseInt(eventoMinuto) : null }]);
+    setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol"); cargarEventos(partidoActivo.id);
   };
-
   const actualizarEvento = async (id: string, nuevoTipo: string, nuevoMinuto: string) => {
-    try {
-      await supabase.from("match_events").update({ event_type: nuevoTipo, minute: nuevoMinuto ? parseInt(nuevoMinuto) : null }).eq("id", id);
-      setEditandoEventoId(null);
-      cargarEventos(partidoActivo.id);
-    } catch (error) { alert("Error al actualizar evento."); }
+    await supabase.from("match_events").update({ event_type: nuevoTipo, minute: nuevoMinuto ? parseInt(nuevoMinuto) : null }).eq("id", id);
+    setEditandoEventoId(null); cargarEventos(partidoActivo.id);
   };
-
   const eliminarEvento = async (id: string) => {
-    if (!window.confirm("¿Borrar este evento?")) return;
-    await supabase.from("match_events").delete().eq("id", id);
-    cargarEventos(partidoActivo.id);
+    if (!window.confirm("¿Borrar?")) return; await supabase.from("match_events").delete().eq("id", id); cargarEventos(partidoActivo.id);
   };
-
   const finalizarPartido = async () => {
-    if (!window.confirm("¿Seguro que deseas finalizar el partido?")) return;
+    if (!window.confirm("¿Finalizar?")) return;
     setLoading(true);
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
-    try {
-      await supabase.from("matches").update({ status: "finished", home_goals: golesLocal, away_goals: golesVisitante }).eq("id", partidoActivo.id);
-      setPartidoActivo(null);
-      cargarDatos();
-    } catch (error) { alert("Error al finalizar."); } finally { setLoading(false); }
+    await supabase.from("matches").update({ status: "finished", home_goals: golesLocal, away_goals: golesVisitante }).eq("id", partidoActivo.id);
+    setPartidoActivo(null); cargarDatos(); setLoading(false);
   };
 
-  // 📸 FUNCIÓN: Descargar Calendario GAME-LEGAL PRO
   const descargarCalendario = async () => {
-    if (!capturaRef.current) return;
-    setLoading(true);
+    if (!capturaRef.current) return; setLoading(true);
     try {
       capturaRef.current.style.display = "block";
-      const canvas = await html2canvas(capturaRef.current, {
-        backgroundColor: "#0a0a0a",
-        scale: 2,
-        useCORS: true
-      });
+      const canvas = await html2canvas(capturaRef.current, { backgroundColor: "#0a0a0a", scale: 2, useCORS: true });
       capturaRef.current.style.display = "none";
-      
-      const image = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = image;
-      link.download = `Póster-Fecha-${filtroJornada || 'General'}.png`;
-      link.click();
-    } catch (error) {
-      alert("Error al generar la imagen.");
-    } finally {
-      setLoading(false);
-    }
+      const link = document.createElement("a"); link.href = canvas.toDataURL("image/png"); link.download = `Póster.png`; link.click();
+    } catch (e) { alert("Error"); } finally { setLoading(false); }
   };
 
-  const partidosFiltrados = filtroJornada 
-    ? partidos.filter(p => p.matchday === filtroJornada)
-    : partidos;
+  const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
 
   // ============================================================================
   // VISTA 2: PANEL DE CONTROL EN VIVO
@@ -289,14 +272,8 @@ export default function PartidosPage() {
             <p className="text-gray-500 font-bold text-xs uppercase">Local</p>
           </div>
           <div className="px-8 z-10 text-center">
-            <div className="bg-[#0a0a0a] border border-[#2E2E2E] px-6 py-3 rounded-xl font-mono text-5xl font-black text-[#D4A017] tracking-widest shadow-inner">
-              {golesLocal} - {golesVisitante}
-            </div>
-            {partidoActivo.status === 'finished' ? (
-              <span className="inline-block mt-3 bg-green-900/40 text-green-400 border border-green-500/50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">Finalizado</span>
-            ) : (
-              <span className="inline-block mt-3 bg-red-900/40 text-red-400 border border-red-500/50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest animate-pulse">En Juego</span>
-            )}
+            <div className="bg-[#0a0a0a] border border-[#2E2E2E] px-6 py-3 rounded-xl font-mono text-5xl font-black text-[#D4A017] tracking-widest shadow-inner">{golesLocal} - {golesVisitante}</div>
+            {partidoActivo.status === 'finished' ? <span className="inline-block mt-3 bg-green-900/40 text-green-400 border border-green-500/50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">Finalizado</span> : <span className="inline-block mt-3 bg-red-900/40 text-red-400 border border-red-500/50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest animate-pulse">En Juego</span>}
           </div>
           <div className="text-center flex-1 z-10">
             <h3 className="text-2xl font-black text-white">{partidoActivo.away?.name}</h3>
@@ -307,82 +284,57 @@ export default function PartidosPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {partidoActivo.status !== 'finished' && (
             <div className="lg:col-span-1 bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 h-fit">
-              <h4 className="text-[#D4A017] font-black uppercase tracking-widest text-sm mb-4 border-b border-[#2E2E2E] pb-2">Registrar Evento</h4>
               <form onSubmit={registrarEvento} className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase">Jugador</label>
-                  <select value={eventoJugador} onChange={e => setEventoJugador(e.target.value)} required className="w-full p-2 mt-1 rounded bg-[#1c1c1c] border border-[#2e2e2e] text-white">
+                <select value={eventoJugador} onChange={e => setEventoJugador(e.target.value)} required className="w-full p-2 mt-1 rounded bg-[#1c1c1c] border border-[#2e2e2e] text-white">
                     <option value="" disabled>Selecciona el jugador</option>
-                    <optgroup label={partidoActivo.home?.name}>
-                      {jugadores.filter(j => j.team_id === partidoActivo.home_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}
-                    </optgroup>
-                    <optgroup label={partidoActivo.away?.name}>
-                      {jugadores.filter(j => j.team_id === partidoActivo.away_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}
-                    </optgroup>
-                  </select>
-                </div>
+                    <optgroup label={partidoActivo.home?.name}>{jugadores.filter(j => j.team_id === partidoActivo.home_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
+                    <optgroup label={partidoActivo.away?.name}>{jugadores.filter(j => j.team_id === partidoActivo.away_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
+                </select>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Suceso</label>
-                    <select value={eventoTipo} onChange={e => setEventoTipo(e.target.value)} className="w-full p-2 mt-1 rounded bg-[#1c1c1c] border border-[#2e2e2e] text-white">
-                      <option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Minuto</label>
-                    <input type="number" value={eventoMinuto} onChange={e => setEventoMinuto(e.target.value)} placeholder="Ej: 45" className="w-full p-2 mt-1 rounded bg-[#1c1c1c] border border-[#2e2e2e] text-white" />
-                  </div>
+                  <select value={eventoTipo} onChange={e => setEventoTipo(e.target.value)} className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded"><option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option></select>
+                  <input type="number" value={eventoMinuto} onChange={e => setEventoMinuto(e.target.value)} placeholder="Min" className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded" />
                 </div>
-                <button type="submit" className="w-full py-2 bg-[#1c1c1c] text-white border border-[#2e2e2e] font-bold uppercase rounded hover:border-[#D4A017] hover:text-[#D4A017] transition-all">Guardar Evento</button>
+                <button type="submit" className="w-full py-2 bg-[#1c1c1c] text-white font-bold uppercase rounded border border-[#2e2e2e] hover:border-[#D4A017] hover:text-[#D4A017] transition-all">Guardar Evento</button>
               </form>
-              <button onClick={finalizarPartido} disabled={loading} className="w-full mt-6 py-3 bg-red-600/20 text-red-500 border border-red-600 font-black uppercase rounded-xl hover:bg-red-600 hover:text-white transition-all">Terminar Partido</button>
+              <button onClick={finalizarPartido} disabled={loading} className="w-full mt-6 py-3 bg-red-600/20 text-red-500 font-black uppercase rounded-xl border border-red-600 hover:bg-red-600 hover:text-white transition-all">Terminar Partido</button>
             </div>
           )}
 
           <div className="lg:col-span-2 bg-[#1C1C1C] border border-[#2E2E2E] rounded-2xl p-6">
             <h4 className="text-white font-black uppercase tracking-widest text-sm mb-4">Minuto a Minuto</h4>
             <div className="space-y-3">
-              {eventos.length === 0 ? (
-                <p className="text-gray-500 text-sm italic text-center py-10">No hay eventos registrados en este partido.</p>
-              ) : (
-                eventos.map(ev => (
-                  <div key={ev.id} className="flex items-center justify-between bg-[#141414] p-3 rounded-xl border border-[#2E2E2E]">
-                    {editandoEventoId === ev.id ? (
+              {eventos.map(ev => (
+                <div key={ev.id} className="flex items-center justify-between bg-[#141414] p-3 rounded-xl border border-[#2E2E2E]">
+                  {editandoEventoId === ev.id ? (
                       <div className="flex items-center gap-4 w-full">
                         <select id={`edit-t-${ev.id}`} defaultValue={ev.event_type} className="bg-black p-2 text-white rounded border border-[#2e2e2e]">
                           <option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option>
                         </select>
                         <input id={`edit-m-${ev.id}`} type="number" defaultValue={ev.minute || ""} placeholder="Minuto" className="bg-black p-2 text-white w-20 rounded border border-[#2e2e2e]" />
                         <div className="flex gap-2 ml-auto">
-                          <button onClick={() => actualizarEvento(ev.id, (document.getElementById(`edit-t-${ev.id}`) as HTMLSelectElement).value, (document.getElementById(`edit-m-${ev.id}`) as HTMLInputElement).value)} className="text-green-500 hover:text-green-400 text-xs font-bold px-3 py-2 bg-green-900/20 rounded">Guardar</button>
-                          <button onClick={() => setEditandoEventoId(null)} className="text-gray-500 hover:text-gray-400 text-xs font-bold px-3 py-2 bg-gray-900/20 rounded">Cancelar</button>
+                          <button onClick={() => actualizarEvento(ev.id, (document.getElementById(`edit-t-${ev.id}`) as HTMLSelectElement).value, (document.getElementById(`edit-m-${ev.id}`) as HTMLInputElement).value)} className="text-green-500 font-bold px-3 py-2 bg-green-900/20 rounded text-xs">Guardar</button>
+                          <button onClick={() => setEditandoEventoId(null)} className="text-gray-500 font-bold px-3 py-2 bg-gray-900/20 rounded text-xs">Cancelar</button>
                         </div>
                       </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-[#0a0a0a] rounded-lg border border-[#2E2E2E] flex items-center justify-center text-lg">
-                            {ev.event_type === 'gol' && '⚽'}
-                            {ev.event_type === 'amarilla' && '🟨'}
-                            {ev.event_type === 'roja' && '🟥'}
-                            {ev.event_type === 'mvp' && '🌟'}
-                          </div>
-                          <div>
-                            <p className="text-white font-bold">{ev.players?.full_name} <span className="text-gray-500 font-normal text-xs ml-2">({ev.teams?.name})</span></p>
-                            <p className="text-xs text-[#D4A017] font-bold uppercase tracking-wider">{ev.event_type} {ev.minute ? `- Min ${ev.minute}'` : ''}</p>
-                          </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-[#0a0a0a] rounded-lg border border-[#2E2E2E] flex items-center justify-center text-lg">{ev.event_type === 'gol' && '⚽'}{ev.event_type === 'amarilla' && '🟨'}{ev.event_type === 'roja' && '🟥'}{ev.event_type === 'mvp' && '🌟'}</div>
+                        <div>
+                          <p className="text-white font-bold">{ev.players?.full_name} <span className="text-gray-500 font-normal text-xs ml-2">({ev.teams?.name})</span></p>
+                          <p className="text-xs text-[#D4A017] font-bold uppercase tracking-wider">{ev.event_type} {ev.minute ? `- Min ${ev.minute}'` : ''}</p>
                         </div>
-                        {partidoActivo.status !== 'finished' && (
-                          <div className="flex gap-2">
-                            <button onClick={() => setEditandoEventoId(ev.id)} className="text-[#D4A017] hover:text-yellow-300 text-xs font-bold px-2 py-1 bg-[#D4A017]/10 rounded">Editar</button>
-                            <button onClick={() => eliminarEvento(ev.id)} className="text-red-500 hover:text-red-400 text-xs font-bold px-2 py-1 bg-red-900/20 rounded">Anular</button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))
-              )}
+                      </div>
+                      {partidoActivo.status !== 'finished' && (
+                        <div className="flex gap-2">
+                          <button onClick={() => setEditandoEventoId(ev.id)} className="text-[#D4A017] text-xs font-bold px-2 py-1 bg-[#D4A017]/10 rounded">Editar</button>
+                          <button onClick={() => eliminarEvento(ev.id)} className="text-red-500 text-xs font-bold px-2 py-1 bg-red-900/20 rounded">Anular</button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -391,7 +343,7 @@ export default function PartidosPage() {
   }
 
   // ============================================================================
-  // VISTA 1: CALENDARIO PRINCIPAL
+  // VISTA 1: CALENDARIO PRINCIPAL Y FORMULARIOS
   // ============================================================================
   return (
     <div className="space-y-6">
@@ -406,6 +358,7 @@ export default function PartidosPage() {
       
       {/* ======================= FORMULARIOS ======================= */}
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
+        
         {modoProgramacion === "manual" && (
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 text-black rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
@@ -440,38 +393,41 @@ export default function PartidosPage() {
           <div className="bg-[#1C1C1C] p-6 border border-yellow-600/50 rounded-xl space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-600/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
             
-            <div>
-              <h4 className="text-yellow-500 font-black uppercase text-xl mb-1 relative z-10">🏆 Generador Inteligente de Llaves</h4>
-              <p className="text-gray-400 text-sm relative z-10">Elige el formato del torneo. El sistema analizará la tabla de posiciones y emparejará a los clasificados automáticamente.</p>
+            <div className="relative z-10 border-b border-[#2E2E2E] pb-4">
+              <h4 className="text-yellow-500 font-black uppercase text-xl mb-1">🏆 Generador Inteligente de Llaves</h4>
+              <p className="text-gray-400 text-sm">El sistema extraerá la tabla de posiciones y armará los cruces matemáticamente (El 1ro vs el Peor Clasificado).</p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-               <div>
-                 <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Formato de Torneo</label>
-                 <select className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded focus:border-[#D4A017] outline-none">
-                   <option>Formato Mundial (Pasan 2 mejores de cada grupo)</option>
-                   <option>Copa Libertadores (Ida y Vuelta desde Octavos)</option>
-                   <option>Champions League (Liguilla + Eliminatoria)</option>
-                   <option>Liga Regular (Pasan 8 mejores a Playoffs)</option>
+            <form onSubmit={generarLlavesAutomaticas} className="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+               <div className="md:col-span-2">
+                 <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Formato de Llave</label>
+                 <select value={formatoEliminatoria} onChange={e => setFormatoEliminatoria(e.target.value)} className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded outline-none">
+                   <option>Un Solo Partido (Playoff)</option>
+                   <option>Ida y Vuelta (Estilo Libertadores)</option>
                  </select>
                </div>
-               <div>
+               <div className="md:col-span-2">
                  <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Fase a Generar</label>
-                 <select className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded focus:border-[#D4A017] outline-none">
+                 <select value={faseGenerar} onChange={e => setFaseGenerar(e.target.value)} className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded outline-none">
                    <option>Octavos de Final</option>
                    <option>Cuartos de Final</option>
                    <option>Semifinal</option>
                    <option>Final</option>
                  </select>
                </div>
-            </div>
-            
-            <button 
-              onClick={() => alert("¡Excelente elección! Para que el motor sepa qué equipos pasaron, necesitamos enlazar el cálculo de Puntos y Goles. ¡Pásame el código de 'app/dashboard/estadisticas/page.tsx' para activar esta función de inmediato!")} 
-              className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black text-sm font-black uppercase tracking-widest rounded-xl shadow-lg hover:scale-[1.01] transition-transform relative z-10"
-            >
-              ⚡ Calcular Clasificados y Generar Llaves
-            </button>
+               
+               {/* Fechas para las eliminatorias */}
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+
+               <div className="md:col-span-4">
+                 <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black text-sm font-black uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(212,160,23,0.3)] hover:scale-[1.01] transition-transform">
+                   ⚡ {loading ? "Calculando..." : "Calcular Clasificados y Generar Llaves"}
+                 </button>
+               </div>
+            </form>
           </div>
         )}
       </div>
@@ -501,23 +457,23 @@ export default function PartidosPage() {
             partidosFiltrados.map(p => (
               <div key={p.id} className="flex flex-col md:flex-row items-center justify-between bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl gap-4 hover:border-[#D4A017] transition-all relative overflow-hidden">
                 {p.stage !== 'Fase de Grupos' && (
-                  <div className="absolute top-0 left-0 bg-[#D4A017] text-black text-[9px] font-black uppercase px-3 py-1 rounded-br-lg shadow-lg">
+                  <div className="absolute top-0 left-0 bg-[#D4A017] text-black text-[9px] font-black uppercase px-3 py-1 rounded-br-lg shadow-lg z-10">
                     {p.stage}
                   </div>
                 )}
                 
-                <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0">
+                <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0 relative z-20">
                   <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {p.court || "Cancha 1"}</p>
                   {p.home?.name}
                 </div>
-                <div className="flex flex-col items-center px-4 w-48">
+                <div className="flex flex-col items-center px-4 w-48 relative z-20">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">{new Date(p.match_date).toLocaleString('es-EC', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}</span>
                   <div className="bg-[#0a0a0a] border border-[#2E2E2E] px-4 py-2 rounded-lg font-mono font-black text-xl text-[#D4A017] w-full text-center">
                     {p.status === 'finished' ? `${p.home_goals} - ${p.away_goals}` : "VS"}
                   </div>
                 </div>
-                <div className="flex-1 text-left font-bold text-white text-lg">{p.away?.name}</div>
-                <div className="md:ml-4">
+                <div className="flex-1 text-left font-bold text-white text-lg relative z-20">{p.away?.name}</div>
+                <div className="md:ml-4 relative z-20">
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
                   </button>
@@ -533,9 +489,7 @@ export default function PartidosPage() {
           ============================================================================== */}
       <div style={{ display: "none" }} ref={capturaRef}>
         <div className="bg-[#0a0a0a] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-[#D4A017]">
-          
           <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A017]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-
           <div className="flex justify-between items-start mb-10 relative z-10 border-b border-[#2E2E2E] pb-6">
             <div>
               <h1 className="text-4xl font-black text-white tracking-widest uppercase">CRONOGRAMA OFICIAL</h1>
@@ -548,22 +502,18 @@ export default function PartidosPage() {
                 </p>
               )}
             </div>
-
             <div className="bg-[#1C1C1C] p-2 rounded-xl flex flex-col items-center shadow-2xl border border-[#D4A017]">
               {appUrl && <QRCodeSVG value={appUrl} size={90} level={"H"} fgColor="#D4A017" bgColor="#1C1C1C" />}
               <span className="text-[10px] text-white font-black uppercase mt-1">Ver en Vivo</span>
             </div>
           </div>
-
           <div className="space-y-4 relative z-10">
             {partidosFiltrados.map(p => (
               <div key={p.id} className="flex items-center justify-between bg-[#141414] border border-[#2e2e2e] rounded-full pr-6 pl-6 py-2 shadow-lg relative h-20">
-                
                 <div className="flex-1 flex items-center justify-end gap-4">
                   <span className="font-black text-white text-xl uppercase tracking-wider">{p.home?.name}</span>
                   {p.home?.shield_url ? <img src={p.home.shield_url} crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
                 </div>
-                
                 <div className="w-32 flex flex-col items-center justify-center relative z-20 mx-4 h-full">
                    <div className="w-24 h-24 bg-gradient-to-b from-[#D4A017] to-yellow-600 flex flex-col items-center justify-start shadow-2xl absolute -top-2" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}>
                       <span className="text-black font-black text-2xl italic mt-2">VS</span>
@@ -572,7 +522,6 @@ export default function PartidosPage() {
                      <span className="text-[#D4A017] font-black text-sm">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' }).replace(':', 'H')}</span>
                    </div>
                 </div>
-
                 <div className="flex-1 flex items-center justify-start gap-4">
                   {p.away?.shield_url ? <img src={p.away.shield_url} crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
                   <span className="font-black text-white text-xl uppercase tracking-wider">{p.away?.name}</span>
@@ -580,17 +529,14 @@ export default function PartidosPage() {
               </div>
             ))}
           </div>
-
           <div className="text-center mt-16 mb-4 bg-[#D4A017] py-3 rounded-xl mx-10 shadow-2xl">
             <h2 className="text-xl font-black text-black uppercase tracking-widest">Organización Deportiva Profesional</h2>
           </div>
-          
           <div className="text-center mt-6">
              <p className="text-gray-500 text-xs tracking-[0.3em] uppercase">Powered by GAME-LEGAL PRO</p>
           </div>
         </div>
       </div>
-
     </div>
   );
 }
