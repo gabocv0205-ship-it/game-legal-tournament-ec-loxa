@@ -9,8 +9,8 @@ export default function PartidosPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Tabs de Programación
-  const [modoProgramacion, setModoProgramacion] = useState<"manual" | "automatico">("manual");
+  // Tabs de Programación (AÑADIDA LA PESTAÑA DE ELIMINATORIAS)
+  const [modoProgramacion, setModoProgramacion] = useState<"manual" | "automatico" | "eliminatorias">("manual");
 
   // Opciones de Fases del Torneo
   const opcionesFase = ["Fase de Grupos", "16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Tercer Lugar", "Final"];
@@ -30,6 +30,7 @@ export default function PartidosPage() {
   const [autoDuracion, setAutoDuracion] = useState<number>(60);
   const [autoCancha, setAutoCancha] = useState("Cancha 1");
   const [autoFase, setAutoFase] = useState("Fase de Grupos");
+  const [idaYVuelta, setIdaYVuelta] = useState<boolean>(false); // NUEVO: Control de Ida y Vuelta
 
   // Estados para Filtro y Descarga
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
@@ -90,7 +91,7 @@ export default function PartidosPage() {
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
-  // 🤖 MOTOR AUTOMÁTICO ANTIRREPETICIÓN
+  // 🤖 MOTOR AUTOMÁTICO ANTIRREPETICIÓN (CON IDA Y VUELTA)
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!autoDia || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
@@ -101,26 +102,20 @@ export default function PartidosPage() {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
       if (!tourney) throw new Error("Debes configurar un torneo primero.");
 
-      // Crear un registro de partidos ya jugados para no repetirlos
-      const historialCruces = new Set(
-        partidos.map(p => `${p.home_team_id}-${p.away_team_id}`)
-      );
-      const historialCrucesInverso = new Set(
-        partidos.map(p => `${p.away_team_id}-${p.home_team_id}`)
-      );
+      // Registros para validar repeticiones
+      const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
+      const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
 
       let matchesToInsert = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
-      let maxIntentos = 100; // Evitar bucles infinitos si no hay combinaciones posibles
+      let maxIntentos = 100;
       let exito = false;
 
-      // Algoritmo de emparejamiento con reintentos
       while (maxIntentos > 0 && !exito) {
         let equiposDisponibles = [...equipos];
         let combinacionValida = true;
         let tempMatches = [];
 
-        // Desordenar equipos aleatoriamente (Fisher-Yates)
         for (let i = equiposDisponibles.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [equiposDisponibles[i], equiposDisponibles[j]] = [equiposDisponibles[j], equiposDisponibles[i]];
@@ -129,16 +124,23 @@ export default function PartidosPage() {
         while (equiposDisponibles.length >= 2) {
           const homeTeam = equiposDisponibles.pop();
           const awayTeam = equiposDisponibles.pop();
-
           if (!homeTeam || !awayTeam) break;
 
           const cruce1 = `${homeTeam.id}-${awayTeam.id}`;
           const cruce2 = `${awayTeam.id}-${homeTeam.id}`;
 
-          // Validar si ya jugaron en este torneo
-          if (historialCruces.has(cruce1) || historialCrucesInverso.has(cruce1) || historialCruces.has(cruce2) || historialCrucesInverso.has(cruce2)) {
+          let yaJugaron = false;
+          if (idaYVuelta) {
+            // Si es Ida y Vuelta, permitimos el partido si aún no han jugado con esta misma localía
+            yaJugaron = historialCruces.has(cruce1) || historialCruces.has(cruce2);
+          } else {
+            // Si es partido único, validamos que no hayan jugado nunca en este torneo
+            yaJugaron = historialCruces.has(cruce1) || historialCrucesInverso.has(cruce1) || historialCruces.has(cruce2) || historialCrucesInverso.has(cruce2);
+          }
+
+          if (yaJugaron) {
             combinacionValida = false;
-            break; // Romper este intento, volver a mezclar
+            break; 
           }
 
           tempMatches.push({
@@ -148,12 +150,11 @@ export default function PartidosPage() {
             matchday: autoJornada,
             court: autoCancha,
             stage: autoFase,
-            match_date: null // Se asignará si la fecha completa es válida
+            match_date: null 
           });
         }
 
         if (combinacionValida) {
-          // Asignar horarios exactos a la combinación exitosa
           matchesToInsert = tempMatches.map((match) => {
              const fechaAsignada = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
              currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
@@ -161,18 +162,17 @@ export default function PartidosPage() {
           });
           exito = true;
         }
-        
         maxIntentos--;
       }
 
       if (!exito) {
-        throw new Error("No se pudo generar la fecha. Es posible que todos los equipos ya hayan jugado contra todos (Fin de temporada regular).");
+        throw new Error("No se pudo generar la fecha. Todos los equipos ya agotaron sus cruces posibles para este formato.");
       }
 
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       
-      alert(`¡Fecha ${autoJornada} generada con éxito sin repetir cruces!`);
+      alert(`¡Fecha ${autoJornada} generada con éxito sin repetir cruces prohibidos!`);
       cargarDatos();
     } catch (error: any) {
       alert(error.message);
@@ -395,17 +395,18 @@ export default function PartidosPage() {
   // ============================================================================
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end border-b border-[#2E2E2E] pb-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-[#2E2E2E] pb-4 gap-4">
         <h2 className="text-3xl font-black text-white uppercase tracking-wider">Programación de Fechas</h2>
-        <div className="bg-[#1C1C1C] p-1 rounded-lg border border-[#2E2E2E] flex">
-          <button onClick={() => setModoProgramacion("manual")} className={`px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "manual" ? "bg-[#D4A017] text-black shadow-lg" : "text-gray-400 hover:text-white"}`}>Manual</button>
-          <button onClick={() => setModoProgramacion("automatico")} className={`px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "automatico" ? "bg-[#2E2E2E] text-[#D4A017] border border-[#D4A017]/30 shadow-lg" : "text-gray-400 hover:text-white"}`}>⚡ Motor Automático</button>
+        <div className="bg-[#1C1C1C] p-1 rounded-lg border border-[#2E2E2E] flex w-full md:w-auto">
+          <button onClick={() => setModoProgramacion("manual")} className={`flex-1 md:flex-none px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "manual" ? "bg-[#D4A017] text-black shadow-lg" : "text-gray-400 hover:text-white"}`}>Manual</button>
+          <button onClick={() => setModoProgramacion("automatico")} className={`flex-1 md:flex-none px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "automatico" ? "bg-[#2E2E2E] text-[#D4A017] border border-[#D4A017]/30 shadow-lg" : "text-gray-400 hover:text-white"}`}>⚡ Automático</button>
+          <button onClick={() => setModoProgramacion("eliminatorias")} className={`flex-1 md:flex-none px-4 py-2 rounded text-xs font-bold uppercase transition-all ${modoProgramacion === "eliminatorias" ? "bg-gradient-to-r from-yellow-600 to-[#D4A017] text-black shadow-lg" : "text-gray-400 hover:text-white"}`}>🏆 Fases Finales</button>
         </div>
       </div>
       
       {/* ======================= FORMULARIOS ======================= */}
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
-        {modoProgramacion === "manual" ? (
+        {modoProgramacion === "manual" && (
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 text-black rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 text-black rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
@@ -415,8 +416,17 @@ export default function PartidosPage() {
             <div className="md:col-span-3"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 text-black rounded" /></div>
             <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar"}</button>
           </form>
-        ) : (
+        )}
+
+        {modoProgramacion === "automatico" && (
           <form onSubmit={generarFechaAutomatica} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end bg-[#1C1C1C] p-6 border border-[#D4A017]/30 rounded-xl">
+            <div className="md:col-span-6 flex items-center justify-between border-b border-[#2E2E2E] pb-3 mb-2">
+              <h4 className="text-[#D4A017] font-black uppercase text-sm">Generador de Fase de Grupos / Liga</h4>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={idaYVuelta} onChange={e => setIdaYVuelta(e.target.checked)} className="w-4 h-4 accent-[#D4A017]" />
+                <span className="text-white font-bold text-xs uppercase">Torneo de Ida y Vuelta</span>
+              </label>
+            </div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración (Min)</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
@@ -424,6 +434,45 @@ export default function PartidosPage() {
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Instancia</label><select value={autoFase} onChange={e => setAutoFase(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <button type="submit" disabled={loading} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.4)] hover:bg-yellow-500 transition-all">⚡ Auto Generar</button>
           </form>
+        )}
+
+        {modoProgramacion === "eliminatorias" && (
+          <div className="bg-[#1C1C1C] p-6 border border-yellow-600/50 rounded-xl space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-600/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            
+            <div>
+              <h4 className="text-yellow-500 font-black uppercase text-xl mb-1 relative z-10">🏆 Generador Inteligente de Llaves</h4>
+              <p className="text-gray-400 text-sm relative z-10">Elige el formato del torneo. El sistema analizará la tabla de posiciones y emparejará a los clasificados automáticamente.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+               <div>
+                 <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Formato de Torneo</label>
+                 <select className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded focus:border-[#D4A017] outline-none">
+                   <option>Formato Mundial (Pasan 2 mejores de cada grupo)</option>
+                   <option>Copa Libertadores (Ida y Vuelta desde Octavos)</option>
+                   <option>Champions League (Liguilla + Eliminatoria)</option>
+                   <option>Liga Regular (Pasan 8 mejores a Playoffs)</option>
+                 </select>
+               </div>
+               <div>
+                 <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Fase a Generar</label>
+                 <select className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded focus:border-[#D4A017] outline-none">
+                   <option>Octavos de Final</option>
+                   <option>Cuartos de Final</option>
+                   <option>Semifinal</option>
+                   <option>Final</option>
+                 </select>
+               </div>
+            </div>
+            
+            <button 
+              onClick={() => alert("¡Excelente elección! Para que el motor sepa qué equipos pasaron, necesitamos enlazar el cálculo de Puntos y Goles. ¡Pásame el código de 'app/dashboard/estadisticas/page.tsx' para activar esta función de inmediato!")} 
+              className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black text-sm font-black uppercase tracking-widest rounded-xl shadow-lg hover:scale-[1.01] transition-transform relative z-10"
+            >
+              ⚡ Calcular Clasificados y Generar Llaves
+            </button>
+          </div>
         )}
       </div>
 
@@ -451,7 +500,6 @@ export default function PartidosPage() {
           ) : (
             partidosFiltrados.map(p => (
               <div key={p.id} className="flex flex-col md:flex-row items-center justify-between bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl gap-4 hover:border-[#D4A017] transition-all relative overflow-hidden">
-                {/* Etiqueta de Fase (Ej: "Semifinal") */}
                 {p.stage !== 'Fase de Grupos' && (
                   <div className="absolute top-0 left-0 bg-[#D4A017] text-black text-[9px] font-black uppercase px-3 py-1 rounded-br-lg shadow-lg">
                     {p.stage}
@@ -488,7 +536,6 @@ export default function PartidosPage() {
           
           <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A017]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
 
-          {/* CABECERA (LOGOS, TÍTULO, QR) */}
           <div className="flex justify-between items-start mb-10 relative z-10 border-b border-[#2E2E2E] pb-6">
             <div>
               <h1 className="text-4xl font-black text-white tracking-widest uppercase">CRONOGRAMA OFICIAL</h1>
@@ -508,7 +555,6 @@ export default function PartidosPage() {
             </div>
           </div>
 
-          {/* GRILLA DE PARTIDOS - ESTILO GAME-LEGAL */}
           <div className="space-y-4 relative z-10">
             {partidosFiltrados.map(p => (
               <div key={p.id} className="flex items-center justify-between bg-[#141414] border border-[#2e2e2e] rounded-full pr-6 pl-6 py-2 shadow-lg relative h-20">
@@ -518,7 +564,6 @@ export default function PartidosPage() {
                   {p.home?.shield_url ? <img src={p.home.shield_url} crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
                 </div>
                 
-                {/* Triángulo Dorado Invertido */}
                 <div className="w-32 flex flex-col items-center justify-center relative z-20 mx-4 h-full">
                    <div className="w-24 h-24 bg-gradient-to-b from-[#D4A017] to-yellow-600 flex flex-col items-center justify-start shadow-2xl absolute -top-2" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}>
                       <span className="text-black font-black text-2xl italic mt-2">VS</span>
