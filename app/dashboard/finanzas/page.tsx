@@ -77,11 +77,12 @@ export default function FinanzasPage() {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
       if (!tourney) throw new Error("Torneo no encontrado");
 
+      // SOLUCIÓN AL ERROR DE CACHÉ: 
+      // Omitimos payment_date. La base de datos de Supabase asignará la fecha exacta automáticamente (DEFAULT NOW()).
       const { error } = await supabase.from("payments").insert([{
         tournament_id: tourney.id,
         team_id: equipoSeleccionado.id,
-        amount: Number(montoPago),
-        payment_date: new Date().toISOString()
+        amount: Number(montoPago)
       }]);
 
       if (error) throw error;
