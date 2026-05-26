@@ -94,7 +94,7 @@ export default function PartidosPage() {
       const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
       const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
       
-      // Corrección TS: Tipado explícito para arreglos vacíos
+      // SOLUCIÓN VERCEL TYPE ERROR: Tipado estricto any[]
       let matchesToInsert: any[] = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
       let maxIntentos = 100, exito = false;
@@ -102,8 +102,8 @@ export default function PartidosPage() {
       while (maxIntentos > 0 && !exito) {
         let equiposDisponibles = [...equipos];
         let combinacionValida = true;
-        // Corrección TS: Tipado explícito
-        let tempMatches: any[] = [];
+        let tempMatches: any[] = []; // SOLUCIÓN VERCEL TYPE ERROR
+        
         for (let i = equiposDisponibles.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [equiposDisponibles[i], equiposDisponibles[j]] = [equiposDisponibles[j], equiposDisponibles[i]];
@@ -147,7 +147,7 @@ export default function PartidosPage() {
 
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero."); 
+      if (!tourney) throw new Error("Debes configurar un torneo primero.");
       
       const matchesGrupos = partidos.filter(p => p.stage === "Fase de Grupos" && p.status === "finished");
       const stats: Record<string, any> = {};
@@ -177,7 +177,7 @@ export default function PartidosPage() {
 
       const clasificados = clasificacionGlobal.slice(0, numEquipos);
       
-      // Corrección TS: Tipado explícito
+      // SOLUCIÓN VERCEL TYPE ERROR: Tipado estricto any[]
       let matchesToInsert: any[] = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
 
@@ -214,6 +214,21 @@ export default function PartidosPage() {
     }
   };
 
+  // 🗑️ NUEVO: FUNCIÓN PARA ELIMINAR PARTIDO NO JUGADO
+  const eliminarPartido = async (id: string) => {
+    if (!window.confirm("¿Estás seguro de eliminar este partido programado? (Esta acción no se puede deshacer)")) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("matches").delete().eq("id", id);
+      if (error) throw error;
+      cargarDatos();
+    } catch (error: any) {
+      alert("Error al eliminar: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- LÓGICA DE PARTIDO EN VIVO (INTACTA) ---
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
@@ -237,10 +252,10 @@ export default function PartidosPage() {
     setEditandoEventoId(null); cargarEventos(partidoActivo.id);
   };
   const eliminarEvento = async (id: string) => {
-    if (!window.confirm("¿Borrar?")) return; await supabase.from("match_events").delete().eq("id", id); cargarEventos(partidoActivo.id);
+    if (!window.confirm("¿Borrar evento?")) return; await supabase.from("match_events").delete().eq("id", id); cargarEventos(partidoActivo.id);
   };
   const finalizarPartido = async () => {
-    if (!window.confirm("¿Finalizar?")) return;
+    if (!window.confirm("¿Finalizar? Una vez cerrado no podrás modificar los eventos del partido.")) return;
     setLoading(true);
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
@@ -476,10 +491,16 @@ export default function PartidosPage() {
                   </div>
                 </div>
                 <div className="flex-1 text-left font-bold text-white text-lg relative z-20">{p.away?.name}</div>
-                <div className="md:ml-4 relative z-20">
+                <div className="md:ml-4 relative z-20 flex flex-col md:flex-row gap-2">
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
                   </button>
+                  {/* BOTÓN ELIMINAR: Solo aparece si el partido no está finalizado */}
+                  {p.status !== 'finished' && (
+                    <button onClick={() => eliminarPartido(p.id)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-900/50">
+                      Eliminar
+                    </button>
+                  )}
                 </div>
               </div>
             ))
