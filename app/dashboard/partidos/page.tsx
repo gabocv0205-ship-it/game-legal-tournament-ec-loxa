@@ -71,7 +71,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero."); // SOLUCIÓN ERROR VERCEL TS
+      if (!tourney) throw new Error("Debes configurar un torneo primero.");
 
       const { error } = await supabase.from("matches").insert([{
         tournament_id: tourney.id, home_team_id: localId, away_team_id: visitanteId,
@@ -93,14 +93,17 @@ export default function PartidosPage() {
 
       const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
       const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
-      let matchesToInsert = [];
+      
+      // Corrección TS: Tipado explícito para arreglos vacíos
+      let matchesToInsert: any[] = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
       let maxIntentos = 100, exito = false;
 
       while (maxIntentos > 0 && !exito) {
         let equiposDisponibles = [...equipos];
         let combinacionValida = true;
-        let tempMatches = [];
+        // Corrección TS: Tipado explícito
+        let tempMatches: any[] = [];
         for (let i = equiposDisponibles.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [equiposDisponibles[i], equiposDisponibles[j]] = [equiposDisponibles[j], equiposDisponibles[i]];
@@ -144,7 +147,7 @@ export default function PartidosPage() {
 
     try {
       const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero."); // SOLUCIÓN ERROR VERCEL TS
+      if (!tourney) throw new Error("Debes configurar un torneo primero."); 
       
       const matchesGrupos = partidos.filter(p => p.stage === "Fase de Grupos" && p.status === "finished");
       const stats: Record<string, any> = {};
@@ -173,7 +176,9 @@ export default function PartidosPage() {
       if (clasificacionGlobal.length < numEquipos) throw new Error("No hay suficientes equipos en el torneo para armar esta fase.");
 
       const clasificados = clasificacionGlobal.slice(0, numEquipos);
-      let matchesToInsert = [];
+      
+      // Corrección TS: Tipado explícito
+      let matchesToInsert: any[] = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
 
       for (let i = 0; i < numEquipos / 2; i++) {
