@@ -1,21 +1,17 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 
-export default function PortalTorneoDinamico() {
+export default function PortalInvitados() {
   const router = useRouter();
-  const params = useParams(); // ESTE ES EL NUEVO CEREBRO DINÁMICO
-  const slug = params.slug;
 
   // Estados de Datos
-  const [torneoActual, setTorneoActual] = useState<any>(null);
   const [tabla, setTabla] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
   const [goleadores, setGoleadores] = useState<any[]>([]);
   const [visitas, setVisitas] = useState(0);
   const [activeTab, setActiveTab] = useState("posiciones");
-  const [errorTorneo, setErrorTorneo] = useState(false);
 
   // Estados del Modal de Login
   const [showLogin, setShowLogin] = useState(false);
@@ -24,79 +20,71 @@ export default function PortalTorneoDinamico() {
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
+    // 1. Motor Supabase: Cargar datos en vivo
     async function inicializarPortal() {
       try {
-        if (!slug) return;
-
         // Registrar visita
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
 
-        // 1. BUSCAR EL TORNEO POR SU URL ÚNICA (SLUG)
-        const { data: tourney } = await supabase.from("tournaments").select("*").eq("slug", slug).single();
+        const { data: tourney } = await supabase.from("tournaments").select("id").order("created_at", { ascending: false }).limit(1).single();
         
-        if (!tourney) {
-          setErrorTorneo(true);
-          return;
-        }
+        if (tourney) {
+          // Partidos y Equipos
+          const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
+          const { data: matches } = await supabase.from("matches")
+            .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
+            .eq("tournament_id", tourney.id)
+            .order("match_date", { ascending: true });
+          
+          setPartidos(matches || []);
 
-        setTorneoActual(tourney);
-
-        // 2. Extraer equipos y partidos SOLO de este torneo
-        const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
-        const { data: matches } = await supabase.from("matches")
-          .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
-          .eq("tournament_id", tourney.id)
-          .order("match_date", { ascending: true });
-        
-        setPartidos(matches || []);
-
-        // Calcular Tabla
-        const stats: Record<string, any> = {};
-        teams?.forEach(t => {
-          stats[t.id] = { id: t.id, name: t.name, shield: t.shield_url, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
-        });
-
-        matches?.filter(m => m.status === 'finished').forEach(m => {
-          const hId = m.home_team_id; const aId = m.away_team_id;
-          const hG = m.home_goals || 0; const aG = m.away_goals || 0;
-          if (stats[hId] && stats[aId]) {
-            stats[hId].pj++; stats[aId].pj++;
-            stats[hId].gf += hG; stats[aId].gf += aG;
-            stats[hId].gc += aG; stats[aId].gc += hG;
-            if (hG > aG) { stats[hId].pg++; stats[hId].pts += 3; stats[aId].pp++; }
-            else if (aG > hG) { stats[aId].pg++; stats[aId].pts += 3; stats[hId].pp++; }
-            else { stats[hId].pe++; stats[hId].pts += 1; stats[aId].pe++; stats[aId].pts += 1; }
-          }
-        });
-
-        const ordenada = Object.values(stats)
-          .map(s => ({ ...s, gd: s.gf - s.gc }))
-          .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-        setTabla(ordenada);
-
-        // Calcular Goleadores
-        const matchIds = matches?.map(m => m.id) || [];
-        if (matchIds.length > 0) {
-          const { data: events } = await supabase.from("match_events")
-            .select("*, players(full_name), teams(name)").in("match_id", matchIds).eq("event_type", "gol");
-          const golesObj: Record<string, any> = {};
-          events?.forEach(e => {
-             const pId = e.player_id;
-             if (!golesObj[pId]) golesObj[pId] = { id: pId, name: e.players?.full_name, team: e.teams?.name, goles: 0 };
-             golesObj[pId].goles++;
+          // Calcular Tabla Exacta (Con el nuevo motor)
+          const stats: Record<string, any> = {};
+          teams?.forEach(t => {
+            stats[t.id] = { id: t.id, name: t.name, shield: t.shield_url, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
           });
-          setGoleadores(Object.values(golesObj).sort((a, b) => b.goles - a.goles).slice(0, 10));
+
+          matches?.filter(m => m.status === 'finished').forEach(m => {
+            const hId = m.home_team_id; const aId = m.away_team_id;
+            const hG = m.home_goals || 0; const aG = m.away_goals || 0;
+            if (stats[hId] && stats[aId]) {
+              stats[hId].pj++; stats[aId].pj++;
+              stats[hId].gf += hG; stats[aId].gf += aG;
+              stats[hId].gc += aG; stats[aId].gc += hG;
+              if (hG > aG) { stats[hId].pg++; stats[hId].pts += 3; stats[aId].pp++; }
+              else if (aG > hG) { stats[aId].pg++; stats[aId].pts += 3; stats[hId].pp++; }
+              else { stats[hId].pe++; stats[hId].pts += 1; stats[aId].pe++; stats[aId].pts += 1; }
+            }
+          });
+
+          const ordenada = Object.values(stats)
+            .map(s => ({ ...s, gd: s.gf - s.gc }))
+            .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+          setTabla(ordenada);
+
+          // Calcular Goleadores Reales (Desde la tabla de eventos)
+          const matchIds = matches?.map(m => m.id) || [];
+          if (matchIds.length > 0) {
+            const { data: events } = await supabase.from("match_events")
+              .select("*, players(full_name), teams(name)").in("match_id", matchIds).eq("event_type", "gol");
+            const golesObj: Record<string, any> = {};
+            events?.forEach(e => {
+               const pId = e.player_id;
+               if (!golesObj[pId]) golesObj[pId] = { id: pId, name: e.players?.full_name, team: e.teams?.name, goles: 0 };
+               golesObj[pId].goles++;
+            });
+            setGoleadores(Object.values(golesObj).sort((a, b) => b.goles - a.goles).slice(0, 10));
+          }
         }
       } catch (err) {
         console.error("Error cargando portal:", err);
-        setErrorTorneo(true);
       }
     }
     inicializarPortal();
 
-    // Animaciones
+    // 2. Custom Cursor Animado
     const dot = document.getElementById('cursorDot');
     const ring = document.getElementById('cursorRing');
     let mouseX = 0, mouseY = 0, ringX = 0, ringY = 0;
@@ -115,6 +103,7 @@ export default function PortalTorneoDinamico() {
     };
     animateRing();
 
+    // 3. Animaciones Reveal al hacer scroll
     const reveals = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
@@ -122,8 +111,9 @@ export default function PortalTorneoDinamico() {
     reveals.forEach(el => observer.observe(el));
 
     return () => { document.removeEventListener('mousemove', moveCursor); };
-  }, [slug]);
+  }, []);
 
+  // Función de Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -135,18 +125,6 @@ export default function PortalTorneoDinamico() {
       router.push("/dashboard/partidos");
     }
   };
-
-  if (errorTorneo) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white font-sans">
-        <div className="text-center">
-          <h1 className="text-6xl text-[#D4A017] mb-4">404</h1>
-          <h2 className="text-2xl font-bold uppercase tracking-widest">Torneo no encontrado</h2>
-          <p className="text-gray-500 mt-2">El enlace proporcionado no es válido o el torneo ha sido eliminado.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -182,10 +160,12 @@ export default function PortalTorneoDinamico() {
         .sponsors-track { display: flex; gap: 40px; animation: marquee 20s linear infinite; padding: 40px 0;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
         
+        /* Estilos Pestañas */
         .tab-btn { flex: 1; padding: 15px; background: transparent; color: var(--white); font-weight: bold; text-transform: uppercase; border: none; cursor: none; transition: 0.3s; border-bottom: 2px solid transparent;}
         .tab-btn.active { background: rgba(212,160,23,0.1); color: var(--gold); border-bottom: 2px solid var(--gold); }
         .tab-btn:hover { background: rgba(255,255,255,0.05); }
 
+        /* Estilos Modal Tailwind Integrado */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px); z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px;}
         .modal-content { background: var(--dark2); border: 1px solid rgba(212,160,23,0.5); border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 0 40px rgba(212,160,23,0.15); position: relative;}
         .modal-close { position: absolute; top: 15px; right: 20px; background: transparent; border: none; color: var(--gray); font-size: 20px; font-weight: bold; cursor: none; transition: 0.3s;}
@@ -194,9 +174,11 @@ export default function PortalTorneoDinamico() {
         .modal-input:focus { border-color: var(--gold); }
       `}} />
 
+      {/* CURSOR ANIMADO */}
       <div className="cursor-dot" id="cursorDot"></div>
       <div className="cursor-ring" id="cursorRing"></div>
 
+      {/* MARQUESINA SUPERIOR: MENSAJE MOTIVADOR UNIVERSAL */}
       <div className="topbar">
         <div className="topbar-marquee">
           <span><i className="fa fa-trophy"></i> CHAMPIONS GAME-LEGAL 2026 — ¡DONDE NACEN LAS LEYENDAS! FORJA TU DESTINO EN LA CANCHA &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i className="fa fa-futbol"></i> DEMUESTRA TU TALENTO — GLORIA, TRANSPARENCIA Y PASIÓN 🔥</span>
@@ -209,7 +191,7 @@ export default function PortalTorneoDinamico() {
           <div className="reveal">
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>
               <span style={{ display:'inline-block', width:'8px',height:'8px',background:'var(--green-light)',borderRadius:'50%',marginRight:'8px', animation: 'pulse 2s infinite'}}></span>
-              {torneoActual?.name || 'EDICIÓN PRO 2026'}
+              TEMPORADA 2026 • EDICIÓN PRO
             </div>
             <h1 className="hero-title">
               <span style={{ display: 'block' }}>La Pasión</span>
@@ -220,6 +202,7 @@ export default function PortalTorneoDinamico() {
               El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
             <div style={{ display: 'flex', gap: '20px' }}>
+              {/* EL BOTÓN AHORA ABRE EL MODAL ELEGANTE */}
               <button onClick={() => setShowLogin(true)} className="btn-primary">
                 <i className="fa fa-shield-halved"></i> Acceso Administrador
               </button>
@@ -245,6 +228,7 @@ export default function PortalTorneoDinamico() {
               </div>
             </div>
 
+            {/* Pestañas Integradas */}
             <div style={{ display: 'flex', background: 'var(--dark2)', borderBottom: '1px solid var(--dark3)' }}>
               <button onClick={() => setActiveTab('posiciones')} className={`tab-btn ${activeTab === 'posiciones' ? 'active' : ''}`}>Posiciones</button>
               <button onClick={() => setActiveTab('partidos')} className={`tab-btn ${activeTab === 'partidos' ? 'active' : ''}`}>Partidos</button>
@@ -363,6 +347,7 @@ export default function PortalTorneoDinamico() {
             <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
             <div className="sponsor-logo">Consultorio Jurídico Virtual GAME LEGAL ec</div>
             <div className="sponsor-logo">Dr. Alex Avila Aguirre</div>
+            {/* Duplicados para efecto infinito */}
             <div className="sponsor-logo">Banco Loja</div>
             <div className="sponsor-logo">Torneos Calib</div>
             <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
@@ -378,6 +363,7 @@ export default function PortalTorneoDinamico() {
         <p style={{ color: 'var(--gold)' }}> 👑 Game Legal — La casa digital de los campeones.</p>
       </footer>
 
+      {/* MODAL DE LOGIN (ADMINISTRADOR) INTEGRADO */}
       {showLogin && (
         <div className="modal-overlay">
           <div className="modal-content animate-in fade-in zoom-in duration-300">
@@ -416,6 +402,7 @@ export default function PortalTorneoDinamico() {
           </div>
         </div>
       )}
+
     </>
   );
 }
