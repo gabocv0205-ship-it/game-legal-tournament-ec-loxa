@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 
-export default function PortalInvitados() {
+export default function PortalPrincipal() {
   const router = useRouter();
 
   // Estados de Datos
@@ -12,6 +12,7 @@ export default function PortalInvitados() {
   const [goleadores, setGoleadores] = useState<any[]>([]);
   const [visitas, setVisitas] = useState(0);
   const [activeTab, setActiveTab] = useState("posiciones");
+  const [torneoDestacado, setTorneoDestacado] = useState<any>(null);
 
   // Estados del Modal de Login
   const [showLogin, setShowLogin] = useState(false);
@@ -20,18 +21,17 @@ export default function PortalInvitados() {
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
-    // 1. Motor Supabase: Cargar datos en vivo
+    // 1. Motor Supabase: Cargar el torneo más reciente como "Vitrina"
     async function inicializarPortal() {
       try {
-        // Registrar visita
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
 
-        const { data: tourney } = await supabase.from("tournaments").select("id").order("created_at", { ascending: false }).limit(1).single();
+        const { data: tourney } = await supabase.from("tournaments").select("*").order("created_at", { ascending: false }).limit(1).single();
         
         if (tourney) {
-          // Partidos y Equipos
+          setTorneoDestacado(tourney);
           const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
           const { data: matches } = await supabase.from("matches")
             .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
@@ -40,7 +40,6 @@ export default function PortalInvitados() {
           
           setPartidos(matches || []);
 
-          // Calcular Tabla Exacta (Con el nuevo motor)
           const stats: Record<string, any> = {};
           teams?.forEach(t => {
             stats[t.id] = { id: t.id, name: t.name, shield: t.shield_url, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
@@ -64,7 +63,6 @@ export default function PortalInvitados() {
             .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
           setTabla(ordenada);
 
-          // Calcular Goleadores Reales (Desde la tabla de eventos)
           const matchIds = matches?.map(m => m.id) || [];
           if (matchIds.length > 0) {
             const { data: events } = await supabase.from("match_events")
@@ -79,7 +77,7 @@ export default function PortalInvitados() {
           }
         }
       } catch (err) {
-        console.error("Error cargando portal:", err);
+        console.error("Error cargando portal principal:", err);
       }
     }
     inicializarPortal();
@@ -113,7 +111,6 @@ export default function PortalInvitados() {
     return () => { document.removeEventListener('mousemove', moveCursor); };
   }, []);
 
-  // Función de Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -160,12 +157,10 @@ export default function PortalInvitados() {
         .sponsors-track { display: flex; gap: 40px; animation: marquee 20s linear infinite; padding: 40px 0;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
         
-        /* Estilos Pestañas */
         .tab-btn { flex: 1; padding: 15px; background: transparent; color: var(--white); font-weight: bold; text-transform: uppercase; border: none; cursor: none; transition: 0.3s; border-bottom: 2px solid transparent;}
         .tab-btn.active { background: rgba(212,160,23,0.1); color: var(--gold); border-bottom: 2px solid var(--gold); }
         .tab-btn:hover { background: rgba(255,255,255,0.05); }
 
-        /* Estilos Modal Tailwind Integrado */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px); z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px;}
         .modal-content { background: var(--dark2); border: 1px solid rgba(212,160,23,0.5); border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 0 40px rgba(212,160,23,0.15); position: relative;}
         .modal-close { position: absolute; top: 15px; right: 20px; background: transparent; border: none; color: var(--gray); font-size: 20px; font-weight: bold; cursor: none; transition: 0.3s;}
@@ -174,11 +169,9 @@ export default function PortalInvitados() {
         .modal-input:focus { border-color: var(--gold); }
       `}} />
 
-      {/* CURSOR ANIMADO */}
       <div className="cursor-dot" id="cursorDot"></div>
       <div className="cursor-ring" id="cursorRing"></div>
 
-      {/* MARQUESINA SUPERIOR: MENSAJE MOTIVADOR UNIVERSAL */}
       <div className="topbar">
         <div className="topbar-marquee">
           <span><i className="fa fa-trophy"></i> CHAMPIONS GAME-LEGAL 2026 — ¡DONDE NACEN LAS LEYENDAS! FORJA TU DESTINO EN LA CANCHA &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i className="fa fa-futbol"></i> DEMUESTRA TU TALENTO — GLORIA, TRANSPARENCIA Y PASIÓN 🔥</span>
@@ -191,7 +184,7 @@ export default function PortalInvitados() {
           <div className="reveal">
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>
               <span style={{ display:'inline-block', width:'8px',height:'8px',background:'var(--green-light)',borderRadius:'50%',marginRight:'8px', animation: 'pulse 2s infinite'}}></span>
-              TEMPORADA 2026 • EDICIÓN PRO
+              {torneoDestacado?.name || 'EDICIÓN PRO 2026'}
             </div>
             <h1 className="hero-title">
               <span style={{ display: 'block' }}>La Pasión</span>
@@ -202,7 +195,6 @@ export default function PortalInvitados() {
               El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
             <div style={{ display: 'flex', gap: '20px' }}>
-              {/* EL BOTÓN AHORA ABRE EL MODAL ELEGANTE */}
               <button onClick={() => setShowLogin(true)} className="btn-primary">
                 <i className="fa fa-shield-halved"></i> Acceso Administrador
               </button>
@@ -228,7 +220,6 @@ export default function PortalInvitados() {
               </div>
             </div>
 
-            {/* Pestañas Integradas */}
             <div style={{ display: 'flex', background: 'var(--dark2)', borderBottom: '1px solid var(--dark3)' }}>
               <button onClick={() => setActiveTab('posiciones')} className={`tab-btn ${activeTab === 'posiciones' ? 'active' : ''}`}>Posiciones</button>
               <button onClick={() => setActiveTab('partidos')} className={`tab-btn ${activeTab === 'partidos' ? 'active' : ''}`}>Partidos</button>
@@ -347,7 +338,6 @@ export default function PortalInvitados() {
             <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
             <div className="sponsor-logo">Consultorio Jurídico Virtual GAME LEGAL ec</div>
             <div className="sponsor-logo">Dr. Alex Avila Aguirre</div>
-            {/* Duplicados para efecto infinito */}
             <div className="sponsor-logo">Banco Loja</div>
             <div className="sponsor-logo">Torneos Calib</div>
             <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
@@ -363,7 +353,6 @@ export default function PortalInvitados() {
         <p style={{ color: 'var(--gold)' }}> 👑 Game Legal — La casa digital de los campeones.</p>
       </footer>
 
-      {/* MODAL DE LOGIN (ADMINISTRADOR) INTEGRADO */}
       {showLogin && (
         <div className="modal-overlay">
           <div className="modal-content animate-in fade-in zoom-in duration-300">
@@ -402,7 +391,6 @@ export default function PortalInvitados() {
           </div>
         </div>
       )}
-
     </>
   );
 }
