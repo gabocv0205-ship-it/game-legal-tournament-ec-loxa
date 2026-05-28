@@ -12,35 +12,53 @@ export function useTournamentData() {
     stats: { suspended: 0, debts: 0 },
     loading: true,
     tournamentId: null as string | null,
+    tournamentName: "" as string,
   });
 
   const fetchData = useCallback(async () => {
     try {
-      const { data: tourney, error: tourneyError } = await supabase
-        .from('tournaments')
-        .select('id')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      // 1. LEER LA IDENTIDAD DEL TORNEO DESDE LA MEMORIA DEL NAVEGADOR
+      let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
+      let activeName = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentName') : "";
 
-      if (tourneyError || !tourney) {
-        setData(prev => ({ ...prev, loading: false }));
-        return;
+      // 2. RESPALDO AUTOMÁTICO: Si no hay ninguno en memoria, buscamos el más reciente
+      if (!activeId) {
+        const { data: fallbackTourney, error: tourneyError } = await supabase
+          .from('tournaments')
+          .select('id, name')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (tourneyError || !fallbackTourney) {
+          setData(prev => ({ ...prev, loading: false }));
+          return;
+        }
+        
+        activeId = fallbackTourney.id;
+        activeName = fallbackTourney.name;
+        
+        // Guardar el respaldo en memoria para no perder el hilo
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('activeTournamentId', activeId);
+          localStorage.setItem('activeTournamentName', activeName);
+        }
       }
 
+      // 3. EXTRAER DATOS FILTRADOS EXCLUSIVAMENTE PARA ESTE TORNEO (Aislamiento SaaS)
       const [playersRes, teamsRes, matchesRes] = await Promise.all([
         supabase
           .from('players')
           .select('*, teams(name, shield_url)')
-          .eq('tournament_id', tourney.id),
+          .eq('tournament_id', activeId),
         supabase
           .from('teams')
           .select('*, payments(amount)')
-          .eq('tournament_id', tourney.id),
+          .eq('tournament_id', activeId),
         supabase
           .from('matches')
           .select('*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)')
-          .eq('tournament_id', tourney.id),
+          .eq('tournament_id', activeId),
       ]);
 
       const playersData = playersRes.data || [];
@@ -63,7 +81,8 @@ export function useTournamentData() {
           }).length,
         },
         loading: false,
-        tournamentId: tourney.id,
+        tournamentId: activeId,
+        tournamentName: activeName || "Torneo Oficial",
       });
     } catch (error) {
       console.error('Error cargando datos:', error);
