@@ -70,6 +70,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // GENERACIÓN DEL MENÚ INTELIGENTE
   // ==========================================
   const MENU = [
+    { href: "/dashboard/torneos", label: "Mis Torneos", icon: Icons.crown }, // <--- AÑADE ESTA LÍNEA
+  { href: "/dashboard", label: "Inicio", icon: Icons.home },
+  { href: "/dashboard/equipos", label: "Equipos", icon: Icons.users },
     { href: "/dashboard", label: "Inicio", icon: Icons.home },
     { href: "/dashboard/equipos", label: "Equipos", icon: Icons.users },
     { href: "/dashboard/sorteo", label: "Fase de Grupos", icon: Icons.grid },
