@@ -38,10 +38,10 @@ export function useTournamentData() {
         activeId = fallbackTourney.id;
         activeName = fallbackTourney.name;
         
-        // Guardar el respaldo en memoria para no perder el hilo
+        // Guardar el respaldo en memoria de forma segura para TypeScript
         if (typeof window !== 'undefined') {
-          localStorage.setItem('activeTournamentId', activeId);
-          localStorage.setItem('activeTournamentName', activeName);
+          localStorage.setItem('activeTournamentId', activeId || "");
+          localStorage.setItem('activeTournamentName', activeName || "Torneo Oficial");
         }
       }
 
