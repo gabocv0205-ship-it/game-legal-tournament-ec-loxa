@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase";
 
 export default function ConfiguracionPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
+  
+  // Datos Generales
   const [nombre, setNombre] = useState("");
   const [formato, setFormato] = useState("todos_contra_todos");
   const [premio1, setPremio1] = useState("");
@@ -11,6 +13,13 @@ export default function ConfiguracionPage() {
   const [premio3, setPremio3] = useState("");
   const [reglamento, setReglamento] = useState<File | null>(null);
   const [reglamentoUrl, setReglamentoUrl] = useState("");
+  
+  // Motor Financiero (Nuevos campos)
+  const [costoInscripcion, setCostoInscripcion] = useState("150.00");
+  const [costoArbitraje, setCostoArbitraje] = useState("20.00");
+  const [costoAmarilla, setCostoAmarilla] = useState("2.00");
+  const [costoRoja, setCostoRoja] = useState("5.00");
+
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -18,21 +27,37 @@ export default function ConfiguracionPage() {
   }, []);
 
   const cargarConfiguracion = async () => {
-    const { data } = await supabase.from('tournaments').select('*').limit(1).single();
-    if (data) {
-      setTorneoId(data.id);
-      setNombre(data.name || "");
-      setFormato(data.format || "todos_contra_todos");
-      setPremio1(data.prize_first || "");
-      setPremio2(data.prize_second || "");
-      setPremio3(data.prize_third || "");
-      setReglamentoUrl(data.rules_url || "");
+    // Leemos el torneo que el cliente seleccionó en el Hub
+    let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
+
+    if (!activeId) {
+      const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
+      if (fallback) activeId = fallback.id;
+    }
+
+    if (activeId) {
+      const { data } = await supabase.from('tournaments').select('*').eq('id', activeId).single();
+      if (data) {
+        setTorneoId(data.id);
+        setNombre(data.name || "");
+        setFormato(data.format || "todos_contra_todos");
+        setPremio1(data.prize_first || "");
+        setPremio2(data.prize_second || "");
+        setPremio3(data.prize_third || "");
+        setReglamentoUrl(data.rules_url || "");
+        
+        // Cargar valores financieros (si existen, o dejar los por defecto)
+        if (data.registration_fee) setCostoInscripcion(data.registration_fee.toString());
+        if (data.referee_fee) setCostoArbitraje(data.referee_fee.toString());
+        if (data.yellow_card_fee) setCostoAmarilla(data.yellow_card_fee.toString());
+        if (data.red_card_fee) setCostoRoja(data.red_card_fee.toString());
+      }
     }
   };
 
   const guardarConfiguracion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!torneoId) return alert("No hay un torneo activo creado en el sistema.");
+    if (!torneoId) return alert("No hay un torneo activo seleccionado.");
     setLoading(true);
 
     try {
@@ -55,14 +80,18 @@ export default function ConfiguracionPage() {
         nuevaUrlReglamento = publicUrlData.publicUrl;
       }
 
-      // Actualizar Base de Datos
+      // Actualizar Base de Datos (incluyendo los rubros financieros)
       const { error } = await supabase.from("tournaments").update({
         name: nombre,
         format: formato,
         prize_first: premio1,
         prize_second: premio2,
         prize_third: premio3,
-        rules_url: nuevaUrlReglamento
+        rules_url: nuevaUrlReglamento,
+        registration_fee: parseFloat(costoInscripcion) || 0,
+        referee_fee: parseFloat(costoArbitraje) || 0,
+        yellow_card_fee: parseFloat(costoAmarilla) || 0,
+        red_card_fee: parseFloat(costoRoja) || 0
       }).eq("id", torneoId);
 
       if (error) throw error;
@@ -81,7 +110,7 @@ export default function ConfiguracionPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <h2 className="text-3xl font-black text-white uppercase tracking-wider">Configuración del Torneo</h2>
-      <p className="text-gray-400 text-sm">Define el formato de competición, establece los premios y sube el reglamento oficial para mantener la transparencia.</p>
+      <p className="text-gray-400 text-sm">Define el formato, premios, valores financieros y reglamento oficial.</p>
 
       <form onSubmit={guardarConfiguracion} className="space-y-8 bg-[#141414] p-8 rounded-2xl border border-[#2E2E2E] shadow-2xl">
         
@@ -99,15 +128,40 @@ export default function ConfiguracionPage() {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Formato de Competición</label>
               <select value={formato} onChange={e => setFormato(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all cursor-pointer">
                 <option value="todos_contra_todos">Liga (Todos contra Todos)</option>
-                <option value="grupos_eliminatoria">Fase de Grupos + Eliminatorias (Estilo Mundial)</option>
-                <option value="eliminatoria_ida_vuelta">Eliminatoria Ida y Vuelta (Estilo Libertadores)</option>
-                <option value="eliminatoria_directa">Eliminatoria Directa a un partido</option>
+                <option value="grupos_eliminatoria">Fase de Grupos + Eliminatorias</option>
+                <option value="eliminatoria_ida_vuelta">Eliminatoria Ida y Vuelta</option>
+                <option value="eliminatoria_directa">Eliminatoria Directa</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* SECCIÓN 2: PREMIOS */}
+        {/* SECCIÓN 2: MOTOR FINANCIERO (NUEVO) */}
+        <div className="space-y-4">
+          <h3 className="text-green-500 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2 flex items-center gap-2">
+            <i className="fa fa-coins"></i> Configuración Financiera (Libro Mayor)
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><span className="text-green-500">$</span> Inscripción</label>
+              <input type="number" step="0.01" value={costoInscripcion} onChange={e => setCostoInscripcion(e.target.value)} required className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-green-500 outline-none transition-all font-mono" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><span className="text-green-500">$</span> Arbitraje (Por Partido)</label>
+              <input type="number" step="0.01" value={costoArbitraje} onChange={e => setCostoArbitraje(e.target.value)} required className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-green-500 outline-none transition-all font-mono" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><span className="text-yellow-500">🟨</span> Multa Amarilla</label>
+              <input type="number" step="0.01" value={costoAmarilla} onChange={e => setCostoAmarilla(e.target.value)} required className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-yellow-500 outline-none transition-all font-mono" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><span className="text-red-500">🟥</span> Multa Roja</label>
+              <input type="number" step="0.01" value={costoRoja} onChange={e => setCostoRoja(e.target.value)} required className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-red-500 outline-none transition-all font-mono" />
+            </div>
+          </div>
+        </div>
+
+        {/* SECCIÓN 3: PREMIOS */}
         <div className="space-y-4">
           <h3 className="text-[#D4A017] font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2 flex items-center gap-2">
             <i className="fa fa-medal"></i> Tabla de Premios
@@ -128,7 +182,7 @@ export default function ConfiguracionPage() {
           </div>
         </div>
 
-        {/* SECCIÓN 3: REGLAMENTO OFICIAL */}
+        {/* SECCIÓN 4: REGLAMENTO OFICIAL */}
         <div className="space-y-4">
           <h3 className="text-[#D4A017] font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2 flex items-center gap-2">
             <i className="fa fa-gavel"></i> Documento Reglamentario
@@ -158,8 +212,8 @@ export default function ConfiguracionPage() {
 
         {/* BOTÓN GUARDAR */}
         <div className="pt-4 border-t border-[#2E2E2E]">
-          <button type="submit" disabled={loading} className="w-full py-4 bg-[#D4A017] text-black font-black uppercase tracking-widest rounded-xl hover:bg-yellow-500 transition-all shadow-[0_0_20px_rgba(212,160,23,0.3)] text-lg">
-            {loading ? "Guardando Cambios..." : "Guardar Configuración Oficial"}
+          <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black font-black uppercase tracking-widest rounded-xl hover:scale-[1.01] transition-transform shadow-[0_0_20px_rgba(212,160,23,0.3)] text-lg">
+            {loading ? "Actualizando Base de Datos..." : "Guardar Configuración Oficial"}
           </button>
         </div>
 
