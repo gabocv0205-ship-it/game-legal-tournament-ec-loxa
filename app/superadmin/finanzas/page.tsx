@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -104,6 +105,11 @@ export default function CajaFuerteSaaS() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
       
+      {/* BOTÓN DE REGRESO AL MENÚ PRINCIPAL */}
+      <Link href="/dashboard" className="inline-flex items-center gap-2 text-[#D4A017] hover:text-white font-black uppercase tracking-widest text-xs transition-colors mb-2 bg-[#1C1C1C] px-4 py-2 rounded-lg border border-[#2E2E2E] w-fit shadow-md">
+        ← Volver al Panel Principal
+      </Link>
+
       {/* HEADER BÓVEDA FINANCIERA */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-[#D4A017]/30 pb-4 gap-4">
         <div>
