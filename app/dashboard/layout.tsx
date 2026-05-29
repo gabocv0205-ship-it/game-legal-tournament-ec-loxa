@@ -70,11 +70,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // GENERACIÓN DEL MENÚ INTELIGENTE
   // ==========================================
   const MENU = [
-    { href: "/dashboard/torneos", label: "Mis Torneos", icon: Icons.crown }, // <--- AÑADE ESTA LÍNEA
+    { href: "/dashboard/perfil", label: "Mi Perfil", icon: Icons.user },
+    { href: "/dashboard/torneos", label: "Mis Torneos", icon: Icons.crown },
     { href: "/dashboard", label: "Inicio", icon: Icons.home },
-    { href: "/dashboard/equipos", label: "Equipos", icon: Icons.users },
+    { href: "/dashboard/equipos", label: "Equipos", icon: Icons.shield },
+    { href: "/dashboard/jugadores", label: "Jugadores", icon: Icons.users },
     { href: "/dashboard/sorteo", label: "Fase de Grupos", icon: Icons.grid },
-    { href: "/dashboard/jugadores", label: "Jugadores", icon: Icons.shield },
     { href: "/dashboard/partidos", label: "Partidos", icon: Icons.calendar },
     { href: "/dashboard/finanzas", label: "Finanzas", icon: Icons.dollar },
     { href: "/dashboard/estadisticas", label: "Estadísticas", icon: Icons.chart },
