@@ -141,12 +141,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           ))}
           
-          {/* BOTÓN SECRETO SOLO PARA TI (EL DUEÑO) */}
+         {/* BOTONES SECRETOS SOLO PARA TI (EL DUEÑO) */}
           {perfilUsuario?.role === 'superadmin' && (
-             <Link href="/superadmin/clientes" onClick={() => setSidebarOpen(false)}
-             className={`w-full flex items-center gap-3 px-4 py-3 mt-4 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${pathname.includes("/superadmin") ? "bg-gradient-to-r from-red-600 to-red-900 text-white shadow-[0_4px_20px_rgba(220,38,38,0.4)]" : "bg-[#1a0a0a] text-red-500 border border-red-900/50 hover:bg-red-900/40"}`}>
-             <Icon path={Icons.crown} size={18} /> Bóveda Admin
-           </Link>
+            <div className="mt-4 pt-4 border-t border-[#2E2E2E] space-y-2">
+              <p className="text-[10px] text-red-500 font-black uppercase tracking-widest px-4 mb-2">Control Corporativo</p>
+              
+              <Link href="/superadmin/clientes" onClick={() => setSidebarOpen(false)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${pathname.includes("/superadmin/clientes") ? "bg-gradient-to-r from-red-600 to-red-900 text-white shadow-lg" : "bg-[#1a0a0a] text-red-500 border border-red-900/50 hover:bg-red-900/40"}`}>
+                <Icon path={Icons.users} size={16} /> Bóveda Clientes
+              </Link>
+              
+              <Link href="/superadmin/finanzas" onClick={() => setSidebarOpen(false)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${pathname.includes("/superadmin/finanzas") ? "bg-[#D4A017] text-black shadow-lg" : "bg-[#1a140a] text-[#D4A017] border border-[#D4A017]/50 hover:bg-[#D4A017]/20"}`}>
+                <Icon path={Icons.dollar} size={16} /> Tesorería SaaS
+              </Link>
+            </div>
           )}
         </nav>
 
