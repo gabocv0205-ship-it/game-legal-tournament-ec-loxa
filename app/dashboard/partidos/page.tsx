@@ -5,6 +5,10 @@ import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
 
 export default function PartidosPage() {
+  const [torneoId, setTorneoId] = useState<string | null>(null);
+  const [costoArbitraje, setCostoArbitraje] = useState<number>(20);
+  const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]); // Para saber si ya pagaron el arbitraje
+  
   const [partidos, setPartidos] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,26 +59,38 @@ export default function PartidosPage() {
   }, []);
 
   const cargarDatos = async () => {
-    const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-    if (!tourney) return;
-    const { data: teamsData } = await supabase.from("teams").select("id, name").eq("tournament_id", tourney.id).order("name");
+    // 1. AISLAMIENTO SAAS
+    let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
+    if (!activeId) {
+      const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
+      if (fallback) activeId = fallback.id;
+    }
+    if (!activeId) return;
+    setTorneoId(activeId);
+
+    // 2. Traer Costo de Arbitraje
+    const { data: tourney } = await supabase.from('tournaments').select('referee_fee').eq('id', activeId).single();
+    if (tourney) setCostoArbitraje(Number(tourney.referee_fee || 20));
+
+    // 3. Traer Equipos
+    const { data: teamsData } = await supabase.from("teams").select("id, name").eq("tournament_id", activeId).order("name");
     if (teamsData) setEquipos(teamsData);
+
+    // 4. Traer Partidos
     const { data: matchesData } = await supabase.from("matches")
       .select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)")
-      .eq("tournament_id", tourney.id).order("match_date", { ascending: true });
+      .eq("tournament_id", activeId).order("match_date", { ascending: true });
     if (matchesData) setPartidos(matchesData);
   };
 
   const programarPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
+    if (!torneoId) return alert("No hay torneo activo.");
     setLoading(true);
     try {
-      const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero.");
-
       const { error } = await supabase.from("matches").insert([{
-        tournament_id: tourney.id, home_team_id: localId, away_team_id: visitanteId,
+        tournament_id: torneoId, home_team_id: localId, away_team_id: visitanteId,
         match_date: fecha, matchday: jornadaManual, court: canchaManual, stage: faseManual
       }]);
       if (error) throw error;
@@ -85,16 +101,13 @@ export default function PartidosPage() {
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!autoDia || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
+    if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Generar Fecha ${autoJornada} de ${autoFase}?`)) return;
     setLoading(true);
     try {
-      const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero.");
-
       const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
       const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
       
-      // SOLUCIÓN VERCEL TYPE ERROR: Tipado estricto any[]
       let matchesToInsert: any[] = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
       let maxIntentos = 100, exito = false;
@@ -102,7 +115,7 @@ export default function PartidosPage() {
       while (maxIntentos > 0 && !exito) {
         let equiposDisponibles = [...equipos];
         let combinacionValida = true;
-        let tempMatches: any[] = []; // SOLUCIÓN VERCEL TYPE ERROR
+        let tempMatches: any[] = [];
         
         for (let i = equiposDisponibles.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -119,7 +132,7 @@ export default function PartidosPage() {
             : (historialCruces.has(cruce1) || historialCrucesInverso.has(cruce1) || historialCruces.has(cruce2) || historialCrucesInverso.has(cruce2));
           
           if (yaJugaron) { combinacionValida = false; break; }
-          tempMatches.push({ tournament_id: tourney.id, home_team_id: homeTeam.id, away_team_id: awayTeam.id, matchday: autoJornada, court: autoCancha, stage: autoFase, match_date: null });
+          tempMatches.push({ tournament_id: torneoId, home_team_id: homeTeam.id, away_team_id: awayTeam.id, matchday: autoJornada, court: autoCancha, stage: autoFase, match_date: null });
         }
         if (combinacionValida) {
           matchesToInsert = tempMatches.map((match) => {
@@ -138,17 +151,14 @@ export default function PartidosPage() {
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
-  // 🏆 MOTOR INTELIGENTE DE FASES FINALES (LLAVES)
   const generarLlavesAutomaticas = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!autoDia || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
+    if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Calcular clasificados y generar ${faseGenerar}?`)) return;
     setLoading(true);
 
     try {
-      const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) throw new Error("Debes configurar un torneo primero.");
-      
       const matchesGrupos = partidos.filter(p => p.stage === "Fase de Grupos" && p.status === "finished");
       const stats: Record<string, any> = {};
       equipos.forEach(t => { stats[t.id] = { id: t.id, gf: 0, gc: 0, pts: 0 }; });
@@ -177,7 +187,6 @@ export default function PartidosPage() {
 
       const clasificados = clasificacionGlobal.slice(0, numEquipos);
       
-      // SOLUCIÓN VERCEL TYPE ERROR: Tipado estricto any[]
       let matchesToInsert: any[] = [];
       let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
 
@@ -187,7 +196,7 @@ export default function PartidosPage() {
 
         const fechaAsignadaIda = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
         matchesToInsert.push({
-          tournament_id: tourney.id, home_team_id: mejor.id, away_team_id: peor.id,
+          tournament_id: torneoId, home_team_id: mejor.id, away_team_id: peor.id,
           matchday: autoJornada, court: autoCancha, stage: faseGenerar, match_date: fechaAsignadaIda
         });
         currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
@@ -195,7 +204,7 @@ export default function PartidosPage() {
         if (formatoEliminatoria === "Ida y Vuelta (Estilo Libertadores)") {
            const fechaAsignadaVuelta = new Date(currentDate.getTime() - (currentDate.getTimezoneOffset() * 60000)).toISOString();
            matchesToInsert.push({
-             tournament_id: tourney.id, home_team_id: peor.id, away_team_id: mejor.id,
+             tournament_id: torneoId, home_team_id: peor.id, away_team_id: mejor.id,
              matchday: autoJornada + 1, court: autoCancha, stage: `${faseGenerar} (Vuelta)`, match_date: fechaAsignadaVuelta
            });
            currentDate.setMinutes(currentDate.getMinutes() + autoDuracion);
@@ -214,7 +223,6 @@ export default function PartidosPage() {
     }
   };
 
-  // 🗑️ NUEVO: FUNCIÓN PARA ELIMINAR PARTIDO NO JUGADO
   const eliminarPartido = async (id: string) => {
     if (!window.confirm("¿Estás seguro de eliminar este partido programado? (Esta acción no se puede deshacer)")) return;
     setLoading(true);
@@ -229,17 +237,49 @@ export default function PartidosPage() {
     }
   };
 
-  // --- LÓGICA DE PARTIDO EN VIVO (INTACTA) ---
+  // --- LÓGICA DE PARTIDO EN VIVO ---
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
     const { data: playersData } = await supabase.from("players").select("id, full_name, team_id, teams(name)").in("team_id", [partido.home_team_id, partido.away_team_id]).order("full_name");
     if (playersData) setJugadores(playersData);
     cargarEventos(partido.id);
+    cargarPagosArbitraje(partido.id); // Validar contabilidad en cancha
   };
+
   const cargarEventos = async (matchId: string) => {
     const { data } = await supabase.from("match_events").select("*, players(full_name), teams(name)").eq("match_id", matchId).order("created_at", { ascending: false });
     if (data) setEventos(data);
   };
+
+  // NUEVO: MOTOR FINANCIERO EN CANCHA
+  const cargarPagosArbitraje = async (matchId: string) => {
+    const { data } = await supabase.from("payments").select("team_id").eq("match_id", matchId).eq("concept", "arbitraje");
+    if (data) setPagosArbitraje(data.map(p => p.team_id));
+  };
+
+  const registrarPagoArbitraje = async (teamId: string, teamName: string) => {
+    if (!window.confirm(`¿Registrar abono de arbitraje en cancha ($${costoArbitraje}) para el club ${teamName}?`)) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("payments").insert([{
+         tournament_id: torneoId,
+         team_id: teamId,
+         match_id: partidoActivo.id,
+         amount: costoArbitraje,
+         concept: "arbitraje",
+         description: `Abono arbitraje directo en cancha - Jornada ${partidoActivo.matchday}`
+      }]);
+      if (error) throw error;
+      
+      alert(`Pago de $${costoArbitraje} enviado al Libro Mayor de Finanzas.`);
+      cargarPagosArbitraje(partidoActivo.id);
+    } catch (error: any) {
+      alert("Error contable: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const registrarEvento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventoJugador) return;
@@ -247,15 +287,18 @@ export default function PartidosPage() {
     await supabase.from("match_events").insert([{ match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: eventoMinuto ? parseInt(eventoMinuto) : null }]);
     setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol"); cargarEventos(partidoActivo.id);
   };
+
   const actualizarEvento = async (id: string, nuevoTipo: string, nuevoMinuto: string) => {
     await supabase.from("match_events").update({ event_type: nuevoTipo, minute: nuevoMinuto ? parseInt(nuevoMinuto) : null }).eq("id", id);
     setEditandoEventoId(null); cargarEventos(partidoActivo.id);
   };
+
   const eliminarEvento = async (id: string) => {
     if (!window.confirm("¿Borrar evento?")) return; await supabase.from("match_events").delete().eq("id", id); cargarEventos(partidoActivo.id);
   };
+
   const finalizarPartido = async () => {
-    if (!window.confirm("¿Finalizar? Una vez cerrado no podrás modificar los eventos del partido.")) return;
+    if (!window.confirm("¿Finalizar? Una vez cerrado no podrás modificar los eventos del partido. Además, se asomarán las deudas por tarjetas en el libro mayor de los equipos.")) return;
     setLoading(true);
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
@@ -286,17 +329,32 @@ export default function PartidosPage() {
         <button onClick={() => setPartidoActivo(null)} className="text-[#D4A017] font-bold text-sm hover:text-white transition-all">← Volver al Calendario</button>
         <div className="bg-gradient-to-r from-[#141414] to-[#1c1c1c] rounded-2xl border border-[#2E2E2E] p-8 flex items-center justify-between shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4A017]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+          
           <div className="text-center flex-1 z-10">
             <h3 className="text-2xl font-black text-white">{partidoActivo.home?.name}</h3>
-            <p className="text-gray-500 font-bold text-xs uppercase">Local</p>
+            <p className="text-gray-500 font-bold text-xs uppercase mb-3">Local</p>
+            {/* BOTÓN FINANCIERO LOCAL */}
+            {pagosArbitraje.includes(partidoActivo.home_team_id) ? (
+              <span className="text-green-500 font-bold text-[10px] bg-green-900/20 border border-green-900/50 px-3 py-1 rounded uppercase tracking-widest">✅ Arbitraje Cancelado</span>
+            ) : (
+              <button onClick={() => registrarPagoArbitraje(partidoActivo.home_team_id, partidoActivo.home.name)} className="text-[#D4A017] border border-[#D4A017]/50 hover:bg-[#D4A017] hover:text-black font-bold text-[10px] uppercase tracking-widest px-3 py-1 rounded transition-all shadow-lg">Pagar Arbitraje (${costoArbitraje})</button>
+            )}
           </div>
+          
           <div className="px-8 z-10 text-center">
             <div className="bg-[#0a0a0a] border border-[#2E2E2E] px-6 py-3 rounded-xl font-mono text-5xl font-black text-[#D4A017] tracking-widest shadow-inner">{golesLocal} - {golesVisitante}</div>
             {partidoActivo.status === 'finished' ? <span className="inline-block mt-3 bg-green-900/40 text-green-400 border border-green-500/50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">Finalizado</span> : <span className="inline-block mt-3 bg-red-900/40 text-red-400 border border-red-500/50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest animate-pulse">En Juego</span>}
           </div>
+          
           <div className="text-center flex-1 z-10">
             <h3 className="text-2xl font-black text-white">{partidoActivo.away?.name}</h3>
-            <p className="text-gray-500 font-bold text-xs uppercase">Visitante</p>
+            <p className="text-gray-500 font-bold text-xs uppercase mb-3">Visitante</p>
+            {/* BOTÓN FINANCIERO VISITANTE */}
+            {pagosArbitraje.includes(partidoActivo.away_team_id) ? (
+              <span className="text-green-500 font-bold text-[10px] bg-green-900/20 border border-green-900/50 px-3 py-1 rounded uppercase tracking-widest">✅ Arbitraje Cancelado</span>
+            ) : (
+              <button onClick={() => registrarPagoArbitraje(partidoActivo.away_team_id, partidoActivo.away.name)} className="text-[#D4A017] border border-[#D4A017]/50 hover:bg-[#D4A017] hover:text-black font-bold text-[10px] uppercase tracking-widest px-3 py-1 rounded transition-all shadow-lg">Pagar Arbitraje (${costoArbitraje})</button>
+            )}
           </div>
         </div>
 
@@ -340,7 +398,7 @@ export default function PartidosPage() {
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-[#0a0a0a] rounded-lg border border-[#2E2E2E] flex items-center justify-center text-lg">{ev.event_type === 'gol' && '⚽'}{ev.event_type === 'amarilla' && '🟨'}{ev.event_type === 'roja' && '🟥'}{ev.event_type === 'mvp' && '🌟'}</div>
                         <div>
-                          <p className="text-white font-bold">{ev.players?.full_name} <span className="text-gray-500 font-normal text-xs ml-2">({ev.teams?.name})</span></p>
+                          <p className="text-white font-bold uppercase text-[11px] tracking-wide">{ev.players?.full_name} <span className="text-gray-500 font-normal text-[10px] ml-1">({ev.teams?.name})</span></p>
                           <p className="text-xs text-[#D4A017] font-bold uppercase tracking-wider">{ev.event_type} {ev.minute ? `- Min ${ev.minute}'` : ''}</p>
                         </div>
                       </div>
@@ -380,12 +438,12 @@ export default function PartidosPage() {
         
         {modoProgramacion === "manual" && (
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 text-black rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 text-black rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 text-black rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 text-black rounded" /></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 text-black rounded" placeholder="Ej: Cancha 1" /></div>
-            <div className="md:col-span-3"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 text-black rounded" /></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
+            <div className="md:col-span-3"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
             <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar"}</button>
           </form>
         )}
@@ -399,8 +457,8 @@ export default function PartidosPage() {
                 <span className="text-white font-bold text-xs uppercase">Torneo de Ida y Vuelta</span>
               </label>
             </div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración (Min)</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Instancia</label><select value={autoFase} onChange={e => setAutoFase(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
@@ -435,8 +493,8 @@ export default function PartidosPage() {
                  </select>
                </div>
                
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
 
@@ -482,7 +540,7 @@ export default function PartidosPage() {
                 
                 <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0 relative z-20">
                   <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {p.court || "Cancha 1"}</p>
-                  {p.home?.name}
+                  <span className="uppercase tracking-wide">{p.home?.name}</span>
                 </div>
                 <div className="flex flex-col items-center px-4 w-48 relative z-20">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">{new Date(p.match_date).toLocaleString('es-EC', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}</span>
@@ -490,12 +548,11 @@ export default function PartidosPage() {
                     {p.status === 'finished' ? `${p.home_goals} - ${p.away_goals}` : "VS"}
                   </div>
                 </div>
-                <div className="flex-1 text-left font-bold text-white text-lg relative z-20">{p.away?.name}</div>
+                <div className="flex-1 text-left font-bold text-white text-lg relative z-20 uppercase tracking-wide">{p.away?.name}</div>
                 <div className="md:ml-4 relative z-20 flex flex-col md:flex-row gap-2">
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
                   </button>
-                  {/* BOTÓN ELIMINAR: Solo aparece si el partido no está finalizado */}
                   {p.status !== 'finished' && (
                     <button onClick={() => eliminarPartido(p.id)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-900/50">
                       Eliminar
