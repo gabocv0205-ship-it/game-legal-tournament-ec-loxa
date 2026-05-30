@@ -3,15 +3,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
+import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 export default function PartidosPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [costoArbitraje, setCostoArbitraje] = useState<number>(20);
-  const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]); // Para saber si ya pagaron el arbitraje
+  const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]);
   
   const [partidos, setPartidos] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // NUEVO: ESTADO OFFLINE
+  const [isOffline, setIsOffline] = useState(false);
 
   // Tabs de Programación
   const [modoProgramacion, setModoProgramacion] = useState<"manual" | "automatico" | "eliminatorias">("manual");
@@ -19,7 +23,7 @@ export default function PartidosPage() {
   // Opciones de Fases
   const opcionesFase = ["Fase de Grupos", "16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Tercer Lugar", "Final"];
 
-  // Estados Manual
+  // Estados Manuales, Automáticos, Eliminatorias y Filtros (Intactos)
   const [localId, setLocalId] = useState("");
   const [visitanteId, setVisitanteId] = useState("");
   const [fecha, setFecha] = useState("");
@@ -27,7 +31,6 @@ export default function PartidosPage() {
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
 
-  // Estados Automático
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
   const [autoHoraInicio, setAutoHoraInicio] = useState("09:30");
@@ -36,11 +39,9 @@ export default function PartidosPage() {
   const [autoFase, setAutoFase] = useState("Fase de Grupos");
   const [idaYVuelta, setIdaYVuelta] = useState<boolean>(false);
 
-  // Estados Eliminatorias (Fases Finales)
   const [formatoEliminatoria, setFormatoEliminatoria] = useState("Un Solo Partido (Playoff)");
   const [faseGenerar, setFaseGenerar] = useState("Cuartos de Final");
 
-  // Filtros y Extras
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
   const capturaRef = useRef<HTMLDivElement>(null);
   const [appUrl, setAppUrl] = useState("");
@@ -53,13 +54,43 @@ export default function PartidosPage() {
   const [eventoMinuto, setEventoMinuto] = useState("");
   const [editandoEventoId, setEditandoEventoId] = useState<string | null>(null);
 
+  // ============================================================================
+  // NUEVO: ESCUCHADOR DE RED (PLAN DE CONTINGENCIA)
+  // ============================================================================
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOffline(!navigator.onLine);
+
+      const handleOnline = () => {
+        setIsOffline(false);
+        // Pequeño retraso para asegurar que la conexión es estable antes de sincronizar
+        setTimeout(async () => {
+          await offlineStore.sincronizarDatosPendientes();
+          if (partidoActivo) {
+            cargarEventos(partidoActivo.id);
+            cargarPagosArbitraje(partidoActivo.id);
+          }
+        }, 1500);
+      };
+
+      const handleOffline = () => setIsOffline(true);
+
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    }
+  }, [partidoActivo]);
+
   useEffect(() => {
     cargarDatos();
     if (typeof window !== "undefined") setAppUrl(window.location.origin);
   }, []);
 
   const cargarDatos = async () => {
-    // 1. AISLAMIENTO SAAS
     let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
     if (!activeId) {
       const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
@@ -68,15 +99,12 @@ export default function PartidosPage() {
     if (!activeId) return;
     setTorneoId(activeId);
 
-    // 2. Traer Costo de Arbitraje
     const { data: tourney } = await supabase.from('tournaments').select('referee_fee').eq('id', activeId).single();
     if (tourney) setCostoArbitraje(Number(tourney.referee_fee || 20));
 
-    // 3. Traer Equipos
     const { data: teamsData } = await supabase.from("teams").select("id, name").eq("tournament_id", activeId).order("name");
     if (teamsData) setEquipos(teamsData);
 
-    // 4. Traer Partidos
     const { data: matchesData } = await supabase.from("matches")
       .select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)")
       .eq("tournament_id", activeId).order("match_date", { ascending: true });
@@ -216,11 +244,7 @@ export default function PartidosPage() {
       
       alert(`¡Llaves de ${faseGenerar} creadas con éxito! Clasificaron los mejores ${numEquipos}.`);
       cargarDatos();
-    } catch (error: any) {
-      alert("Error: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
   const eliminarPartido = async (id: string) => {
@@ -230,11 +254,7 @@ export default function PartidosPage() {
       const { error } = await supabase.from("matches").delete().eq("id", id);
       if (error) throw error;
       cargarDatos();
-    } catch (error: any) {
-      alert("Error al eliminar: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error: any) { alert("Error al eliminar: " + error.message); } finally { setLoading(false); }
   };
 
   // --- LÓGICA DE PARTIDO EN VIVO ---
@@ -243,7 +263,7 @@ export default function PartidosPage() {
     const { data: playersData } = await supabase.from("players").select("id, full_name, team_id, teams(name)").in("team_id", [partido.home_team_id, partido.away_team_id]).order("full_name");
     if (playersData) setJugadores(playersData);
     cargarEventos(partido.id);
-    cargarPagosArbitraje(partido.id); // Validar contabilidad en cancha
+    cargarPagosArbitraje(partido.id);
   };
 
   const cargarEventos = async (matchId: string) => {
@@ -251,28 +271,37 @@ export default function PartidosPage() {
     if (data) setEventos(data);
   };
 
-  // NUEVO: MOTOR FINANCIERO EN CANCHA
   const cargarPagosArbitraje = async (matchId: string) => {
     const { data } = await supabase.from("payments").select("team_id").eq("match_id", matchId).eq("concept", "arbitraje");
     if (data) setPagosArbitraje(data.map(p => p.team_id));
   };
 
+  // ============================================================================
+  // INTEGRACIÓN OFFLINE: PAGOS Y EVENTOS
+  // ============================================================================
   const registrarPagoArbitraje = async (teamId: string, teamName: string) => {
     if (!window.confirm(`¿Registrar abono de arbitraje en cancha ($${costoArbitraje}) para el club ${teamName}?`)) return;
     setLoading(true);
     try {
-      const { error } = await supabase.from("payments").insert([{
+      const pagoData = {
          tournament_id: torneoId,
          team_id: teamId,
          match_id: partidoActivo.id,
          amount: costoArbitraje,
          concept: "arbitraje",
          description: `Abono arbitraje directo en cancha - Jornada ${partidoActivo.matchday}`
-      }]);
-      if (error) throw error;
-      
-      alert(`Pago de $${costoArbitraje} enviado al Libro Mayor de Finanzas.`);
-      cargarPagosArbitraje(partidoActivo.id);
+      };
+
+      if (isOffline) {
+        await offlineStore.guardarPagoOffline(pagoData);
+        setPagosArbitraje(prev => [...prev, teamId]); // Actualización visual inmediata
+        alert(`[MODO OFFLINE] Pago de $${costoArbitraje} guardado en el dispositivo. Se sincronizará en la nube al recuperar conexión.`);
+      } else {
+        const { error } = await supabase.from("payments").insert([pagoData]);
+        if (error) throw error;
+        alert(`Pago de $${costoArbitraje} enviado al Libro Mayor de Finanzas.`);
+        cargarPagosArbitraje(partidoActivo.id);
+      }
     } catch (error: any) {
       alert("Error contable: " + error.message);
     } finally {
@@ -284,21 +313,43 @@ export default function PartidosPage() {
     e.preventDefault();
     if (!eventoJugador) return;
     const jugadorSel = jugadores.find(j => j.id === eventoJugador);
-    await supabase.from("match_events").insert([{ match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: eventoMinuto ? parseInt(eventoMinuto) : null }]);
-    setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol"); cargarEventos(partidoActivo.id);
+    
+    const eventoData = { match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: eventoMinuto ? parseInt(eventoMinuto) : null };
+
+    if (isOffline) {
+      await offlineStore.guardarEventoOffline(eventoData);
+      // Actualización visual simulada para el Minuto a Minuto
+      setEventos(prev => [{
+        ...eventoData,
+        id: 'offline-' + Date.now(),
+        players: { full_name: jugadorSel.full_name },
+        teams: { name: jugadorSel.teams?.name || 'Local' },
+        created_at: new Date().toISOString()
+      }, ...prev]);
+      alert("[MODO OFFLINE] Evento guardado en la memoria de su dispositivo.");
+    } else {
+      await supabase.from("match_events").insert([eventoData]);
+      cargarEventos(partidoActivo.id);
+    }
+
+    setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol"); 
   };
 
   const actualizarEvento = async (id: string, nuevoTipo: string, nuevoMinuto: string) => {
+    if (isOffline) return alert("⚠️ Seguridad: No puedes editar eventos en Modo Offline. Espera a recuperar señal.");
     await supabase.from("match_events").update({ event_type: nuevoTipo, minute: nuevoMinuto ? parseInt(nuevoMinuto) : null }).eq("id", id);
     setEditandoEventoId(null); cargarEventos(partidoActivo.id);
   };
 
   const eliminarEvento = async (id: string) => {
+    if (isOffline) return alert("⚠️ Seguridad: No puedes anular eventos en Modo Offline. Espera a recuperar señal.");
     if (!window.confirm("¿Borrar evento?")) return; await supabase.from("match_events").delete().eq("id", id); cargarEventos(partidoActivo.id);
   };
 
   const finalizarPartido = async () => {
+    if (isOffline) return alert("⚠️ Contingencia: No puedes finalizar y cerrar el acta oficial en Modo Offline. Tus datos están guardados, espera a conectarte a internet para sellar el partido.");
     if (!window.confirm("¿Finalizar? Una vez cerrado no podrás modificar los eventos del partido. Además, se asomarán las deudas por tarjetas en el libro mayor de los equipos.")) return;
+    
     setLoading(true);
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
@@ -316,9 +367,6 @@ export default function PartidosPage() {
     } catch (e) { alert("Error"); } finally { setLoading(false); }
   };
 
-  // ============================================================================
-  // NUEVO: FUNCIONES DE WHATSAPP
-  // ============================================================================
   const compartirEnlaceInvitacion = () => {
     const mensaje = `🏆 *¡TE INVITAMOS A SEGUIR EL TORNEO EN VIVO!* 🏆\n\nRevisa el calendario oficial, resultados y el minuto a minuto de los partidos directamente desde nuestra plataforma:\n\n🔗 *Enlace Oficial:*\n${appUrl}\n\n¡No te lo pierdas! ⚽🔥`;
     window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
@@ -344,6 +392,14 @@ export default function PartidosPage() {
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
     return (
       <div className="space-y-6">
+        
+        {/* BANNER OFFLINE VISUAL */}
+        {isOffline && (
+          <div className="bg-red-900/90 text-white text-center text-[10px] sm:text-xs font-black py-3 px-4 uppercase tracking-widest rounded-xl shadow-[0_0_15px_rgba(220,38,38,0.5)] border border-red-500 animate-pulse flex items-center justify-center gap-2">
+            <span>⚠️</span> Estás sin conexión. El Modo Offline guardará los goles y cobros en tu dispositivo.
+          </div>
+        )}
+
         <button onClick={() => setPartidoActivo(null)} className="text-[#D4A017] font-bold text-sm hover:text-white transition-all">← Volver al Calendario</button>
         <div className="bg-gradient-to-r from-[#141414] to-[#1c1c1c] rounded-2xl border border-[#2E2E2E] p-8 flex items-center justify-between shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4A017]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -416,11 +472,16 @@ export default function PartidosPage() {
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-[#0a0a0a] rounded-lg border border-[#2E2E2E] flex items-center justify-center text-lg">{ev.event_type === 'gol' && '⚽'}{ev.event_type === 'amarilla' && '🟨'}{ev.event_type === 'roja' && '🟥'}{ev.event_type === 'mvp' && '🌟'}</div>
                         <div>
-                          <p className="text-white font-bold uppercase text-[11px] tracking-wide">{ev.players?.full_name} <span className="text-gray-500 font-normal text-[10px] ml-1">({ev.teams?.name})</span></p>
+                          <p className="text-white font-bold uppercase text-[11px] tracking-wide">
+                            {ev.players?.full_name} 
+                            <span className="text-gray-500 font-normal text-[10px] ml-1">({ev.teams?.name})</span>
+                            {/* Insignia visual si el evento está guardado localmente */}
+                            {ev.id?.startsWith('offline') && <span className="text-red-500 text-[9px] ml-2 animate-pulse">⏳ Sincronizando...</span>}
+                          </p>
                           <p className="text-xs text-[#D4A017] font-bold uppercase tracking-wider">{ev.event_type} {ev.minute ? `- Min ${ev.minute}'` : ''}</p>
                         </div>
                       </div>
-                      {partidoActivo.status !== 'finished' && (
+                      {partidoActivo.status !== 'finished' && !ev.id?.startsWith('offline') && (
                         <div className="flex gap-2">
                           <button onClick={() => setEditandoEventoId(ev.id)} className="text-[#D4A017] text-xs font-bold px-2 py-1 bg-[#D4A017]/10 rounded">Editar</button>
                           <button onClick={() => eliminarEvento(ev.id)} className="text-red-500 text-xs font-bold px-2 py-1 bg-red-900/20 rounded">Anular</button>
