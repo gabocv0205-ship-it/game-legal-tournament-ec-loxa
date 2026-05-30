@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 export default function PartidosPage() {
+  const [torneoSlug, setTorneoSlug] = useState<string>("");
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [costoArbitraje, setCostoArbitraje] = useState<number>(20);
   const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]);
@@ -90,11 +91,10 @@ export default function PartidosPage() {
     if (typeof window !== "undefined") setAppUrl(window.location.origin);
   }, []);
 
-  const cargarDatos = async () => {
-    let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
-    if (!activeId) {
-      const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (fallback) activeId = fallback.id;
+  const { data: tourney } = await supabase.from('tournaments').select('referee_fee, slug').eq('id', activeId).single();
+    if (tourney) {
+      setCostoArbitraje(Number(tourney.referee_fee || 20));
+      setTorneoSlug(tourney.slug); // <-- Guardamos el slug
     }
     if (!activeId) return;
     setTorneoId(activeId);
@@ -367,19 +367,15 @@ export default function PartidosPage() {
     } catch (e) { alert("Error"); } finally { setLoading(false); }
   };
 
-  const compartirEnlaceInvitacion = () => {
-    const mensaje = `🏆 *¡TE INVITAMOS A SEGUIR EL TORNEO EN VIVO!* 🏆\n\nRevisa el calendario oficial, resultados y el minuto a minuto de los partidos directamente desde nuestra plataforma:\n\n🔗 *Enlace Oficial:*\n${appUrl}\n\n¡No te lo pierdas! ⚽🔥`;
+ const compartirEnlaceInvitacion = () => {
+    const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
+    const mensaje = `🏆 *¡TE INVITAMOS A SEGUIR EL TORNEO EN VIVO!* 🏆\n\nRevisa el calendario oficial, resultados y el minuto a minuto de los partidos directamente desde nuestra plataforma:\n\n🔗 *Enlace Oficial:*\n${enlaceOficial}\n\n¡No te lo pierdas! ⚽🔥`;
     window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   const enviarRecordatorioWhatsApp = (p: any) => {
-    const fechaObj = new Date(p.match_date);
-    const fechaFormateada = fechaObj.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
-    const horaFormateada = fechaObj.toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' });
-
-    const mensaje = `🏆 *¡RECORDATORIO DE PARTIDO!* 🏆\n\n⚽ *${p.home?.name}* vs *${p.away?.name}*\n📅 *Fecha:* ${fechaFormateada}\n⏰ *Hora:* ${horaFormateada}\n🏟️ *Lugar:* ${p.court || "Cancha 1"}\n📍 *Instancia:* ${p.stage}\n\n🔗 *Sigue el partido en vivo aquí:*\n${appUrl}`;
-
-    window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
+    const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
+    // ... resto del código del recordatorio usando enlaceOficial en lugar de appUrl
   };
 
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
