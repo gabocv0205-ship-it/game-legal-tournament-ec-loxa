@@ -15,7 +15,7 @@ export default function PartidosPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // NUEVO: ESTADO OFFLINE
+  // ESTADO OFFLINE
   const [isOffline, setIsOffline] = useState(false);
 
   // Tabs de Programación
@@ -24,7 +24,7 @@ export default function PartidosPage() {
   // Opciones de Fases
   const opcionesFase = ["Fase de Grupos", "16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Tercer Lugar", "Final"];
 
-  // Estados Manuales, Automáticos, Eliminatorias y Filtros (Intactos)
+  // Estados Manuales, Automáticos, Eliminatorias y Filtros
   const [localId, setLocalId] = useState("");
   const [visitanteId, setVisitanteId] = useState("");
   const [fecha, setFecha] = useState("");
@@ -56,7 +56,7 @@ export default function PartidosPage() {
   const [editandoEventoId, setEditandoEventoId] = useState<string | null>(null);
 
   // ============================================================================
-  // NUEVO: ESCUCHADOR DE RED (PLAN DE CONTINGENCIA)
+  // ESCUCHADOR DE RED (PLAN DE CONTINGENCIA)
   // ============================================================================
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -64,7 +64,6 @@ export default function PartidosPage() {
 
       const handleOnline = () => {
         setIsOffline(false);
-        // Pequeño retraso para asegurar que la conexión es estable antes de sincronizar
         setTimeout(async () => {
           await offlineStore.sincronizarDatosPendientes();
           if (partidoActivo) {
@@ -91,16 +90,24 @@ export default function PartidosPage() {
     if (typeof window !== "undefined") setAppUrl(window.location.origin);
   }, []);
 
-  const { data: tourney } = await supabase.from('tournaments').select('referee_fee, slug').eq('id', activeId).single();
-    if (tourney) {
-      setCostoArbitraje(Number(tourney.referee_fee || 20));
-      setTorneoSlug(tourney.slug); // <-- Guardamos el slug
+  // ============================================================================
+  // FUNCIÓN REPARADA: CARGAR DATOS
+  // ============================================================================
+  const cargarDatos = async () => {
+    let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
+    if (!activeId) {
+      const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
+      if (fallback) activeId = fallback.id;
     }
     if (!activeId) return;
     setTorneoId(activeId);
 
-    const { data: tourney } = await supabase.from('tournaments').select('referee_fee').eq('id', activeId).single();
-    if (tourney) setCostoArbitraje(Number(tourney.referee_fee || 20));
+    // EXTRAEMOS COSTO DE ARBITRAJE Y EL SLUG DEL TORNEO PARA WHATSAPP
+    const { data: tourney } = await supabase.from('tournaments').select('referee_fee, slug').eq('id', activeId).single();
+    if (tourney) {
+      setCostoArbitraje(Number(tourney.referee_fee || 20));
+      setTorneoSlug(tourney.slug);
+    }
 
     const { data: teamsData } = await supabase.from("teams").select("id, name").eq("tournament_id", activeId).order("name");
     if (teamsData) setEquipos(teamsData);
@@ -318,7 +325,6 @@ export default function PartidosPage() {
 
     if (isOffline) {
       await offlineStore.guardarEventoOffline(eventoData);
-      // Actualización visual simulada para el Minuto a Minuto
       setEventos(prev => [{
         ...eventoData,
         id: 'offline-' + Date.now(),
@@ -367,7 +373,10 @@ export default function PartidosPage() {
     } catch (e) { alert("Error"); } finally { setLoading(false); }
   };
 
- const compartirEnlaceInvitacion = () => {
+  // ============================================================================
+  // FUNCIONES DE WHATSAPP REPARADAS
+  // ============================================================================
+  const compartirEnlaceInvitacion = () => {
     const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
     const mensaje = `🏆 *¡TE INVITAMOS A SEGUIR EL TORNEO EN VIVO!* 🏆\n\nRevisa el calendario oficial, resultados y el minuto a minuto de los partidos directamente desde nuestra plataforma:\n\n🔗 *Enlace Oficial:*\n${enlaceOficial}\n\n¡No te lo pierdas! ⚽🔥`;
     window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
@@ -375,7 +384,13 @@ export default function PartidosPage() {
 
   const enviarRecordatorioWhatsApp = (p: any) => {
     const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
-    // ... resto del código del recordatorio usando enlaceOficial en lugar de appUrl
+    const fechaObj = new Date(p.match_date);
+    const fechaFormateada = fechaObj.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
+    const horaFormateada = fechaObj.toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' });
+
+    const mensaje = `🏆 *¡RECORDATORIO DE PARTIDO!* 🏆\n\n⚽ *${p.home?.name}* vs *${p.away?.name}*\n📅 *Fecha:* ${fechaFormateada}\n⏰ *Hora:* ${horaFormateada}\n🏟️ *Lugar:* ${p.court || "Cancha 1"}\n📍 *Instancia:* ${p.stage}\n\n🔗 *Sigue el partido en vivo aquí:*\n${enlaceOficial}`;
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
@@ -471,7 +486,6 @@ export default function PartidosPage() {
                           <p className="text-white font-bold uppercase text-[11px] tracking-wide">
                             {ev.players?.full_name} 
                             <span className="text-gray-500 font-normal text-[10px] ml-1">({ev.teams?.name})</span>
-                            {/* Insignia visual si el evento está guardado localmente */}
                             {ev.id?.startsWith('offline') && <span className="text-red-500 text-[9px] ml-2 animate-pulse">⏳ Sincronizando...</span>}
                           </p>
                           <p className="text-xs text-[#D4A017] font-bold uppercase tracking-wider">{ev.event_type} {ev.minute ? `- Min ${ev.minute}'` : ''}</p>
