@@ -132,6 +132,14 @@ export default function PortalTorneoDinamico() {
       alert("Credenciales incorrectas. Acceso denegado.");
       setAuthLoading(false);
     } else {
+      // 🚀 NUEVO: PUENTE INTELIGENTE
+      // Si el cliente inicia sesión desde SU página pública, le inyectamos 
+      // automáticamente el ID de su torneo en el Cerebro SaaS (localStorage)
+      if (torneoActual) {
+        localStorage.setItem('activeTournamentId', torneoActual.id);
+      }
+      
+      // Lo redirigimos a su panel de control ya configurado
       router.push("/dashboard/partidos");
     }
   };
