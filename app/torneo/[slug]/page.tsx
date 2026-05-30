@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 export default function PortalTorneoDinamico() {
   const router = useRouter();
-  const params = useParams(); // ESTE ES EL NUEVO CEREBRO DINÁMICO
+  const params = useParams(); // EL CEREBRO DINÁMICO
   const slug = params.slug;
 
   // Estados de Datos
@@ -182,7 +182,10 @@ export default function PortalTorneoDinamico() {
         .sponsors-track { display: flex; gap: 40px; animation: marquee 20s linear infinite; padding: 40px 0;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
         
-        .tab-btn { flex: 1; padding: 15px; background: transparent; color: var(--white); font-weight: bold; text-transform: uppercase; border: none; cursor: none; transition: 0.3s; border-bottom: 2px solid transparent;}
+        .tabs-container { display: flex; background: var(--dark2); border-bottom: 1px solid var(--dark3); overflow-x: auto; white-space: nowrap; }
+        .tabs-container::-webkit-scrollbar { height: 4px; }
+        .tabs-container::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 4px; }
+        .tab-btn { flex: 1; padding: 15px 20px; background: transparent; color: var(--white); font-weight: bold; text-transform: uppercase; border: none; cursor: none; transition: 0.3s; border-bottom: 2px solid transparent;}
         .tab-btn.active { background: rgba(212,160,23,0.1); color: var(--gold); border-bottom: 2px solid var(--gold); }
         .tab-btn:hover { background: rgba(255,255,255,0.05); }
 
@@ -238,20 +241,23 @@ export default function PortalTorneoDinamico() {
 
           <div className="standings-card reveal" style={{ transitionDelay: '0.2s' }}>
             <div style={{ padding: '20px', background: 'var(--dark3)', borderBottom: '1px solid var(--dark2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-              <h3 style={{ textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--gold)' }}><i className="fa fa-trophy"></i> Copa GAME-LEGAL</h3>
+              <h3 style={{ textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--gold)' }}><i className="fa fa-trophy"></i> {torneoActual?.name || 'Copa GAME-LEGAL'}</h3>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <span style={{ fontSize: '12px', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '3px 10px', borderRadius: '15px' }}><i className="fa fa-eye"></i> {visitas} Visitas</span>
                 <span style={{ fontSize: '12px', background: 'var(--green)', padding: '3px 10px', borderRadius: '15px' }}>En curso</span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', background: 'var(--dark2)', borderBottom: '1px solid var(--dark3)' }}>
+            {/* MENÚ DE TABS ACTUALIZADO */}
+            <div className="tabs-container">
               <button onClick={() => setActiveTab('posiciones')} className={`tab-btn ${activeTab === 'posiciones' ? 'active' : ''}`}>Posiciones</button>
               <button onClick={() => setActiveTab('partidos')} className={`tab-btn ${activeTab === 'partidos' ? 'active' : ''}`}>Partidos</button>
               <button onClick={() => setActiveTab('goleadores')} className={`tab-btn ${activeTab === 'goleadores' ? 'active' : ''}`}>Goleadores</button>
+              <button onClick={() => setActiveTab('premios')} className={`tab-btn ${activeTab === 'premios' ? 'active' : ''}`}>Premios</button>
+              <button onClick={() => setActiveTab('reglamento')} className={`tab-btn ${activeTab === 'reglamento' ? 'active' : ''}`}>Reglamento</button>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflowX: 'auto', minHeight: '300px' }}>
               {/* VISTA 1: POSICIONES */}
               {activeTab === 'posiciones' && (
                 <table className="standings-table">
@@ -349,6 +355,57 @@ export default function PortalTorneoDinamico() {
                   </tbody>
                 </table>
               )}
+
+              {/* VISTA 4: PREMIOS */}
+              {activeTab === 'premios' && (
+                <div style={{ padding: '40px', maxWidth: '600px', margin: '0 auto' }}>
+                  <h3 style={{ color: 'var(--gold)', marginBottom: '30px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '2px' }}>Premiación Oficial</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ background: 'var(--dark3)', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #FFD700', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                      <span style={{ fontSize: '30px' }}>🥇</span>
+                      <div>
+                        <p style={{ color: 'var(--gray)', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>Campeón</p>
+                        <p style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--white)' }}>{torneoActual?.prize_first || 'Por definir por la organización'}</p>
+                      </div>
+                    </div>
+                    <div style={{ background: 'var(--dark3)', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #C0C0C0', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                      <span style={{ fontSize: '30px' }}>🥈</span>
+                      <div>
+                        <p style={{ color: 'var(--gray)', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>Subcampeón</p>
+                        <p style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--white)' }}>{torneoActual?.prize_second || 'Por definir por la organización'}</p>
+                      </div>
+                    </div>
+                    <div style={{ background: 'var(--dark3)', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #CD7F32', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                      <span style={{ fontSize: '30px' }}>🥉</span>
+                      <div>
+                        <p style={{ color: 'var(--gray)', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>Tercer Lugar</p>
+                        <p style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--white)' }}>{torneoActual?.prize_third || 'Por definir por la organización'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* VISTA 5: REGLAMENTO */}
+              {activeTab === 'reglamento' && (
+                <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '50px', color: 'var(--gold)', marginBottom: '20px' }}>
+                    <i className="fa fa-gavel"></i>
+                  </div>
+                  <h3 style={{ color: 'var(--white)', fontSize: '24px', marginBottom: '15px', textTransform: 'uppercase' }}>Reglamento del Torneo</h3>
+                  {torneoActual?.rules_url ? (
+                    <>
+                      <p style={{ color: 'var(--gray)', marginBottom: '30px', maxWidth: '500px', margin: '0 auto 30px' }}>Descarga o visualiza el documento oficial en formato PDF para conocer las normas de competición y lineamientos disciplinarios.</p>
+                      <a href={torneoActual.rules_url} target="_blank" rel="noopener noreferrer" className="btn-primary" style={{ cursor: 'none' }}>
+                        <i className="fa fa-file-pdf"></i> Ver Documento Oficial
+                      </a>
+                    </>
+                  ) : (
+                    <p style={{ color: 'var(--gray)' }}>El organizador aún no ha subido el reglamento oficial para este torneo.</p>
+                  )}
+                </div>
+              )}
+
             </div>
           </div>
         </div>
@@ -419,3 +476,4 @@ export default function PortalTorneoDinamico() {
     </>
   );
 }
+ 
