@@ -316,6 +316,24 @@ export default function PartidosPage() {
     } catch (e) { alert("Error"); } finally { setLoading(false); }
   };
 
+  // ============================================================================
+  // NUEVO: FUNCIONES DE WHATSAPP
+  // ============================================================================
+  const compartirEnlaceInvitacion = () => {
+    const mensaje = `🏆 *¡TE INVITAMOS A SEGUIR EL TORNEO EN VIVO!* 🏆\n\nRevisa el calendario oficial, resultados y el minuto a minuto de los partidos directamente desde nuestra plataforma:\n\n🔗 *Enlace Oficial:*\n${appUrl}\n\n¡No te lo pierdas! ⚽🔥`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
+  const enviarRecordatorioWhatsApp = (p: any) => {
+    const fechaObj = new Date(p.match_date);
+    const fechaFormateada = fechaObj.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
+    const horaFormateada = fechaObj.toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' });
+
+    const mensaje = `🏆 *¡RECORDATORIO DE PARTIDO!* 🏆\n\n⚽ *${p.home?.name}* vs *${p.away?.name}*\n📅 *Fecha:* ${fechaFormateada}\n⏰ *Hora:* ${horaFormateada}\n🏟️ *Lugar:* ${p.court || "Cancha 1"}\n📍 *Instancia:* ${p.stage}\n\n🔗 *Sigue el partido en vivo aquí:*\n${appUrl}`;
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
 
   // ============================================================================
@@ -520,6 +538,12 @@ export default function PartidosPage() {
                 {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(n => <option key={n} value={n}>Fecha {n}</option>)}
               </select>
             </div>
+            
+            {/* BOTÓN 1: COMPARTIR INVITACIÓN WHATSAPP */}
+            <button onClick={compartirEnlaceInvitacion} className="bg-[#25D366]/10 border border-[#25D366]/50 text-[#25D366] hover:bg-[#25D366] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
+              💬 Enviar Invitación
+            </button>
+
             <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               📸 Descargar Póster
             </button>
@@ -550,6 +574,14 @@ export default function PartidosPage() {
                 </div>
                 <div className="flex-1 text-left font-bold text-white text-lg relative z-20 uppercase tracking-wide">{p.away?.name}</div>
                 <div className="md:ml-4 relative z-20 flex flex-col md:flex-row gap-2">
+                  
+                  {/* BOTÓN 2: NOTIFICAR POR WHATSAPP (Solo si no ha terminado) */}
+                  {p.status !== 'finished' && (
+                    <button onClick={() => enviarRecordatorioWhatsApp(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-black border border-[#25D366]/50">
+                      📲 Notificar
+                    </button>
+                  )}
+
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
                   </button>
