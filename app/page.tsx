@@ -2,12 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
-import Link from 'next/link'; // Agregamos Link para la navegación
+import Link from 'next/link';
 
 export default function PortalPrincipal() {
   const router = useRouter();
 
-  // Estados de Datos (Limpiados de posiciones/goleadores)
   const [torneosActivos, setTorneosActivos] = useState<any[]>([]);
   const [visitas, setVisitas] = useState(0);
   const [torneoDestacado, setTorneoDestacado] = useState<any>(null);
@@ -20,7 +19,6 @@ export default function PortalPrincipal() {
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
-    // 1. Motor Supabase: Cargar TODOS los torneos en lugar de uno solo
     async function inicializarPortal() {
       try {
         await supabase.from("status_visits").insert([{}]);
@@ -31,7 +29,7 @@ export default function PortalPrincipal() {
         
         if (tourneys && tourneys.length > 0) {
           setTorneosActivos(tourneys);
-          setTorneoDestacado(tourneys[0]); // Usamos el más reciente para el Hero superior
+          setTorneoDestacado(tourneys[0]); 
         }
       } catch (err) {
         console.error("Error cargando portal principal:", err);
@@ -41,7 +39,6 @@ export default function PortalPrincipal() {
     }
     inicializarPortal();
 
-    // 2. Custom Cursor Animado
     const dot = document.getElementById('cursorDot');
     const ring = document.getElementById('cursorRing');
     let mouseX = 0, mouseY = 0, ringX = 0, ringY = 0;
@@ -60,7 +57,6 @@ export default function PortalPrincipal() {
     };
     animateRing();
 
-    // 3. Animaciones Reveal al hacer scroll
     const reveals = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
@@ -80,6 +76,24 @@ export default function PortalPrincipal() {
     } else {
       router.push("/dashboard/partidos");
     }
+  };
+
+  // NUEVO: Función para Recuperar Contraseña
+  const handleRecuperarPassword = async () => {
+    if (!email) {
+      alert("Por favor, ingresa tu correo electrónico en el campo superior primero.");
+      return;
+    }
+    setAuthLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/dashboard`,
+    });
+    if (error) {
+      alert("Error al intentar enviar el correo: " + error.message);
+    } else {
+      alert("Te hemos enviado un enlace de recuperación. Revisa tu bandeja de entrada o la carpeta de SPAM.");
+    }
+    setAuthLoading(false);
   };
 
   return (
@@ -108,7 +122,6 @@ export default function PortalPrincipal() {
         .sponsors-track { display: flex; gap: 40px; animation: marquee 20s linear infinite; padding: 40px 0;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
 
-        /* NUEVO ESTILO: Tarjetas dinámicas de torneos */
         .tournament-card { background: var(--dark2); border: 1px solid var(--dark3); border-radius: 8px; overflow: hidden; padding: 25px; transition: 0.3s; cursor: none; text-decoration: none; display: flex; flex-direction: column; justify-content: space-between;}
         .tournament-card:hover { border-color: var(--gold); transform: translateY(-5px); box-shadow: 0 10px 30px rgba(212,160,23,0.1); }
 
@@ -116,7 +129,7 @@ export default function PortalPrincipal() {
         .modal-content { background: var(--dark2); border: 1px solid rgba(212,160,23,0.5); border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 0 40px rgba(212,160,23,0.15); position: relative;}
         .modal-close { position: absolute; top: 15px; right: 20px; background: transparent; border: none; color: var(--gray); font-size: 20px; font-weight: bold; cursor: none; transition: 0.3s;}
         .modal-close:hover { color: var(--white); }
-        .modal-input { width: 100%; background: var(--dark); border: 1px solid var(--dark3); color: var(--white); padding: 12px; border-radius: 8px; margin-top: 8px; margin-bottom: 20px; outline: none; transition: 0.3s;}
+        .modal-input { width: 100%; background: var(--dark); border: 1px solid var(--dark3); color: var(--white); padding: 12px; border-radius: 8px; margin-top: 8px; margin-bottom: 8px; outline: none; transition: 0.3s;}
         .modal-input:focus { border-color: var(--gold); }
       `}} />
 
@@ -154,7 +167,6 @@ export default function PortalPrincipal() {
         </div>
       </section>
 
-      {/* AQUÍ OCURRE LA MAGIA: Directorio de Ligas en lugar de las tablas */}
       <section style={{ padding: '80px 20px', background: 'var(--dark)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div className="reveal">
@@ -243,13 +255,18 @@ export default function PortalPrincipal() {
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
                   className="modal-input"
                   placeholder="••••••••"
                 />
               </div>
               
-              <button type="submit" disabled={authLoading} className="btn-primary" style={{ width: '100%', marginTop: '10px', textAlign: 'center' }}>
+              <div style={{ textAlign: 'right', marginBottom: '15px' }}>
+                <button type="button" onClick={handleRecuperarPassword} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer' }}>
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+              
+              <button type="submit" disabled={authLoading} className="btn-primary" style={{ width: '100%', textAlign: 'center' }}>
                 {authLoading ? "Verificando..." : "Ingresar al Panel"}
               </button>
             </form>
