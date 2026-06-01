@@ -2,14 +2,15 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
-import Link from 'next/link'; // Importación añadida para navegación rápida
+import Link from 'next/link'; // Agregamos Link para la navegación
 
 export default function PortalPrincipal() {
   const router = useRouter();
 
-  // Estados de Datos (Ahora enfocado en el Directorio de Torneos)
+  // Estados de Datos (Limpiados de posiciones/goleadores)
   const [torneosActivos, setTorneosActivos] = useState<any[]>([]);
   const [visitas, setVisitas] = useState(0);
+  const [torneoDestacado, setTorneoDestacado] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Estados del Modal de Login
@@ -19,21 +20,18 @@ export default function PortalPrincipal() {
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
-    // 1. Motor Supabase: Cargar TODOS los torneos para el directorio
+    // 1. Motor Supabase: Cargar TODOS los torneos en lugar de uno solo
     async function inicializarPortal() {
       try {
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
 
-        // Extraemos todos los torneos
-        const { data } = await supabase
-          .from("tournaments")
-          .select("id, name, slug, created_at")
-          .order("created_at", { ascending: false });
+        const { data: tourneys } = await supabase.from("tournaments").select("*").order("created_at", { ascending: false });
         
-        if (data) {
-          setTorneosActivos(data);
+        if (tourneys && tourneys.length > 0) {
+          setTorneosActivos(tourneys);
+          setTorneoDestacado(tourneys[0]); // Usamos el más reciente para el Hero superior
         }
       } catch (err) {
         console.error("Error cargando portal principal:", err);
@@ -43,7 +41,7 @@ export default function PortalPrincipal() {
     }
     inicializarPortal();
 
-    // 2. Custom Cursor Animado (Intacto)
+    // 2. Custom Cursor Animado
     const dot = document.getElementById('cursorDot');
     const ring = document.getElementById('cursorRing');
     let mouseX = 0, mouseY = 0, ringX = 0, ringY = 0;
@@ -62,7 +60,7 @@ export default function PortalPrincipal() {
     };
     animateRing();
 
-    // 3. Animaciones Reveal al hacer scroll (Intacto)
+    // 3. Animaciones Reveal al hacer scroll
     const reveals = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
@@ -105,15 +103,14 @@ export default function PortalPrincipal() {
         .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(212,160,23,0.4); }
         .section-label { color: var(--gold); font-weight: bold; letter-spacing: 3px; text-transform: uppercase; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap:10px;}
         .section-label::before { content: ''; width: 30px; height: 2px; background: var(--gold); }
-        
-        /* NUEVO ESTILO PARA LAS TARJETAS DEL DIRECTORIO */
-        .tournament-card { background: var(--dark2); border: 1px solid var(--dark3); padding: 25px; border-radius: 12px; transition: 0.3s; cursor: none; display: flex; flex-direction: column; justify-content: space-between; text-decoration: none;}
-        .tournament-card:hover { border-color: var(--gold); transform: translateY(-5px); box-shadow: 0 10px 30px rgba(212,160,23,0.1); }
-        
         .reveal { opacity: 0; transform: translateY(30px); transition: 0.8s ease; }
         .reveal.visible { opacity: 1; transform: translateY(0); }
         .sponsors-track { display: flex; gap: 40px; animation: marquee 20s linear infinite; padding: 40px 0;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
+
+        /* NUEVO ESTILO: Tarjetas dinámicas de torneos */
+        .tournament-card { background: var(--dark2); border: 1px solid var(--dark3); border-radius: 8px; overflow: hidden; padding: 25px; transition: 0.3s; cursor: none; text-decoration: none; display: flex; flex-direction: column; justify-content: space-between;}
+        .tournament-card:hover { border-color: var(--gold); transform: translateY(-5px); box-shadow: 0 10px 30px rgba(212,160,23,0.1); }
 
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px); z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px;}
         .modal-content { background: var(--dark2); border: 1px solid rgba(212,160,23,0.5); border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 0 40px rgba(212,160,23,0.15); position: relative;}
@@ -126,7 +123,6 @@ export default function PortalPrincipal() {
       <div className="cursor-dot" id="cursorDot"></div>
       <div className="cursor-ring" id="cursorRing"></div>
 
-      {/* TOPBAR ORIGINAL MANTENIDO */}
       <div className="topbar">
         <div className="topbar-marquee">
           <span><i className="fa fa-trophy"></i> CHAMPIONS GAME-LEGAL 2026 — ¡DONDE NACEN LAS LEYENDAS! FORJA TU DESTINO EN LA CANCHA &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i className="fa fa-futbol"></i> DEMUESTRA TU TALENTO — GLORIA, TRANSPARENCIA Y PASIÓN 🔥</span>
@@ -139,7 +135,7 @@ export default function PortalPrincipal() {
           <div className="reveal">
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>
               <span style={{ display:'inline-block', width:'8px',height:'8px',background:'var(--green-light)',borderRadius:'50%',marginRight:'8px', animation: 'pulse 2s infinite'}}></span>
-              PLATAFORMA SAAS DEPORTIVA
+              {torneoDestacado?.name || 'EDICIÓN PRO 2026'}
             </div>
             <h1 className="hero-title">
               <span style={{ display: 'block' }}>La Pasión</span>
@@ -147,7 +143,7 @@ export default function PortalPrincipal() {
               <span style={{ display: 'block', color: 'transparent', WebkitTextStroke: '2px white' }}>Campeones</span>
             </h1>
             <p style={{ color: 'var(--gray)', fontSize: '18px', maxWidth: '550px', marginBottom: '40px', lineHeight: '1.6' }}>
-              El software de gestión deportiva más avanzado. Organiza torneos profesionales, analiza estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
+              El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
             <div style={{ display: 'flex', gap: '20px' }}>
               <button onClick={() => setShowLogin(true)} className="btn-primary">
@@ -158,46 +154,46 @@ export default function PortalPrincipal() {
         </div>
       </section>
 
-      {/* SECCIÓN DEL DIRECTORIO DINÁMICO (Reemplaza a las estadísticas fijas) */}
+      {/* AQUÍ OCURRE LA MAGIA: Directorio de Ligas en lugar de las tablas */}
       <section style={{ padding: '80px 20px', background: 'var(--dark)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div className="reveal">
             <div className="section-label">Directorio Oficial</div>
             <h2 style={{ fontSize: '40px', textTransform: 'uppercase', marginBottom: '10px' }}>Ligas <span className="text-gold">Activas</span></h2>
-            <p style={{ color: 'var(--gray)', marginBottom: '40px' }}>Selecciona tu torneo para acceder a las estadísticas completas, tabla de posiciones y reglamento oficial.</p>
+            <p style={{ color: 'var(--gray)' }}>Transparencia absoluta. Selecciona tu torneo para acceder a la base de datos oficial.</p>
           </div>
 
-          {loading ? (
-             <div style={{ padding: '50px', textAlign: 'center', color: 'var(--gold)' }}>Cargando torneos activos...</div>
-          ) : (
-            <div className="reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', transitionDelay: '0.2s' }}>
-              {torneosActivos.length === 0 ? (
-                <p style={{ color: 'var(--gray)' }}>No hay torneos registrados en este momento.</p>
-              ) : (
-                torneosActivos.map(torneo => (
-                  <Link href={`/torneo/${torneo.slug}`} key={torneo.id} style={{ textDecoration: 'none' }}>
-                    <div className="tournament-card">
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                          <div style={{ width: '40px', height: '40px', background: 'var(--dark3)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>🏆</div>
-                          <span style={{ background: 'var(--green)', color: 'var(--white)', padding: '4px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }}>En Curso</span>
-                        </div>
-                        <h3 style={{ color: 'var(--white)', fontSize: '20px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '5px' }}>{torneo.name}</h3>
-                        <p style={{ color: 'var(--gray)', fontSize: '12px' }}>Gestión GAME-LEGAL PRO</p>
-                      </div>
-                      <div style={{ marginTop: '20px', borderTop: '1px solid var(--dark3)', paddingTop: '15px', color: 'var(--gold)', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        Ingresar al Portal <i className="fa fa-arrow-right"></i>
-                      </div>
-                    </div>
-                  </Link>
-                ))
-              )}
-            </div>
-          )}
+          <div className="reveal" style={{ transitionDelay: '0.2s', marginTop: '40px' }}>
+            {loading ? (
+               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--gold)' }}>Cargando torneos...</div>
+            ) : (
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                 {torneosActivos.length === 0 ? (
+                   <p style={{ color: 'var(--gray)', padding: '20px' }}>Aún no hay torneos registrados en el sistema.</p>
+                 ) : (
+                   torneosActivos.map((torneo) => (
+                     <Link href={`/torneo/${torneo.slug}`} key={torneo.id} style={{ textDecoration: 'none' }}>
+                       <div className="tournament-card">
+                         <div>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                             <h3 style={{ textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--gold)', fontSize: '18px', margin: 0 }}><i className="fa fa-trophy"></i> {torneo.name}</h3>
+                             <span style={{ fontSize: '10px', background: 'var(--green)', color: 'white', padding: '3px 8px', borderRadius: '15px', fontWeight: 'bold', textTransform: 'uppercase' }}>En Curso</span>
+                           </div>
+                           <p style={{ color: 'var(--gray)', fontSize: '12px', marginTop: '10px' }}>Gestión Integral GAME-LEGAL</p>
+                         </div>
+                         <div style={{ marginTop: '20px', borderTop: '1px solid var(--dark3)', paddingTop: '15px', color: 'var(--gold)', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                           Ver Estadísticas Completas <i className="fa fa-arrow-right"></i>
+                         </div>
+                       </div>
+                     </Link>
+                   ))
+                 )}
+               </div>
+            )}
+          </div>
         </div>
       </section>
 
-      {/* AUSPICIANTES ORIGINALES MANTENIDOS INTACTOS */}
       <section style={{ padding: '60px 20px', background: 'var(--dark2)', borderTop: '1px solid var(--dark3)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', overflow: 'hidden' }}>
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
