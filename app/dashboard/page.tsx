@@ -1,5 +1,6 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase"; // <-- Añadimos Supabase para poder leer todos tus torneos
 import { useTournamentData } from "./useTournamentData";
 
 const StatCard = ({ icon, label, value, sub }: any) => (
@@ -18,6 +19,32 @@ const StatCard = ({ icon, label, value, sub }: any) => (
 
 export default function DashboardInicio() {
   const { players, teams, matches, stats, loading } = useTournamentData();
+  
+  // NUEVO: Estados para el selector de torneos
+  const [misTorneos, setMisTorneos] = useState<any[]>([]);
+  const [torneoActivoId, setTorneoActivoId] = useState<string | null>(null);
+
+  // NUEVO: Cargar los torneos disponibles para este administrador
+  useEffect(() => {
+    const fetchTorneos = async () => {
+      const storedId = localStorage.getItem('activeTournamentId');
+      setTorneoActivoId(storedId);
+      
+      // Traemos todos los torneos ordenados (las políticas RLS filtrarán solos los que te pertenecen)
+      const { data } = await supabase.from('tournaments').select('id, name').order('created_at', { ascending: false });
+      if (data) setMisTorneos(data);
+    };
+    fetchTorneos();
+  }, []);
+
+  // NUEVO: La palanca de cambio que refresca el sistema al instante
+  const cambiarTorneo = (nuevoId: string) => {
+    localStorage.setItem('activeTournamentId', nuevoId);
+    window.dispatchEvent(new Event('tournamentChanged')); // Avisamos al Layout de arriba
+    window.location.reload(); // Recarga ultra-rápida para que todos los módulos lean el nuevo torneo
+  };
+
+  const torneoActual = misTorneos.find(t => t.id === torneoActivoId);
 
   if (loading) return <div className="text-center p-10 text-[#D4A017] font-bold animate-pulse">Sincronizando con Supabase...</div>;
 
@@ -32,10 +59,34 @@ export default function DashboardInicio() {
               Gestión Oficial
             </span>
           </div>
-          <h1 className="text-5xl md:text-6xl font-black mb-4 text-white tracking-tight">GAME-LEGAL <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D4A017] to-yellow-200">2026</span></h1>
-          <p className="text-gray-400 text-sm md:text-base max-w-xl leading-relaxed">
+          
+          {/* TÍTULO DINÁMICO: Muestra el nombre del torneo en grande */}
+          <h1 className="text-5xl md:text-6xl font-black mb-4 text-white tracking-tight uppercase">
+            {torneoActual?.name || 'GAME-LEGAL 2026'}
+          </h1>
+          
+          <p className="text-gray-400 text-sm md:text-base max-w-xl leading-relaxed mb-6">
             Centro de mando del torneo. Los datos presentados a continuación se extraen en tiempo real de la base de datos oficial.
           </p>
+
+          {/* LA PALANCA DE CAMBIO (SELECTOR INTELIGENTE) */}
+          <div className="bg-[#0a0a0a] border border-[#D4A017]/30 p-4 rounded-xl flex items-center gap-4 max-w-md shadow-inner">
+             <span className="text-[#D4A017] text-2xl">⚙️</span>
+             <div className="flex-1">
+               <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Palanca de Cambio - Seleccione Torneo</label>
+               <select
+                 value={torneoActivoId || ""}
+                 onChange={(e) => cambiarTorneo(e.target.value)}
+                 className="w-full bg-[#141414] text-white border border-[#2E2E2E] rounded-lg p-2 text-sm font-bold focus:border-[#D4A017] outline-none transition-colors"
+               >
+                 <option value="" disabled>Seleccione un torneo para administrar...</option>
+                 {misTorneos.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                 ))}
+               </select>
+             </div>
+          </div>
+
         </div>
       </div>
       
