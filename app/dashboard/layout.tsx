@@ -21,7 +21,7 @@ const Icons = {
   alert: "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
   eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z",
-  crown: "M2 4h20v2H2z M12 8l-3 5-5-3 1 8h14l1-8-5 3z" // Ícono de Corona para el Dueño
+  crown: "M2 4h20v2H2z M12 8l-3 5-5-3 1 8h14l1-8-5 3z"
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -35,30 +35,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // ==========================================
   const [perfilUsuario, setPerfilUsuario] = useState<any>(null);
   const [loadingPerfil, setLoadingPerfil] = useState(true);
+  
+  // NUEVO: Estado para saber qué torneo estamos administrando visualmente
+  const [nombreTorneoActivo, setNombreTorneoActivo] = useState<string>("Cargando...");
 
   useEffect(() => {
     async function verificarIdentidad() {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      // Si nadie ha iniciado sesión, expulsar a la página de login
-      if (!session) {
-        router.push('/');
-        return;
-      }
-
-      // Buscar si el usuario es cliente o superadmin y su estado de pagos
+      if (!session) { router.push('/'); return; }
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-      
-      if (profile) {
-        setPerfilUsuario(profile);
-      }
+      if (profile) setPerfilUsuario(profile);
       setLoadingPerfil(false);
     }
-    
     verificarIdentidad();
   }, [router]);
 
-  // Si está cargando la identidad, mostrar un spinner elegante
+  // NUEVO: Función para leer el Torneo Activo y mostrar su nombre
+  useEffect(() => {
+    const fetchTorneoNombre = async () => {
+      const activeId = localStorage.getItem('activeTournamentId');
+      if (activeId) {
+        const { data } = await supabase.from('tournaments').select('name').eq('id', activeId).single();
+        if (data) setNombreTorneoActivo(data.name);
+      } else {
+        setNombreTorneoActivo("Seleccione un torneo");
+      }
+    };
+
+    fetchTorneoNombre();
+    // Escuchar si cambiamos de torneo desde la página principal
+    window.addEventListener('tournamentChanged', fetchTorneoNombre);
+    return () => window.removeEventListener('tournamentChanged', fetchTorneoNombre);
+  }, []);
+
   if (loadingPerfil) {
     return (
       <div className="flex h-screen w-full bg-[#0a0a0a] items-center justify-center">
@@ -67,9 +76,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // ==========================================
-  // GENERACIÓN DEL MENÚ INTELIGENTE
-  // ==========================================
   const MENU = [
     { href: "/dashboard/perfil", label: "Mi Perfil", icon: Icons.user },
     { href: "/dashboard/torneos", label: "Mis Torneos", icon: Icons.crown },
@@ -82,9 +88,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard/estadisticas", label: "Estadísticas", icon: Icons.chart },
   ];
 
-  // ==========================================
-  // CONTROL DE SUSPENSIÓN (Pantalla Bloqueada)
-  // ==========================================
   if (perfilUsuario?.saas_status === 'suspended' && perfilUsuario?.role !== 'superadmin') {
     return (
       <div className="flex flex-col h-screen w-full bg-[#0a0a0a] items-center justify-center p-6 text-center">
@@ -103,10 +106,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen w-full bg-[#0a0a0a] overflow-hidden font-sans">
       
-      {/* MENÚ LATERAL (SIDEBAR) */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#141414] text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#2E2E2E]`}>
         <div className="p-6 border-b border-[#2E2E2E] flex items-center gap-3 relative overflow-hidden">
-          {/* Brillo especial si eres Súper Admin */}
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
           <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C]">
@@ -141,7 +142,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           ))}
           
-         {/* BOTONES SECRETOS SOLO PARA TI (EL DUEÑO) */}
           {perfilUsuario?.role === 'superadmin' && (
             <div className="mt-4 pt-4 border-t border-[#2E2E2E] space-y-2">
               <p className="text-[10px] text-red-500 font-black uppercase tracking-widest px-4 mb-2">Control Corporativo</p>
@@ -171,10 +171,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/80 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      {/* ÁREA PRINCIPAL */}
       <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#0a0a0a] relative z-10 text-white">
         
-        {/* BANNER INQUISIDOR DE DEUDAS (Si el cliente debe dinero) */}
         {perfilUsuario?.saas_status === 'pending_payment' && perfilUsuario?.role !== 'superadmin' && (
           <div className="bg-gradient-to-r from-red-900 via-red-600 to-red-900 text-white px-6 py-3 flex items-center justify-between shadow-[0_10px_30px_rgba(220,38,38,0.3)] sticky top-0 z-30">
             <div className="flex items-center gap-3">
@@ -187,9 +185,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <header className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4 flex items-center gap-4 sticky top-0 z-20 shadow-sm">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 bg-[#1C1C1C] text-gray-300 rounded-xl hover:bg-[#2A2A2A]"><Icon path={Icons.bars} size={20}/></button>
-          <h1 className="font-black text-white text-lg flex-1 truncate">
-             {perfilUsuario?.role === 'superadmin' ? 'Torre de Control Máxima' : 'Panel de Administración'}
-          </h1>
+          
+          {/* NUEVO: Mostrar claramente el torneo que estamos administrando */}
+          <div className="flex-1 flex flex-col">
+            <h1 className="font-black text-white text-lg truncate">
+               {perfilUsuario?.role === 'superadmin' ? 'Torre de Control Máxima' : 'Panel de Administración'}
+            </h1>
+            <p className="text-xs text-[#D4A017] uppercase tracking-widest font-bold flex items-center gap-2 mt-1">
+               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+               Gestionando: {nombreTorneoActivo}
+            </p>
+          </div>
+
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
               <p className="text-xs font-black text-white uppercase">{perfilUsuario?.full_name || 'Organizador'}</p>
@@ -200,7 +207,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
         <div className="flex-1 p-4 md:p-8 relative">
           
-          {/* Si eres SuperAdmin, mostrar un leve aviso visual de fondo en el área de trabajo */}
           {perfilUsuario?.role === 'superadmin' && (
             <div className="absolute top-4 right-8 pointer-events-none opacity-10">
               <h2 className="text-8xl font-black italic tracking-tighter">SÚPER ADMIN</h2>
