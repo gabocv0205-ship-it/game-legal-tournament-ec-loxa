@@ -2,13 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
+import Link from 'next/link'; // Importación para el botón de regreso
 
 export default function PortalTorneoDinamico() {
   const router = useRouter();
-  const params = useParams(); // EL CEREBRO DINÁMICO
+  const params = useParams(); 
   const slug = params.slug;
 
-  // Estados de Datos
   const [torneoActual, setTorneoActual] = useState<any>(null);
   const [tabla, setTabla] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
@@ -17,7 +17,6 @@ export default function PortalTorneoDinamico() {
   const [activeTab, setActiveTab] = useState("posiciones");
   const [errorTorneo, setErrorTorneo] = useState(false);
 
-  // Estados del Modal de Login
   const [showLogin, setShowLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,12 +27,10 @@ export default function PortalTorneoDinamico() {
       try {
         if (!slug) return;
 
-        // Registrar visita
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
 
-        // 1. BUSCAR EL TORNEO POR SU URL ÚNICA (SLUG)
         const { data: tourney } = await supabase.from("tournaments").select("*").eq("slug", slug).single();
         
         if (!tourney) {
@@ -43,7 +40,6 @@ export default function PortalTorneoDinamico() {
 
         setTorneoActual(tourney);
 
-        // 2. Extraer equipos y partidos SOLO de este torneo
         const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
         const { data: matches } = await supabase.from("matches")
           .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
@@ -52,7 +48,6 @@ export default function PortalTorneoDinamico() {
         
         setPartidos(matches || []);
 
-        // Calcular Tabla
         const stats: Record<string, any> = {};
         teams?.forEach(t => {
           stats[t.id] = { id: t.id, name: t.name, shield: t.shield_url, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
@@ -76,7 +71,6 @@ export default function PortalTorneoDinamico() {
           .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
         setTabla(ordenada);
 
-        // Calcular Goleadores
         const matchIds = matches?.map(m => m.id) || [];
         if (matchIds.length > 0) {
           const { data: events } = await supabase.from("match_events")
@@ -96,7 +90,6 @@ export default function PortalTorneoDinamico() {
     }
     inicializarPortal();
 
-    // Animaciones
     const dot = document.getElementById('cursorDot');
     const ring = document.getElementById('cursorRing');
     let mouseX = 0, mouseY = 0, ringX = 0, ringY = 0;
@@ -132,16 +125,18 @@ export default function PortalTorneoDinamico() {
       alert("Credenciales incorrectas. Acceso denegado.");
       setAuthLoading(false);
     } else {
-      // 🚀 NUEVO: PUENTE INTELIGENTE
-      // Si el cliente inicia sesión desde SU página pública, le inyectamos 
-      // automáticamente el ID de su torneo en el Cerebro SaaS (localStorage)
+      // PUENTE INTELIGENTE
       if (torneoActual) {
         localStorage.setItem('activeTournamentId', torneoActual.id);
       }
-      
-      // Lo redirigimos a su panel de control ya configurado
       router.push("/dashboard/partidos");
     }
+  };
+
+  // Función para agrupar partidos por fecha
+  const obtenerFechasUnicas = () => {
+    const fechas = partidos.map(p => p.matchday);
+    return Array.from(new Set(fechas)).sort((a, b) => a - b);
   };
 
   if (errorTorneo) {
@@ -151,6 +146,7 @@ export default function PortalTorneoDinamico() {
           <h1 className="text-6xl text-[#D4A017] mb-4">404</h1>
           <h2 className="text-2xl font-bold uppercase tracking-widest">Torneo no encontrado</h2>
           <p className="text-gray-500 mt-2">El enlace proporcionado no es válido o el torneo ha sido eliminado.</p>
+          <Link href="/" className="btn-primary mt-6"><i className="fa fa-home"></i> Volver al Inicio</Link>
         </div>
       </div>
     );
@@ -175,6 +171,8 @@ export default function PortalTorneoDinamico() {
         .text-gold { color: var(--gold); }
         .btn-primary { background: linear-gradient(135deg, var(--gold) 0%, #A07810 100%); color: var(--black); padding: 12px 28px; border-radius: 4px; font-weight: bold; text-transform: uppercase; display: inline-block; transition: 0.3s; border: none; cursor: none;}
         .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(212,160,23,0.4); }
+        .btn-secondary { background: transparent; color: var(--gold); border: 1px solid var(--gold); padding: 12px 28px; border-radius: 4px; font-weight: bold; text-transform: uppercase; display: inline-block; transition: 0.3s; cursor: none;}
+        .btn-secondary:hover { background: rgba(212,160,23,0.1); }
         .section-label { color: var(--gold); font-weight: bold; letter-spacing: 3px; text-transform: uppercase; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap:10px;}
         .section-label::before { content: ''; width: 30px; height: 2px; background: var(--gold); }
         .standings-card { background: var(--dark2); border: 1px solid var(--dark3); border-radius: 8px; overflow: hidden; margin-top:30px;}
@@ -230,7 +228,11 @@ export default function PortalTorneoDinamico() {
             <p style={{ color: 'var(--gray)', fontSize: '18px', maxWidth: '550px', marginBottom: '40px', lineHeight: '1.6' }}>
               El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
-            <div style={{ display: 'flex', gap: '20px' }}>
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+              {/* BOTÓN NUEVO PARA REGRESAR */}
+              <Link href="/" className="btn-secondary">
+                <i className="fa fa-arrow-left"></i> Volver al Directorio
+              </Link>
               <button onClick={() => setShowLogin(true)} className="btn-primary">
                 <i className="fa fa-shield-halved"></i> Acceso Administrador
               </button>
@@ -256,7 +258,6 @@ export default function PortalTorneoDinamico() {
               </div>
             </div>
 
-            {/* MENÚ DE TABS ACTUALIZADO */}
             <div className="tabs-container">
               <button onClick={() => setActiveTab('posiciones')} className={`tab-btn ${activeTab === 'posiciones' ? 'active' : ''}`}>Posiciones</button>
               <button onClick={() => setActiveTab('partidos')} className={`tab-btn ${activeTab === 'partidos' ? 'active' : ''}`}>Partidos</button>
@@ -266,7 +267,6 @@ export default function PortalTorneoDinamico() {
             </div>
 
             <div style={{ overflowX: 'auto', minHeight: '300px' }}>
-              {/* VISTA 1: POSICIONES */}
               {activeTab === 'posiciones' && (
                 <table className="standings-table">
                   <thead>
@@ -312,23 +312,32 @@ export default function PortalTorneoDinamico() {
                 </table>
               )}
 
-              {/* VISTA 2: PARTIDOS */}
+              {/* VISTA 2: PARTIDOS AGRUPADOS POR FECHA */}
               {activeTab === 'partidos' && (
                 <div style={{ padding: '20px' }}>
                   {partidos.length === 0 ? (
                     <p style={{ textAlign: 'center', padding: '40px', color: 'var(--gray)' }}>No hay encuentros programados.</p>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      {partidos.map((match) => (
-                        <div key={match.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--dark3)', padding: '15px', borderRadius: '8px', border: '1px solid var(--dark2)' }}>
-                          <div style={{ flex: 1, textAlign: 'right', fontWeight: 'bold' }}>
-                            <div style={{ fontSize: '10px', color: 'var(--gray)', textTransform: 'uppercase', marginBottom: '4px' }}>{match.stage || 'Fase de Grupos'} • Fecha {match.matchday}</div>
-                            {match.home?.name}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+                      {obtenerFechasUnicas().map((fecha) => (
+                        <div key={fecha} className="bg-[var(--dark2)] p-4 rounded-xl border border-[var(--dark3)]">
+                          <h4 style={{ color: 'var(--gold)', fontSize: '18px', fontWeight: 'bold', marginBottom: '15px', textTransform: 'uppercase', borderBottom: '1px solid var(--dark3)', paddingBottom: '10px' }}>
+                            <i className="fa fa-calendar-days" style={{ marginRight: '8px' }}></i> FECHA {fecha}
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {partidos.filter(p => p.matchday === fecha).map((match) => (
+                              <div key={match.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--dark3)', padding: '15px', borderRadius: '8px', border: '1px solid var(--dark2)' }}>
+                                <div style={{ flex: 1, textAlign: 'right', fontWeight: 'bold' }}>
+                                  <div style={{ fontSize: '10px', color: 'var(--gray)', textTransform: 'uppercase', marginBottom: '4px' }}>{match.stage || 'Fase de Grupos'}</div>
+                                  {match.home?.name}
+                                </div>
+                                <div style={{ padding: '5px 15px', background: 'var(--black)', borderRadius: '5px', margin: '0 20px', fontWeight: 'bold', color: 'var(--gold)', fontSize: '20px', fontFamily: 'monospace' }}>
+                                  {match.status === "finished" ? `${match.home_goals} - ${match.away_goals}` : "VS"}
+                                </div>
+                                <div style={{ flex: 1, textAlign: 'left', fontWeight: 'bold' }}>{match.away?.name}</div>
+                              </div>
+                            ))}
                           </div>
-                          <div style={{ padding: '5px 15px', background: 'var(--black)', borderRadius: '5px', margin: '0 20px', fontWeight: 'bold', color: 'var(--gold)', fontSize: '20px', fontFamily: 'monospace' }}>
-                            {match.status === "finished" ? `${match.home_goals} - ${match.away_goals}` : "VS"}
-                          </div>
-                          <div style={{ flex: 1, textAlign: 'left', fontWeight: 'bold' }}>{match.away?.name}</div>
                         </div>
                       ))}
                     </div>
@@ -336,7 +345,6 @@ export default function PortalTorneoDinamico() {
                 </div>
               )}
 
-              {/* VISTA 3: GOLEADORES */}
               {activeTab === 'goleadores' && (
                 <table className="standings-table">
                   <thead>
@@ -364,7 +372,6 @@ export default function PortalTorneoDinamico() {
                 </table>
               )}
 
-              {/* VISTA 4: PREMIOS */}
               {activeTab === 'premios' && (
                 <div style={{ padding: '40px', maxWidth: '600px', margin: '0 auto' }}>
                   <h3 style={{ color: 'var(--gold)', marginBottom: '30px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '2px' }}>Premiación Oficial</h3>
@@ -394,7 +401,6 @@ export default function PortalTorneoDinamico() {
                 </div>
               )}
 
-              {/* VISTA 5: REGLAMENTO */}
               {activeTab === 'reglamento' && (
                 <div style={{ padding: '60px 20px', textAlign: 'center' }}>
                   <div style={{ fontSize: '50px', color: 'var(--gold)', marginBottom: '20px' }}>
@@ -413,7 +419,6 @@ export default function PortalTorneoDinamico() {
                   )}
                 </div>
               )}
-
             </div>
           </div>
         </div>
