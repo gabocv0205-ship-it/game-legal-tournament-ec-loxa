@@ -11,7 +11,9 @@ const Icons = {
   plus: "M12 5v14M5 12h14",
   trophy: "M8 21h8M12 17v4M7 4h10l1 7c0 3-3 6-6 6s-6-3-6-6l1-7z",
   settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
-  eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+  eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  check: "M5 13l4 4L19 7",
+  trash: "M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
 };
 
 export default function GestorTorneos() {
@@ -39,9 +41,12 @@ export default function GestorTorneos() {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       setPerfil(profile);
 
-      // Cargar Torneos (El SQL de Supabase ya filtra si es cliente o superadmin automáticamente)
+      // Cargar Torneos y aplicar filtro de Soft Delete
       const { data: tourneys } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
-      setTorneos(tourneys || []);
+      
+      // Filtrar torneos que no estén marcados como eliminados lógicamente
+      const torneosActivos = (tourneys || []).filter((t: any) => t.status !== 'deleted');
+      setTorneos(torneosActivos);
 
     } catch (error) {
       console.error("Error al cargar el gestor:", error);
@@ -58,7 +63,6 @@ export default function GestorTorneos() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      // Generar una URL amigable (slug) única: "mi-torneo-12345"
       const baseSlug = nombreTorneo.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
       const randomID = Math.random().toString(36).substring(2, 7);
       const slugUnico = `${baseSlug}-${randomID}`;
@@ -67,7 +71,8 @@ export default function GestorTorneos() {
         name: nombreTorneo,
         slug: slugUnico,
         user_id: session?.user.id,
-        registration_fee: 150.00
+        registration_fee: 150.00,
+        status: 'active' // Estado explícito al crear
       }]);
 
       if (error) throw error;
@@ -84,12 +89,37 @@ export default function GestorTorneos() {
     }
   };
 
-  // Esta función es vital: "Entra" al torneo seleccionado
+  // NUEVA FUNCIÓN: Clausura Deportiva
+  const finalizarTorneo = async (id: string, nombre: string) => {
+    if (!window.confirm(`¿Estás seguro de FINALIZAR el torneo "${nombre}"?\n\nEsta acción conservará el historial, pero iniciará el proceso automatizado de cierre de temporada.`)) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('tournaments').update({ status: 'finished' }).eq('id', id);
+      if (error) throw error;
+      cargarDatos();
+    } catch (err: any) {
+      alert('Error al finalizar: ' + err.message);
+      setLoading(false);
+    }
+  };
+
+  // NUEVA FUNCIÓN: Soft Delete (Borrado Lógico)
+  const eliminarTorneo = async (id: string, nombre: string) => {
+    if (!window.confirm(`¡ATENCIÓN! ¿Deseas ELIMINAR el torneo "${nombre}"?\n\nEsta acción lo ocultará de tu panel para liberar espacio en tu plan, pero los datos se conservarán internamente por seguridad referencial.`)) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('tournaments').update({ status: 'deleted' }).eq('id', id);
+      if (error) throw error;
+      cargarDatos();
+    } catch (err: any) {
+      alert('Error al eliminar: ' + err.message);
+      setLoading(false);
+    }
+  };
+
   const administrarTorneo = (torneoId: string, torneoNombre: string) => {
-    // Guardamos en la memoria del navegador qué torneo estamos administrando
     localStorage.setItem('activeTournamentId', torneoId);
     localStorage.setItem('activeTournamentName', torneoNombre);
-    // Redirigimos al dashboard hermoso que me mostraste
     router.push('/dashboard');
   };
 
@@ -106,7 +136,7 @@ export default function GestorTorneos() {
     );
   }
 
-  // Verificar si el cliente alcanzó su límite
+  // El límite ahora evalúa solo los torneos que no han sido eliminados lógicamente
   const limiteAlcanzado = perfil?.role !== 'superadmin' && torneos.length >= (perfil?.max_tournaments || 1);
 
   return (
@@ -138,41 +168,75 @@ export default function GestorTorneos() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {torneos.map(t => (
-            <div key={t.id} className="bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 relative overflow-hidden group hover:border-[#D4A017] transition-all duration-300 flex flex-col h-full shadow-lg">
-              <div className="absolute -right-6 -top-6 w-32 h-32 bg-[#D4A017]/5 rounded-full blur-2xl group-hover:bg-[#D4A017]/20 transition-all"></div>
-              
-              <div className="relative z-10 flex-1">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 bg-[#1C1C1C] border border-[#D4A017]/30 rounded-full flex items-center justify-center text-[#D4A017] shadow-inner">
-                    <Icon path={Icons.trophy} size={24} />
-                  </div>
-                  {perfil?.role === 'superadmin' && (
-                    <span className="bg-red-900/30 text-red-500 border border-red-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Soporte Admin</span>
-                  )}
-                </div>
-                
-                <h3 className="text-xl font-black text-white uppercase tracking-wide mb-1 truncate" title={t.name}>{t.name || 'Torneo Sin Nombre'}</h3>
-                <p className="text-[10px] text-gray-500 font-mono mb-6 truncate">ID: {t.slug}</p>
-              </div>
+          {torneos.map(t => {
+            // Evaluador de Insignias Dinámicas
+            const isFinished = t.status === 'finished';
+            const isArchived = t.status === 'archived';
+            const isActive = !isFinished && !isArchived;
 
-              <div className="relative z-10 flex gap-3 mt-4 pt-4 border-t border-[#2E2E2E]">
-                <button 
-                  onClick={() => administrarTorneo(t.id, t.name)}
-                  className="flex-1 bg-[#1C1C1C] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] hover:border-transparent py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                >
-                  <Icon path={Icons.settings} size={14} /> Gestionar
-                </button>
-                <button 
-                  onClick={() => verPortalPublico(t.slug)}
-                  title="Ver página pública de este torneo"
-                  className="w-10 h-10 bg-[#1C1C1C] hover:bg-[#2A2A2A] text-gray-400 hover:text-white border border-[#2E2E2E] rounded-lg flex items-center justify-center transition-all"
-                >
-                  <Icon path={Icons.eye} size={16} />
-                </button>
+            return (
+              <div key={t.id} className="bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 relative overflow-hidden group hover:border-[#D4A017] transition-all duration-300 flex flex-col h-full shadow-lg">
+                <div className="absolute -right-6 -top-6 w-32 h-32 bg-[#D4A017]/5 rounded-full blur-2xl group-hover:bg-[#D4A017]/20 transition-all"></div>
+                
+                {/* Controles de Gestión Rápida Supriores */}
+                <div className="absolute top-4 right-4 flex gap-2 z-20">
+                  {isActive && (
+                    <button 
+                      onClick={() => finalizarTorneo(t.id, t.name)} 
+                      title="Finalizar Torneo" 
+                      className="w-8 h-8 bg-[#1C1C1C] border border-[#2E2E2E] rounded-full flex items-center justify-center text-green-500 hover:bg-green-500 hover:text-white transition-all shadow-lg"
+                    >
+                      <Icon path={Icons.check} size={14} />
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => eliminarTorneo(t.id, t.name)} 
+                    title="Eliminar Torneo" 
+                    className="w-8 h-8 bg-[#1C1C1C] border border-[#2E2E2E] rounded-full flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-lg"
+                  >
+                    <Icon path={Icons.trash} size={14} />
+                  </button>
+                </div>
+
+                <div className="relative z-10 flex-1 mt-2">
+                  <div className="flex items-start justify-between mb-4 pr-16">
+                    <div className="w-12 h-12 bg-[#1C1C1C] border border-[#D4A017]/30 rounded-full flex items-center justify-center text-[#D4A017] shadow-inner">
+                      <Icon path={Icons.trophy} size={24} />
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-xl font-black text-white uppercase tracking-wide mb-1 truncate pr-2" title={t.name}>{t.name || 'Torneo Sin Nombre'}</h3>
+                  <p className="text-[10px] text-gray-500 font-mono mb-4 truncate">ID: {t.slug}</p>
+
+                  {/* Insignias de Estado del Torneo */}
+                  <div className="flex gap-2 mb-4">
+                    {perfil?.role === 'superadmin' && (
+                      <span className="bg-red-900/30 text-red-500 border border-red-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Soporte Admin</span>
+                    )}
+                    {isFinished && <span className="bg-green-900/30 text-green-500 border border-green-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Finalizado</span>}
+                    {isArchived && <span className="bg-gray-800 text-gray-400 border border-gray-600 text-[9px] font-black uppercase px-2 py-1 rounded">Archivado Histórico</span>}
+                    {isActive && <span className="bg-[#D4A017]/10 text-[#D4A017] border border-[#D4A017]/30 text-[9px] font-black uppercase px-2 py-1 rounded">Activo</span>}
+                  </div>
+                </div>
+
+                <div className="relative z-10 flex gap-3 mt-auto pt-4 border-t border-[#2E2E2E]">
+                  <button 
+                    onClick={() => administrarTorneo(t.id, t.name)}
+                    className="flex-1 bg-[#1C1C1C] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] hover:border-transparent py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                  >
+                    <Icon path={Icons.settings} size={14} /> Gestionar
+                  </button>
+                  <button 
+                    onClick={() => verPortalPublico(t.slug)}
+                    title="Ver página pública de este torneo"
+                    className="w-10 h-10 bg-[#1C1C1C] hover:bg-[#2A2A2A] text-gray-400 hover:text-white border border-[#2E2E2E] rounded-lg flex items-center justify-center transition-all"
+                  >
+                    <Icon path={Icons.eye} size={16} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
