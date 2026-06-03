@@ -20,7 +20,6 @@ export default function CajaFuerteSaaS() {
   const [procesando, setProcesando] = useState(false);
   const [stats, setStats] = useState({ totalIngresos: 0, clientesActivos: 0, clientesMorosos: 0 });
 
-  // Modal
   const [mostrarModal, setMostrarModal] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null);
   const [monto, setMonto] = useState("");
@@ -34,10 +33,7 @@ export default function CajaFuerteSaaS() {
   const cargarContabilidad = async () => {
     setLoading(true);
     try {
-      // 1. Cargar Clientes (Organizadores)
       const { data: perfiles } = await supabase.from("profiles").select("*").neq("role", "superadmin");
-      
-      // 2. Cargar Pagos SaaS
       const { data: pagos } = await supabase.from("saas_payments").select("*, profiles(full_name, email)").order("created_at", { ascending: false });
 
       let ingresosTotales = 0;
@@ -48,7 +44,6 @@ export default function CajaFuerteSaaS() {
         return { ...perfil, totalPagado };
       }) || [];
 
-      // KPIs
       const activos = clientesProcesados.filter(c => c.saas_status === 'active').length;
       const morosos = clientesProcesados.filter(c => c.saas_status === 'pending_payment' || c.saas_status === 'suspended').length;
 
@@ -65,7 +60,7 @@ export default function CajaFuerteSaaS() {
 
   const abrirModalCobro = (cliente: any) => {
     setClienteSeleccionado(cliente);
-    setMonto("29.99"); // Precio sugerido de suscripción SaaS
+    setMonto("29.99"); 
     setNotas("");
     setMostrarModal(true);
   };
@@ -76,7 +71,6 @@ export default function CajaFuerteSaaS() {
     setProcesando(true);
 
     try {
-      // 1. Registrar el ingreso en la caja fuerte
       const { error: pagoError } = await supabase.from("saas_payments").insert([{
         organizer_id: clienteSeleccionado.id,
         amount: Number(monto),
@@ -85,7 +79,6 @@ export default function CajaFuerteSaaS() {
       }]);
       if (pagoError) throw pagoError;
 
-      // 2. Automáticamente poner al cliente "Al Día"
       const { error: perfilError } = await supabase.from("profiles").update({ saas_status: 'active' }).eq("id", clienteSeleccionado.id);
       if (perfilError) throw perfilError;
 
@@ -105,23 +98,19 @@ export default function CajaFuerteSaaS() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
       
-      {/* BOTÓN DE REGRESO AL MENÚ PRINCIPAL */}
       <Link href="/dashboard" className="inline-flex items-center gap-2 text-[#D4A017] hover:text-white font-black uppercase tracking-widest text-xs transition-colors mb-2 bg-[#1C1C1C] px-4 py-2 rounded-lg border border-[#2E2E2E] w-fit shadow-md">
         ← Volver al Panel Principal
       </Link>
 
-      {/* HEADER BÓVEDA FINANCIERA */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-[#D4A017]/30 pb-4 gap-4">
         <div>
           <h2 className="text-3xl font-black text-white uppercase tracking-wider flex items-center gap-3">
-            <Icon path={Icons.bank} size={28} className="text-[#D4A017]" />
-            Tesorería GAME-LEGAL
+            <Icon path={Icons.bank} size={28} className="text-[#D4A017]" /> Tesorería GAME-LEGAL
           </h2>
           <p className="text-gray-400 font-bold text-sm mt-1">Recaudación global de suscripciones de la plataforma</p>
         </div>
       </div>
 
-      {/* KPIs CORPORATIVOS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-tr from-[#141414] to-[#1C1C1C] p-6 rounded-2xl border border-[#D4A017]/50 shadow-[0_0_20px_rgba(212,160,23,0.1)] relative overflow-hidden">
           <div className="absolute -right-6 -top-6 w-32 h-32 bg-[#D4A017]/10 rounded-full blur-2xl"></div>
@@ -138,10 +127,9 @@ export default function CajaFuerteSaaS() {
         </div>
       </div>
 
-      {/* TABLA: CARTERA DE CLIENTES */}
       <div className="space-y-4">
         <h3 className="text-white font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Facturación por Cliente</h3>
-        <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden">
+        <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-lg">
           <table className="w-full text-left text-sm text-white whitespace-nowrap">
             <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[10px] tracking-widest border-b border-[#2E2E2E]">
               <tr>
@@ -165,7 +153,7 @@ export default function CajaFuerteSaaS() {
                   <td className="p-4 text-center text-gray-400 font-black">{c.max_tournaments}</td>
                   <td className="p-4 text-center text-[#D4A017] font-mono font-black">${c.totalPagado.toFixed(2)}</td>
                   <td className="p-4 text-right">
-                    <button onClick={() => abrirModalCobro(c)} className="bg-[#D4A017] text-black hover:bg-yellow-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg">
+                    <button onClick={() => abrirModalCobro(c)} className="bg-[#D4A017] text-black hover:bg-yellow-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(212,160,23,0.3)]">
                       Cobrar Plan
                     </button>
                   </td>
@@ -176,10 +164,9 @@ export default function CajaFuerteSaaS() {
         </div>
       </div>
 
-      {/* LIBRO MAYOR: HISTORIAL DE INGRESOS */}
       <div className="space-y-4 pt-6">
         <h3 className="text-[#D4A017] font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Libro Mayor de Asientos SaaS</h3>
-        <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden">
+        <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-lg">
           <table className="w-full text-left text-sm text-white whitespace-nowrap">
             <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[10px] tracking-widest border-b border-[#2E2E2E]">
               <tr>
@@ -206,10 +193,9 @@ export default function CajaFuerteSaaS() {
         </div>
       </div>
 
-      {/* MODAL PARA COBRO DE SUSCRIPCIÓN */}
       {mostrarModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden">
+          <div className="bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden animate-in zoom-in duration-300">
             <div className="p-6 border-b border-[#2E2E2E]">
               <h3 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
                 <Icon path={Icons.plus} size={20} className="text-[#D4A017]" /> Registrar Ingreso SaaS
