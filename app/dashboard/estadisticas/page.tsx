@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function EstadisticasPage() {
+  const [torneoId, setTorneoId] = useState<string | null>(null);
   const [tabla, setTabla] = useState<any[]>([]);
   const [goleadores, setGoleadores] = useState<any[]>([]);
   const [sanciones, setSanciones] = useState<any[]>([]);
@@ -15,19 +16,33 @@ export default function EstadisticasPage() {
   const cargarEstadisticas = async () => {
     setLoading(true);
     try {
-      const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (!tourney) return;
+      // 1. AISLAMIENTO SAAS: Identificar el torneo activo
+      let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
+      
+      if (!activeId) {
+        const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
+        if (fallback) activeId = fallback.id;
+      }
+      
+      if (!activeId) {
+        setLoading(false);
+        return;
+      }
+      
+      setTorneoId(activeId);
 
-      // 1. Obtener Todos los Equipos (para incluirlos aunque tengan 0 partidos)
-      const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
+      // 2. Obtener Todos los Equipos estrictamente de ESTE torneo
+      const { data: teams } = await supabase.from("teams")
+        .select("*")
+        .eq("tournament_id", activeId);
 
-      // 2. Obtener Partidos Finalizados
+      // 3. Obtener Partidos Finalizados de ESTE torneo
       const { data: matches } = await supabase.from("matches")
         .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
-        .eq("tournament_id", tourney.id)
+        .eq("tournament_id", activeId)
         .eq("status", "finished");
 
-      // 3. Obtener Eventos (Goles y Tarjetas)
+      // 4. Obtener Eventos (Goles y Tarjetas)
       const matchIds = matches?.map(m => m.id) || [];
       let events: any[] = [];
       if (matchIds.length > 0) {
@@ -122,7 +137,7 @@ export default function EstadisticasPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <div className="w-12 h-12 border-4 border-[#D4A017] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-[#D4A017] font-black uppercase tracking-widest text-sm animate-pulse">Procesando Estadísticas GAME-LEGAL PRO...</p>
+        <p className="text-[#D4A017] font-black uppercase tracking-widest text-sm animate-pulse">Calculando Estadísticas Oficiales...</p>
       </div>
     );
   }
@@ -178,7 +193,7 @@ export default function EstadisticasPage() {
                   <td className="px-4 py-3 font-black text-gray-500">{index + 1}</td>
                   <td className="px-4 py-3 text-left font-bold flex items-center gap-3">
                     {s.shield ? <img src={s.shield} className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
-                    {s.name}
+                    <span className="uppercase tracking-wide">{s.name}</span>
                   </td>
                   <td className="px-3 py-3 font-bold">{s.pj}</td>
                   <td className="px-3 py-3 text-green-400">{s.pg}</td>
@@ -218,7 +233,7 @@ export default function EstadisticasPage() {
                 goleadores.map((g, index) => (
                   <tr key={g.id} className="hover:bg-[#141414]">
                     <td className="px-6 py-3">
-                      <p className="font-bold">{index + 1}. {g.name}</p>
+                      <p className="font-bold uppercase tracking-wide">{index + 1}. {g.name}</p>
                       <p className="text-[10px] text-[#D4A017] uppercase tracking-wider mt-0.5">{g.team}</p>
                     </td>
                     <td className="px-6 py-3 text-center font-black text-xl text-white bg-white/5">{g.goles}</td>
@@ -252,7 +267,7 @@ export default function EstadisticasPage() {
                 sanciones.map(s => (
                   <tr key={s.id} className={`hover:bg-[#141414] ${s.suspendido ? 'bg-red-900/10' : ''}`}>
                     <td className="px-4 py-3">
-                      <p className="font-bold">{s.name}</p>
+                      <p className="font-bold uppercase tracking-wide">{s.name}</p>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">{s.team}</p>
                     </td>
                     <td className="px-2 py-3 text-center font-bold text-yellow-500">{s.amarillas > 0 ? s.amarillas : '-'}</td>
@@ -275,3 +290,4 @@ export default function EstadisticasPage() {
     </div>
   );
 }
+ 
