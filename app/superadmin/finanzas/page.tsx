@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
@@ -33,26 +32,19 @@ export default function CajaFuerteSaaS() {
   const cargarContabilidad = async () => {
     setLoading(true);
     try {
-      const { data: perfiles } = await supabase.from("profiles").select("*").neq("role", "superadmin");
-      const { data: pagos } = await supabase.from("saas_payments").select("*, profiles(full_name, email)").order("created_at", { ascending: false });
+      const res = await fetch('/api/saas/contabilidad');
+      const data = await res.json();
 
-      let ingresosTotales = 0;
-      const clientesProcesados = perfiles?.map(perfil => {
-        const pagosDelCliente = pagos?.filter(p => p.organizer_id === perfil.id) || [];
-        const totalPagado = pagosDelCliente.reduce((sum, p) => sum + Number(p.amount), 0);
-        ingresosTotales += totalPagado;
-        return { ...perfil, totalPagado };
-      }) || [];
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al cargar datos');
+      }
 
-      const activos = clientesProcesados.filter(c => c.saas_status === 'active').length;
-      const morosos = clientesProcesados.filter(c => c.saas_status === 'pending_payment' || c.saas_status === 'suspended').length;
-
-      setClientes(clientesProcesados);
-      setHistorial(pagos || []);
-      setStats({ totalIngresos: ingresosTotales, clientesActivos: activos, clientesMorosos: morosos });
-      
-    } catch (error) {
+      setClientes(data.clientes);
+      setHistorial(data.historial);
+      setStats(data.stats);
+    } catch (error: any) {
       console.error("Error contable:", error);
+      alert("❌ " + error.message);
     } finally {
       setLoading(false);
     }
@@ -60,7 +52,7 @@ export default function CajaFuerteSaaS() {
 
   const abrirModalCobro = (cliente: any) => {
     setClienteSeleccionado(cliente);
-    setMonto("29.99"); 
+    setMonto("29.99");
     setNotas("");
     setMostrarModal(true);
   };
@@ -71,23 +63,28 @@ export default function CajaFuerteSaaS() {
     setProcesando(true);
 
     try {
-      const { error: pagoError } = await supabase.from("saas_payments").insert([{
-        organizer_id: clienteSeleccionado.id,
-        amount: Number(monto),
-        concept: concepto,
-        notes: notas
-      }]);
-      if (pagoError) throw pagoError;
+      const res = await fetch('/api/saas/cobrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizer_id: clienteSeleccionado.id,
+          amount: Number(monto),
+          concept: concepto,
+          notes: notas,
+        }),
+      });
 
-      const { error: perfilError } = await supabase.from("profiles").update({ saas_status: 'active' }).eq("id", clienteSeleccionado.id);
-      if (perfilError) throw perfilError;
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al asentar el pago');
+      }
 
       setMostrarModal(false);
-      alert(`Asiento contable registrado: $${monto} cobrados a ${clienteSeleccionado.full_name || clienteSeleccionado.email}. La cuenta del cliente ha sido reactivada.`);
+      alert(`✅ Asiento registrado: $${monto} cobrados a ${clienteSeleccionado.full_name || clienteSeleccionado.email}. La cuenta del cliente ha sido reactivada.`);
       cargarContabilidad();
-
     } catch (error: any) {
-      alert("Error en el asiento: " + error.message);
+      alert("❌ " + error.message);
     } finally {
       setProcesando(false);
     }
@@ -97,7 +94,7 @@ export default function CajaFuerteSaaS() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
-      
+
       <Link href="/dashboard" className="inline-flex items-center gap-2 text-[#D4A017] hover:text-white font-black uppercase tracking-widest text-xs transition-colors mb-2 bg-[#1C1C1C] px-4 py-2 rounded-lg border border-[#2E2E2E] w-fit shadow-md">
         ← Volver al Panel Principal
       </Link>
@@ -202,7 +199,7 @@ export default function CajaFuerteSaaS() {
               </h3>
               <p className="text-gray-400 text-xs mt-2 uppercase tracking-wide">Cliente: <span className="text-white font-bold">{clienteSeleccionado?.full_name || clienteSeleccionado?.email}</span></p>
             </div>
-            
+
             <form onSubmit={asentarPagoSaaS} className="p-6 space-y-5">
               <div>
                 <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Plan / Concepto</label>
@@ -210,7 +207,7 @@ export default function CajaFuerteSaaS() {
               </div>
               <div>
                 <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Monto Recibido ($)</label>
-                <input type="number" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl focus:border-[#D4A017] outline-none transition-colors" required />
+                <input type="number" step="0.01" min="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl focus:border-[#D4A017] outline-none transition-colors" required />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Notas Contables (Opcional)</label>
@@ -219,7 +216,7 @@ export default function CajaFuerteSaaS() {
 
               <div className="flex gap-3 pt-4 border-t border-[#2E2E2E]">
                 <button type="button" onClick={() => setMostrarModal(false)} className="flex-1 py-3 bg-[#141414] text-gray-400 font-bold uppercase tracking-widest text-xs rounded-xl hover:text-white transition-all">Cancelar</button>
-                <button type="submit" disabled={procesando} className="flex-1 py-3 bg-[#D4A017] text-black font-black uppercase tracking-widest text-xs rounded-xl shadow-lg hover:bg-yellow-500 transition-all">
+                <button type="submit" disabled={procesando} className="flex-1 py-3 bg-[#D4A017] text-black font-black uppercase tracking-widest text-xs rounded-xl shadow-lg hover:bg-yellow-500 transition-all disabled:opacity-50">
                   {procesando ? "Asentando..." : "Asentar Pago"}
                 </button>
               </div>
