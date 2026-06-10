@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link'; 
@@ -344,7 +345,7 @@ export default function PortalTorneoDinamico() {
                                     <td className="py-4 px-6">
                                       <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-[#242424] flex items-center justify-center border border-white/5 overflow-hidden">
-                                          {equipo.shield ? <img src={equipo.shield} alt={equipo.name} className="w-full h-full object-contain p-1" /> : <i className="fa-solid fa-shield-halved text-gray-600 text-xs"></i>}
+                                          {equipo.shield ? <Image src={equipo.shield} alt={equipo.name} width={32} height={32} unoptimized className="w-full h-full object-contain p-1" /> : <i className="fa-solid fa-shield-halved text-gray-600 text-xs"></i>}
                                         </div>
                                         <span className="text-white text-base font-black tracking-wide">{equipo.name}</span>
                                       </div>

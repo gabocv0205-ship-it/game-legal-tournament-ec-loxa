@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
 
 export default function EquiposPage() {
@@ -169,7 +170,7 @@ export default function EquiposPage() {
             <div key={eq.id} className="bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-4 flex flex-col gap-3 group transition-all hover:border-[#D4A017]">
               <div className="flex items-center gap-4">
                 {eq.shield_url ? (
-                  <img src={eq.shield_url} alt="Escudo" className="w-12 h-12 object-contain rounded-full bg-white/5" />
+                  <NextImage src={eq.shield_url} alt={`Escudo de ${eq.name}`} width={48} height={48} unoptimized className="w-12 h-12 object-contain rounded-full bg-white/5" />
                 ) : (
                   <div className="w-12 h-12 bg-[#2E2E2E] rounded-full flex items-center justify-center text-xs font-black text-gray-500">🛡️</div>
                 )}

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
@@ -787,7 +788,7 @@ export default function PartidosPage() {
               <div key={p.id} className="flex items-center justify-between bg-[#141414] border border-[#2e2e2e] rounded-full pr-6 pl-6 py-2 shadow-lg relative h-20">
                 <div className="flex-1 flex items-center justify-end gap-4">
                   <span className="font-black text-white text-xl uppercase tracking-wider">{p.home?.name}</span>
-                  {p.home?.shield_url ? <img src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
+                  {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={56} height={56} unoptimized crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
                 </div>
                 <div className="w-32 flex flex-col items-center justify-center relative z-20 mx-4 h-full">
                    <div className="w-24 h-24 bg-gradient-to-b from-[#D4A017] to-yellow-600 flex flex-col items-center justify-start shadow-2xl absolute -top-2" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}>
@@ -798,7 +799,7 @@ export default function PartidosPage() {
                    </div>
                 </div>
                 <div className="flex-1 flex items-center justify-start gap-4">
-                  {p.away?.shield_url ? <img src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
+                  {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={56} height={56} unoptimized crossOrigin="anonymous" className="w-14 h-14 object-contain" /> : <div className="w-14 h-14 bg-[#2e2e2e] rounded-full"></div>}
                   <span className="font-black text-white text-xl uppercase tracking-wider">{p.away?.name}</span>
                 </div>
               </div>

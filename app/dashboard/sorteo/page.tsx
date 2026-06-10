@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 
@@ -139,7 +140,7 @@ export default function SorteoPage() {
             {equiposLibres.map(equipo => (
               <div key={equipo.id} className="flex items-center bg-[#1c1c1c] border border-[#2E2E2E] rounded-lg p-2 pr-4 gap-3">
                 {equipo.shield_url ? (
-                  <img src={equipo.shield_url} alt="Escudo" crossOrigin="anonymous" className="w-6 h-6 object-contain rounded-full" />
+                  <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={24} height={24} unoptimized crossOrigin="anonymous" className="w-6 h-6 object-contain rounded-full" />
                 ) : (
                   <div className="w-6 h-6 bg-[#2E2E2E] rounded-full flex items-center justify-center text-[10px]">🛡️</div>
                 )}
@@ -179,7 +180,7 @@ export default function SorteoPage() {
                       <div className="flex items-center gap-3">
                         {equipo.shield_url ? (
                           // crossOrigin="anonymous" es vital para que html2canvas pueda capturar imágenes de Supabase
-                          <img src={equipo.shield_url} alt="Escudo" crossOrigin="anonymous" className="w-6 h-6 object-contain rounded-full bg-white/5" />
+                          <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={24} height={24} unoptimized crossOrigin="anonymous" className="w-6 h-6 object-contain rounded-full bg-white/5" />
                         ) : (
                           <div className="w-6 h-6 bg-[#2E2E2E] rounded-full flex items-center justify-center text-[10px]">🛡️</div>
                         )}
