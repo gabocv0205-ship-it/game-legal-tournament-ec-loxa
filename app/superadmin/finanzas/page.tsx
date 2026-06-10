@@ -89,7 +89,7 @@ export default function CajaFuerteSaaS() {
 
       setMostrarModal(false);
       alert(`✅ Asiento registrado: $${monto} cobrados a ${clienteSeleccionado.full_name || clienteSeleccionado.email}. La cuenta del cliente ha sido reactivada.`);
-      cargarContabilidad();
+      cargarContabilidad(true);
     } catch (error: any) {
       alert("❌ " + error.message);
     } finally {
