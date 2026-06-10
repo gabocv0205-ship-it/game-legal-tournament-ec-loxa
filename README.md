@@ -22,6 +22,10 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 `SUPABASE_SERVICE_ROLE_KEY` es secreta. Nunca debe exponerse en codigo cliente,
 capturas o repositorios publicos.
 
+Para preparar la integración entre Bóveda de Clientes y Tesorería SaaS, ejecuta
+una vez `supabase/saas_setup.sql` desde el SQL Editor de Supabase. La migración
+no elimina datos y crea las columnas, tabla e índices requeridos.
+
 Inicia el servidor:
 
 ```bash

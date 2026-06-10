@@ -3,76 +3,160 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
-  try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
+async function getSuperadminClients() {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
         },
-      }
-    );
+      },
+    }
+  );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  if (userError || !user) {
+    return { response: NextResponse.json({ error: 'No autenticado' }, { status: 401 }) };
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseAdminKey) {
+    return { response: NextResponse.json({ error: 'La configuración administrativa de Supabase está incompleta' }, { status: 500 }) };
+  }
+
+  const admin = createAdminClient(supabaseUrl, supabaseAdminKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+  const { data: perfil } = await admin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (perfil?.role !== 'superadmin') {
+    return { response: NextResponse.json({ error: 'Acceso denegado' }, { status: 403 }) };
+  }
+
+  return { user, admin };
+}
+
+export async function GET() {
+  try {
+    const auth = await getSuperadminClients();
+    if (auth.response) return auth.response;
+
+    const { data, error } = await auth.admin
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return NextResponse.json({ clientes: data || [] });
+  } catch (error) {
+    console.error('Error al cargar clientes SaaS:', error);
+    return NextResponse.json({ error: 'No se pudieron cargar los clientes' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const auth = await getSuperadminClients();
+    if (auth.response) return auth.response;
+
+    const { id, saas_status, max_tournaments } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: 'Cliente no especificado' }, { status: 400 });
     }
 
-    const { data: perfil } = await supabase
+    const updates: { saas_status?: string; max_tournaments?: number } = {};
+    if (saas_status !== undefined) {
+      if (!['active', 'pending_payment', 'suspended'].includes(saas_status)) {
+        return NextResponse.json({ error: 'Estado SaaS inválido' }, { status: 400 });
+      }
+      updates.saas_status = saas_status;
+    }
+    if (max_tournaments !== undefined) {
+      const limit = Number(max_tournaments);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        return NextResponse.json({ error: 'Límite de torneos inválido' }, { status: 400 });
+      }
+      updates.max_tournaments = limit;
+    }
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No hay cambios válidos' }, { status: 400 });
+    }
+
+    const { data: target, error: targetError } = await auth.admin
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', id)
       .single();
 
-    if (perfil?.role !== 'superadmin') {
-      return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
+    if (targetError || !target) {
+      return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
     }
+    if (target.role === 'superadmin') {
+      return NextResponse.json({ error: 'El perfil superadmin no puede modificarse desde este módulo' }, { status: 403 });
+    }
+
+    const { data, error } = await auth.admin
+      .from('profiles')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return NextResponse.json({ success: true, cliente: data });
+  } catch (error) {
+    console.error('Error al actualizar cliente SaaS:', error);
+    return NextResponse.json({ error: 'No se pudo actualizar el cliente' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await getSuperadminClients();
+    if (auth.response) return auth.response;
 
     const { email, password, full_name } = await request.json();
-
-    // 1. Instanciar Supabase con privilegios de administrador (Bypass RLS)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    
-    if (!supabaseUrl || !supabaseAdminKey) {
-      throw new Error("La configuración administrativa de Supabase está incompleta.");
+    if (!email || !password || password.length < 6 || !full_name) {
+      return NextResponse.json({ error: 'Nombre, correo y contraseña válida son obligatorios' }, { status: 400 });
     }
 
-    const supabaseAdmin = createAdminClient(supabaseUrl, supabaseAdminKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
-
-    // 2. Crear usuario silenciosamente en Auth (No cierra la sesión actual)
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: authData, error: authError } = await auth.admin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true // Lo confirmamos automáticamente
+      email_confirm: true
     });
 
     if (authError) throw authError;
     const userId = authData.user.id;
 
-    // 3. Sincronizar los datos en la tabla 'profiles' inmediatamente
-    // Usamos UPSERT por si tienes un Trigger automático en la BD
-    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
+    const { error: profileError } = await auth.admin.from('profiles').upsert({
       id: userId,
-      email: email,
-      full_name: full_name,
+      email,
+      full_name,
       role: 'organizer',
-      saas_status: 'active', // Al crearlo empieza al día
+      saas_status: 'active',
       max_tournaments: 1
     });
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      await auth.admin.auth.admin.deleteUser(userId);
+      throw profileError;
+    }
 
     return NextResponse.json({ success: true, user: authData.user });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    console.error('Error al crear cliente SaaS:', error);
+    return NextResponse.json({ error: 'No se pudo crear el cliente' }, { status: 500 });
   }
 }

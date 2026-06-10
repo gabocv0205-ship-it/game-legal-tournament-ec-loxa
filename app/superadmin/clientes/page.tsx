@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
@@ -14,7 +13,8 @@ const Icons = {
   check: "M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4L12 14.01l-3-3",
   alert: "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
   ban: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M4.93 4.93l14.14 14.14",
-  plus: "M12 5v14M5 12h14"
+  plus: "M12 5v14M5 12h14",
+  bank: "M3 21h18 M3 10h18 M5 6l7-3 7 3 M4 10v11 M20 10v11"
 };
 
 export default function BovedaSuperAdmin() {
@@ -28,6 +28,7 @@ export default function BovedaSuperAdmin() {
   const [nuevoEmail, setNuevoEmail] = useState("");
   const [nuevaClave, setNuevaClave] = useState("");
   const [creandoCliente, setCreandoCliente] = useState(false);
+  const [errorCarga, setErrorCarga] = useState("");
 
   useEffect(() => {
     cargarClientes();
@@ -35,24 +36,37 @@ export default function BovedaSuperAdmin() {
 
   const cargarClientes = async () => {
     setLoading(true);
+    setErrorCarga("");
     try {
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      setClientes(data || []);
-    } catch (error) {
+      const response = await fetch('/api/clients', { cache: 'no-store', credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los clientes');
+      setClientes(data.clientes || []);
+    } catch (error: any) {
       console.error("Error al cargar clientes:", error);
+      setErrorCarga(error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const actualizarCliente = async (id: string, changes: Record<string, string | number>) => {
+    const response = await fetch('/api/clients', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ id, ...changes }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'No se pudo actualizar el cliente');
+    setClientes(actuales => actuales.map(cliente => cliente.id === id ? data.cliente : cliente));
   };
 
   const actualizarEstado = async (id: string, nuevoEstado: string, esSuperAdmin: boolean) => {
     if (esSuperAdmin) return alert("¡No puedes suspender o cobrarle al Súper Administrador Maestro!");
     setProcesandoId(id);
     try {
-      const { error } = await supabase.from('profiles').update({ saas_status: nuevoEstado }).eq('id', id);
-      if (error) throw error;
-      await cargarClientes();
+      await actualizarCliente(id, { saas_status: nuevoEstado });
     } catch (error: any) {
       alert("Error al actualizar estado: " + error.message);
     } finally {
@@ -63,9 +77,7 @@ export default function BovedaSuperAdmin() {
   const actualizarLimiteTorneos = async (id: string, nuevoLimite: number) => {
     setProcesandoId(id);
     try {
-      const { error } = await supabase.from('profiles').update({ max_tournaments: nuevoLimite }).eq('id', id);
-      if (error) throw error;
-      await cargarClientes();
+      await actualizarCliente(id, { max_tournaments: nuevoLimite });
     } catch (error: any) {
       alert("Error al actualizar límite: " + error.message);
     } finally {
@@ -94,7 +106,7 @@ export default function BovedaSuperAdmin() {
       setNuevoNombre("");
       setNuevoEmail("");
       setNuevaClave("");
-      cargarClientes();
+      await cargarClientes();
     } catch (error: any) {
       alert(error.message);
     } finally {
@@ -133,6 +145,12 @@ export default function BovedaSuperAdmin() {
           <p className="text-gray-400 font-bold text-sm mt-1">Gestión de Suscripciones SaaS</p>
         </div>
         <div className="flex items-center gap-4">
+          <Link
+            href="/superadmin/finanzas"
+            className="flex items-center gap-2 bg-[#141414] hover:bg-[#D4A017] text-[#D4A017] hover:text-black border border-[#D4A017]/50 font-black uppercase tracking-widest text-xs px-5 py-2.5 rounded-xl transition-all"
+          >
+            Ir a Tesorería
+          </Link>
           <button 
             onClick={() => setMostrarModalCrear(true)}
             className="flex items-center gap-2 bg-[#D4A017] hover:bg-yellow-500 text-black font-black uppercase tracking-widest text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(212,160,23,0.3)]"
@@ -146,6 +164,12 @@ export default function BovedaSuperAdmin() {
         </div>
       </div>
 
+      {errorCarga && (
+        <div className="bg-red-950/40 border border-red-700 text-red-300 px-4 py-3 rounded-xl text-sm font-bold">
+          {errorCarga}
+        </div>
+      )}
+
       <div className="bg-[#141414] rounded-2xl shadow-[0_0_30px_rgba(220,38,38,0.05)] border border-[#2E2E2E] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-white whitespace-nowrap">
@@ -158,7 +182,9 @@ export default function BovedaSuperAdmin() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
-              {clientes.map(cliente => {
+              {clientes.length === 0 ? (
+                <tr><td colSpan={4} className="p-8 text-center text-gray-500 italic">No hay clientes registrados.</td></tr>
+              ) : clientes.map(cliente => {
                 const esSuperAdmin = cliente.role === 'superadmin';
                 const isProcesando = procesandoId === cliente.id;
 
@@ -201,6 +227,15 @@ export default function BovedaSuperAdmin() {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        {!esSuperAdmin && (
+                          <Link
+                            href={`/superadmin/finanzas?cliente=${cliente.id}`}
+                            title="Cobrar en Tesorería"
+                            className="p-2 rounded bg-[#2E2E2E] text-[#D4A017] hover:bg-[#D4A017] hover:text-black transition-all"
+                          >
+                            <Icon path={Icons.bank} size={16} />
+                          </Link>
+                        )}
                         <button onClick={() => actualizarEstado(cliente.id, 'active', esSuperAdmin)} disabled={esSuperAdmin || isProcesando} className={`p-2 rounded transition-all ${cliente.saas_status === 'active' ? 'bg-green-900/30 text-green-500 cursor-not-allowed' : 'bg-[#2E2E2E] text-gray-400 hover:bg-green-600 hover:text-white'}`}><Icon path={Icons.check} size={16} /></button>
                         <button onClick={() => actualizarEstado(cliente.id, 'pending_payment', esSuperAdmin)} disabled={esSuperAdmin || isProcesando} className={`p-2 rounded transition-all ${cliente.saas_status === 'pending_payment' ? 'bg-yellow-900/30 text-yellow-500 cursor-not-allowed' : 'bg-[#2E2E2E] text-gray-400 hover:bg-yellow-600 hover:text-white'}`}><Icon path={Icons.alert} size={16} /></button>
                         <button onClick={() => actualizarEstado(cliente.id, 'suspended', esSuperAdmin)} disabled={esSuperAdmin || isProcesando} className={`p-2 rounded transition-all ${cliente.saas_status === 'suspended' ? 'bg-red-900/30 text-red-500 cursor-not-allowed' : 'bg-[#2E2E2E] text-gray-400 hover:bg-red-600 hover:text-white'}`}><Icon path={Icons.ban} size={16} /></button>

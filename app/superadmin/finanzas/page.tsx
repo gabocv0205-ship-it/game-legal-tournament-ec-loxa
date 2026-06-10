@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
@@ -13,6 +13,8 @@ const Icons = {
 };
 
 export default function CajaFuerteSaaS() {
+  const clienteAbiertoRef = useRef<string | null>(null);
+  const [clienteSolicitado, setClienteSolicitado] = useState<string | null>(null);
   const [clientes, setClientes] = useState<any[]>([]);
   const [historial, setHistorial] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,13 +26,25 @@ export default function CajaFuerteSaaS() {
   const [monto, setMonto] = useState("");
   const [concepto, setConcepto] = useState("Suscripción Mensual Pro");
   const [notas, setNotas] = useState("");
+  const [errorCarga, setErrorCarga] = useState("");
 
   useEffect(() => {
+    setClienteSolicitado(new URLSearchParams(window.location.search).get('cliente'));
     cargarContabilidad();
   }, []);
 
+  useEffect(() => {
+    if (!clienteSolicitado || loading || clienteAbiertoRef.current === clienteSolicitado) return;
+    const cliente = clientes.find(item => item.id === clienteSolicitado);
+    if (cliente) {
+      clienteAbiertoRef.current = clienteSolicitado;
+      abrirModalCobro(cliente);
+    }
+  }, [clienteSolicitado, clientes, loading]);
+
   const cargarContabilidad = async (forzarRefresco = false) => {
   setLoading(true);
+  setErrorCarga("");
   try {
       const url = forzarRefresco 
       ? `/api/saas/contabilidad?t=${Date.now()}` 
@@ -50,7 +64,7 @@ export default function CajaFuerteSaaS() {
       setStats(data.stats);
     } catch (error: any) {
       console.error("Error contable:", error);
-      alert("❌ " + error.message);
+      setErrorCarga(error.message);
     } finally {
       setLoading(false);
     }
@@ -113,7 +127,22 @@ export default function CajaFuerteSaaS() {
           </h2>
           <p className="text-gray-400 font-bold text-sm mt-1">Recaudación global de suscripciones de la plataforma</p>
         </div>
+        <Link
+          href="/superadmin/clientes"
+          className="bg-[#141414] hover:bg-red-700 text-red-400 hover:text-white border border-red-900/50 font-black uppercase tracking-widest text-xs px-5 py-2.5 rounded-xl transition-all"
+        >
+          Ir a Bóveda de Clientes
+        </Link>
       </div>
+
+      {errorCarga && (
+        <div className="bg-red-950/40 border border-red-700 text-red-300 px-4 py-3 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <span className="text-sm font-bold">{errorCarga}</span>
+          <button onClick={() => cargarContabilidad(true)} className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-tr from-[#141414] to-[#1C1C1C] p-6 rounded-2xl border border-[#D4A017]/50 shadow-[0_0_20px_rgba(212,160,23,0.1)] relative overflow-hidden">
