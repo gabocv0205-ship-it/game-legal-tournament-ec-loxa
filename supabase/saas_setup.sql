@@ -4,9 +4,46 @@
 create extension if not exists pgcrypto;
 
 alter table public.profiles
+  add column if not exists email text,
+  add column if not exists full_name text,
   add column if not exists role text default 'organizer',
   add column if not exists saas_status text default 'active',
   add column if not exists max_tournaments integer default 1;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (
+    id,
+    email,
+    full_name,
+    role,
+    saas_status,
+    max_tournaments
+  )
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
+    'organizer',
+    'active',
+    1
+  )
+  on conflict (id) do update set
+    email = excluded.email,
+    full_name = coalesce(public.profiles.full_name, excluded.full_name);
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert or update of email, raw_user_meta_data on auth.users
+  for each row execute procedure public.handle_new_user();
 
 create table if not exists public.saas_payments (
   id uuid primary key default gen_random_uuid(),

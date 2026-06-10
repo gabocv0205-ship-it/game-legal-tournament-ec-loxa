@@ -3,6 +3,23 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+function clientCreationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('already') || normalized.includes('registered') || normalized.includes('exists')) {
+    return { status: 409, message: 'Ya existe un usuario registrado con ese correo' };
+  }
+  if (normalized.includes('password')) {
+    return { status: 400, message: 'La contraseña no cumple los requisitos de Supabase' };
+  }
+  if (normalized.includes('database error') || normalized.includes('trigger')) {
+    return { status: 500, message: 'Supabase no pudo sincronizar Auth con profiles. Ejecuta nuevamente supabase/saas_setup.sql' };
+  }
+
+  return { status: 500, message: 'Supabase rechazó la creación del cliente. Revisa los registros de Auth en Supabase' };
+}
+
 async function getSuperadminClients() {
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -126,7 +143,10 @@ export async function POST(request: Request) {
     const auth = await getSuperadminClients();
     if (auth.response) return auth.response;
 
-    const { email, password, full_name } = await request.json();
+    const body = await request.json();
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    const full_name = String(body.full_name || '').trim();
     if (!email || !password || password.length < 6 || !full_name) {
       return NextResponse.json({ error: 'Nombre, correo y contraseña válida son obligatorios' }, { status: 400 });
     }
@@ -134,10 +154,14 @@ export async function POST(request: Request) {
     const { data: authData, error: authError } = await auth.admin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true
+      email_confirm: true,
+      user_metadata: { full_name }
     });
 
-    if (authError) throw authError;
+    if (authError) {
+      const response = clientCreationError(authError);
+      return NextResponse.json({ error: response.message }, { status: response.status });
+    }
     const userId = authData.user.id;
 
     const { error: profileError } = await auth.admin.from('profiles').upsert({
@@ -157,6 +181,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, user: authData.user });
   } catch (error) {
     console.error('Error al crear cliente SaaS:', error);
-    return NextResponse.json({ error: 'No se pudo crear el cliente' }, { status: 500 });
+    const response = clientCreationError(error);
+    return NextResponse.json({ error: response.message }, { status: response.status });
   }
 }
