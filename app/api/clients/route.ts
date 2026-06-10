@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { rejectCrossOriginRequest } from '@/lib/security';
 
 function clientCreationError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -83,6 +84,9 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
+    const originError = rejectCrossOriginRequest(request);
+    if (originError) return originError;
+
     const auth = await getSuperadminClients();
     if (auth.response) return auth.response;
 
@@ -140,6 +144,9 @@ export async function PATCH(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const originError = rejectCrossOriginRequest(request);
+    if (originError) return originError;
+
     const auth = await getSuperadminClients();
     if (auth.response) return auth.response;
 

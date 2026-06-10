@@ -6,6 +6,7 @@ create extension if not exists pgcrypto;
 alter table public.profiles
   add column if not exists email text,
   add column if not exists full_name text,
+  add column if not exists phone text,
   add column if not exists role text default 'organizer',
   add column if not exists saas_status text default 'active',
   add column if not exists max_tournaments integer default 1;
@@ -44,6 +45,28 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert or update of email, raw_user_meta_data on auth.users
   for each row execute procedure public.handle_new_user();
+
+revoke all on function public.handle_new_user() from public, anon, authenticated;
+
+alter table public.profiles enable row level security;
+
+drop policy if exists profiles_select_own on public.profiles;
+create policy profiles_select_own
+  on public.profiles
+  for select
+  to authenticated
+  using (auth.uid() = id);
+
+drop policy if exists profiles_update_own on public.profiles;
+create policy profiles_update_own
+  on public.profiles
+  for update
+  to authenticated
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
+revoke update on public.profiles from authenticated;
+grant update (full_name, phone) on public.profiles to authenticated;
 
 create table if not exists public.saas_payments (
   id uuid primary key default gen_random_uuid(),
