@@ -32,7 +32,9 @@ export default function CajaFuerteSaaS() {
   const cargarContabilidad = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/saas/contabilidad');
+      const res = await fetch('/api/saas/contabilidad', {
+  credentials: 'include',
+});
       const data = await res.json();
 
       if (!res.ok) {
@@ -64,9 +66,11 @@ export default function CajaFuerteSaaS() {
 
     try {
       const res = await fetch('/api/saas/cobrar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await fetch('/api/saas/cobrar', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include',
+  body: JSON.stringify({
           organizer_id: clienteSeleccionado.id,
           amount: Number(monto),
           concept: concepto,

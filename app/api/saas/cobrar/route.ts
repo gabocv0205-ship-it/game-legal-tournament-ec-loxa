@@ -1,32 +1,33 @@
-// 📄 app/api/saas/cobrar/route.ts
-// Registra un pago y reactiva la cuenta del cliente
-
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
-    // 1. Configurar cliente admin (mismo patrón que clients/route.ts)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-    if (!supabaseAdminKey) {
-      throw new Error("SUPABASE_SERVICE_ROLE_KEY no está configurada en el servidor.");
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseAdminKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    // 1. Crear cliente con cookies
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+        },
+      }
+    );
 
     // 2. Verificar sesión
-    const { data: { user } } = await supabaseAdmin.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
     // 3. Verificar rol
-    const { data: perfil } = await supabaseAdmin
+    const { data: perfil } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Solo superadmin puede cobrar' }, { status: 403 });
     }
 
-    // 4. Leer datos del pago enviados desde el frontend
+    // 4. Leer datos del pago
     const body = await request.json();
     const { organizer_id, amount, concept, notes } = body;
 
@@ -44,21 +45,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 });
     }
 
-    // 5. Insertar el pago en saas_payments
-    const { error: pagoError } = await supabaseAdmin
+    // 5. Usar admin client para escribir
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: { autoRefreshToken: false, persistSession: false }
+      }
+    );
+
+    const { error: pagoError } = await adminSupabase
       .from('saas_payments')
       .insert([{
         organizer_id,
         amount: Number(amount),
         concept,
         notes,
-        collected_by: user.id, // Quién cobró
+        collected_by: user.id,
       }]);
 
     if (pagoError) throw pagoError;
 
-    // 6. Reactivar la cuenta del cliente
-    const { error: perfilError } = await supabaseAdmin
+    const { error: perfilError } = await adminSupabase
       .from('profiles')
       .update({ saas_status: 'active' })
       .eq('id', organizer_id);
