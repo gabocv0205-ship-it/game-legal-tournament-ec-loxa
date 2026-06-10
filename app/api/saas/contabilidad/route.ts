@@ -65,7 +65,7 @@ export async function GET() {
         .neq('role', 'superadmin'),
       adminSupabase
         .from('saas_payments')
-        .select('*, profiles(full_name, email)')
+        .select('*')
         .order('created_at', { ascending: false })
     ]);
 
