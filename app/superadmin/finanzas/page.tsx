@@ -29,12 +29,16 @@ export default function CajaFuerteSaaS() {
     cargarContabilidad();
   }, []);
 
-  const cargarContabilidad = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/saas/contabilidad', {
-  credentials: 'include',
-});
+  const cargarContabilidad = async (forzarRefresco = false) => {
+  setLoading(true);
+  try {
+      const url = forzarRefresco 
+      ? `/api/saas/contabilidad?t=${Date.now()}` 
+      : '/api/saas/contabilidad';
+
+    const res = await fetch(url, {
+      credentials: 'include',
+    });
       const data = await res.json();
 
       if (!res.ok) {
