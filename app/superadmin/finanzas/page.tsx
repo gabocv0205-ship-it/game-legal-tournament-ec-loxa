@@ -64,13 +64,12 @@ export default function CajaFuerteSaaS() {
     if (!clienteSeleccionado || !monto) return;
     setProcesando(true);
 
-    try {
+        try {
       const res = await fetch('/api/saas/cobrar', {
-      const res = await fetch('/api/saas/cobrar', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  credentials: 'include',
-  body: JSON.stringify({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
           organizer_id: clienteSeleccionado.id,
           amount: Number(monto),
           concept: concepto,
