@@ -169,7 +169,7 @@ export default function LibroMayorFinanzas() {
               {equipos.map(eq => (
                 <tr key={eq.id} className="hover:bg-[#141414] transition-colors">
                   <td className="p-4 font-bold flex items-center gap-3">
-                    {eq.shield_url ? <img src={eq.shield_url} className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
+                    {eq.shield_url ? <img src={eq.shield_url} alt={`Escudo de ${eq.name}`} className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
                     {eq.name}
                   </td>
                   <td className="p-4 text-center text-gray-300 font-mono">${eq.deudaInscripcion.toFixed(2)}</td>

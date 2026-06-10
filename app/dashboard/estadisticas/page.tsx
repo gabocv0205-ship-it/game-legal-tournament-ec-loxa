@@ -192,7 +192,7 @@ export default function EstadisticasPage() {
                 <tr key={s.id} className="hover:bg-[#141414] transition-colors">
                   <td className="px-4 py-3 font-black text-gray-500">{index + 1}</td>
                   <td className="px-4 py-3 text-left font-bold flex items-center gap-3">
-                    {s.shield ? <img src={s.shield} className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
+                    {s.shield ? <img src={s.shield} alt={`Escudo de ${s.name}`} className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
                     <span className="uppercase tracking-wide">{s.name}</span>
                   </td>
                   <td className="px-3 py-3 font-bold">{s.pj}</td>

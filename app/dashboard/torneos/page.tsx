@@ -164,7 +164,7 @@ export default function GestorTorneos() {
         <div className="text-center py-20 bg-[#141414] border border-[#2E2E2E] rounded-3xl">
           <Icon path={Icons.trophy} size={48} className="mx-auto text-gray-600 mb-4" />
           <p className="text-gray-400 font-bold text-lg">Aún no tienes torneos creados.</p>
-          <p className="text-gray-600 text-sm mt-2">Haz clic en "Nuevo Torneo" para empezar tu gestión.</p>
+          <p className="text-gray-600 text-sm mt-2">Haz clic en &quot;Nuevo Torneo&quot; para empezar tu gestión.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

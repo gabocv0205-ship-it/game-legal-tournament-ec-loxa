@@ -97,9 +97,6 @@ export async function GET() {
 
   } catch (error: any) {
     console.error('Error en /api/saas/contabilidad:', error);
-    return NextResponse.json({ 
-      error: error.message,
-      stack: error.stack 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'No se pudo cargar la contabilidad' }, { status: 500 });
   }
 }
