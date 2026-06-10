@@ -35,6 +35,9 @@ export default function MiPerfilPage() {
         setPerfil({ ...data, email: session.user.email });
         setNombre(data.full_name || "");
         setTelefono(data.phone || "");
+      } else {
+        
+        setPerfil({ email: session.user.email, role: 'organizer' });
       }
     } catch (error) {
       console.error("Error al cargar perfil:", error);
@@ -90,7 +93,7 @@ export default function MiPerfilPage() {
           <form onSubmit={guardarPerfil} className="space-y-6">
             <div className="flex items-center gap-6 mb-8">
               <div className="w-24 h-24 rounded-full bg-[#1C1C1C] border-2 border-[#D4A017] flex items-center justify-center text-3xl font-black text-[#D4A017] shadow-[0_0_15px_rgba(212,160,23,0.2)]">
-                {nombre ? nombre.charAt(0).toUpperCase() : perfil?.email?.charAt(0).toUpperCase()}
+                {nombre ? nombre.charAt(0).toUpperCase() : (perfil?.email?.charAt(0)?.toUpperCase() || 'U')}
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Avatar del Sistema</p>
