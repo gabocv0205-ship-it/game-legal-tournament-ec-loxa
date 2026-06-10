@@ -29,12 +29,16 @@ export default function CajaFuerteSaaS() {
     cargarContabilidad();
   }, []);
 
-  const cargarContabilidad = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/saas/contabilidad', {
-  credentials: 'include',
-});
+  const cargarContabilidad = async (forzarRefresco = false) => {
+  setLoading(true);
+  try {
+      const url = forzarRefresco 
+      ? `/api/saas/contabilidad?t=${Date.now()}` 
+      : '/api/saas/contabilidad';
+
+    const res = await fetch(url, {
+      credentials: 'include',
+    });
       const data = await res.json();
 
       if (!res.ok) {
@@ -64,13 +68,12 @@ export default function CajaFuerteSaaS() {
     if (!clienteSeleccionado || !monto) return;
     setProcesando(true);
 
-    try {
+        try {
       const res = await fetch('/api/saas/cobrar', {
-      const res = await fetch('/api/saas/cobrar', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  credentials: 'include',
-  body: JSON.stringify({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
           organizer_id: clienteSeleccionado.id,
           amount: Number(monto),
           concept: concepto,
@@ -86,7 +89,7 @@ export default function CajaFuerteSaaS() {
 
       setMostrarModal(false);
       alert(`✅ Asiento registrado: $${monto} cobrados a ${clienteSeleccionado.full_name || clienteSeleccionado.email}. La cuenta del cliente ha sido reactivada.`);
-      cargarContabilidad();
+      cargarContabilidad(true);
     } catch (error: any) {
       alert("❌ " + error.message);
     } finally {
