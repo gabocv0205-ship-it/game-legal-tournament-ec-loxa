@@ -36,6 +36,8 @@ export default function ConfiguracionPage() {
   const [descansoPartidos, setDescansoPartidos] = useState(10);
   const [bannerUrl, setBannerUrl] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
+  const [bannerArchivo, setBannerArchivo] = useState<File | null>(null);
+  const [posterArchivo, setPosterArchivo] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
 
@@ -96,6 +98,8 @@ export default function ConfiguracionPage() {
 
     try {
       let nuevaUrlReglamento = reglamentoUrl;
+      let nuevoBannerUrl = bannerUrl;
+      let nuevoPosterUrl = posterUrl;
 
       // Si el cliente seleccionó un nuevo PDF
       if (reglamento) {
@@ -113,6 +117,9 @@ export default function ConfiguracionPage() {
         const { data: publicUrlData } = supabase.storage.from("reglamentos").getPublicUrl(fileName);
         nuevaUrlReglamento = publicUrlData.publicUrl;
       }
+
+      if (bannerArchivo) nuevoBannerUrl = await subirImagenTorneo(bannerArchivo, "banner", torneoId, 1920);
+      if (posterArchivo) nuevoPosterUrl = await subirImagenTorneo(posterArchivo, "poster", torneoId, 1080);
 
       // Actualizar Base de Datos (incluyendo los rubros financieros)
       const { error } = await supabase.from("tournaments").update({
@@ -141,8 +148,8 @@ export default function ConfiguracionPage() {
         estimated_end_date: fechaFin || null,
         match_duration_minutes: duracionPartido,
         break_between_matches_minutes: descansoPartidos,
-        banner_url: bannerUrl || null,
-        poster_url: posterUrl || null,
+        banner_url: nuevoBannerUrl || null,
+        poster_url: nuevoPosterUrl || null,
         configuration_completed: true
       }).eq("id", torneoId);
 
@@ -151,6 +158,8 @@ export default function ConfiguracionPage() {
       alert("¡Configuración guardada con éxito!");
       cargarConfiguracion(); // Recargar datos frescos
       setReglamento(null); // Limpiar el input de archivo
+      setBannerArchivo(null);
+      setPosterArchivo(null);
 
     } catch (error: any) {
       alert("Error al guardar: " + error.message);
@@ -223,9 +232,10 @@ export default function ConfiguracionPage() {
 
         <div className="space-y-4">
           <h3 className="text-pink-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Identidad Visual del Torneo</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TextField label="URL del banner principal" value={bannerUrl} onChange={setBannerUrl} placeholder="https://..." />
-            <TextField label="URL del póster oficial" value={posterUrl} onChange={setPosterUrl} placeholder="https://..." />
+          <p className="text-gray-500 text-xs">Selecciona cualquier publicidad, diseño, eslogan o fotografía. La aplicación la optimiza automáticamente antes de publicarla.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <ImageUpload label="Banner principal (horizontal)" currentUrl={bannerUrl} file={bannerArchivo} onChange={setBannerArchivo} />
+            <ImageUpload label="Póster promocional (vertical)" currentUrl={posterUrl} file={posterArchivo} onChange={setPosterArchivo} />
           </div>
         </div>
 
@@ -336,6 +346,41 @@ function DateField({ label, value, onChange, required = false }: any) {
   return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><input type="date" required={required} value={value} onChange={e => onChange(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl" style={{ colorScheme: "dark" }} /></div>;
 }
 
-function TextField({ label, value, onChange, placeholder }: any) {
-  return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><input type="url" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl" /></div>;
+function ImageUpload({ label, currentUrl, file, onChange }: any) {
+  const preview = file ? URL.createObjectURL(file) : currentUrl;
+  return <label className="block bg-[#1c1c1c] border border-dashed border-[#D4A017]/50 rounded-xl p-4 cursor-pointer hover:bg-[#242424] transition-colors">
+    <span className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">{label}</span>
+    <div className="h-36 rounded-lg bg-[#0a0a0a] mt-3 bg-cover bg-center flex items-center justify-center text-gray-500 text-xs" style={preview ? { backgroundImage: `linear-gradient(rgba(0,0,0,.15),rgba(0,0,0,.35)),url("${preview}")` } : undefined}>{!preview && "Haz clic para seleccionar una imagen"}</div>
+    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => onChange(e.target.files?.[0] || null)} className="hidden" />
+    <span className="block text-gray-500 text-[10px] mt-2">{file ? file.name : currentUrl ? "Imagen actual. Selecciona otra para reemplazarla." : "JPG, PNG o WebP"}</span>
+  </label>;
+}
+
+async function subirImagenTorneo(file: File, tipo: string, torneoId: string, maxWidth: number) {
+  const optimized = await comprimirImagen(file, `${tipo}-${torneoId}-${Date.now()}.webp`, maxWidth);
+  const path = `${torneoId}/${optimized.name}`;
+  const { error } = await supabase.storage.from("identidad-torneos").upload(path, optimized, { upsert: true });
+  if (error) throw error;
+  return supabase.storage.from("identidad-torneos").getPublicUrl(path).data.publicUrl;
+}
+
+function comprimirImagen(file: File, name: string, maxWidth: number): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("La imagen seleccionada no es válida."));
+      image.onload = () => {
+        const scale = Math.min(1, maxWidth / image.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => blob ? resolve(new File([blob], name, { type: "image/webp" })) : reject(new Error("No se pudo optimizar la imagen.")), "image/webp", 0.78);
+      };
+      image.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
 }

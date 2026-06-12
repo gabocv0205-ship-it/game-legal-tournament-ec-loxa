@@ -155,6 +155,7 @@ export default function PortalTorneoDinamico() {
 
   // Bandera para detectar si el torneo fue purgado/archivado por el sistema automatizado
   const isArchived = torneoActual?.status === 'archived';
+  const partidoDestacado = partidos.find(partido => partido.status !== 'finished' && partido.match_date) || partidos[0];
 
   return (
     <>
@@ -172,6 +173,12 @@ export default function PortalTorneoDinamico() {
         .hero { position: relative; min-height: 90vh; display: flex; align-items: center; padding: 4rem 2rem; overflow:hidden;}
         .hero-bg { position: absolute; inset: 0; background: radial-gradient(circle at center, rgba(27,107,47,0.2) 0%, var(--black) 80%); z-index: -1; }
         .hero-title { font-family: var(--font-display); font-size: clamp(40px, 8vw, 90px); line-height: 0.9; text-transform: uppercase; margin-bottom: 20px;}
+        .match-spotlight { position: relative; overflow: hidden; background: linear-gradient(145deg, rgba(28,28,28,.94), rgba(13,13,13,.98)); border: 1px solid rgba(212,160,23,.45); border-radius: 22px; padding: 24px; box-shadow: 0 20px 70px rgba(0,0,0,.55); }
+        .match-spotlight::before { content: ''; position: absolute; inset: -70%; background: conic-gradient(transparent, rgba(212,160,23,.18), transparent 25%); animation: spotlight-spin 8s linear infinite; }
+        .match-spotlight-content { position: relative; z-index: 1; }
+        .team-shield { width: 76px; height: 76px; object-fit: contain; filter: drop-shadow(0 8px 18px rgba(0,0,0,.65)); transition: transform .3s ease; }
+        .match-spotlight:hover .team-shield { transform: scale(1.08); }
+        @keyframes spotlight-spin { to { transform: rotate(360deg); } }
         .text-gold { color: var(--gold); }
         .btn-primary { background: linear-gradient(135deg, var(--gold) 0%, #A07810 100%); color: var(--black); padding: 12px 28px; border-radius: 4px; font-weight: bold; text-transform: uppercase; display: inline-block; transition: 0.3s; border: none; cursor: none;}
         .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(212,160,23,0.4); }
@@ -219,7 +226,7 @@ export default function PortalTorneoDinamico() {
 
       <section className="hero">
         <div className="hero-bg" style={torneoActual?.banner_url ? { backgroundImage: `linear-gradient(rgba(13,13,13,.45), rgba(13,13,13,.92)), url("${torneoActual.banner_url}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}></div>
-        <div style={{ zIndex: 1, maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+        <div style={{ zIndex: 1, maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', alignItems: 'center', gap: '48px' }}>
           <div className="reveal">
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>
               <span style={{ display:'inline-block', width:'8px',height:'8px',background:'var(--green-light)',borderRadius:'50%',marginRight:'8px', animation: 'pulse 2s infinite'}}></span>
@@ -242,6 +249,24 @@ export default function PortalTorneoDinamico() {
               </button>
             </div>
           </div>
+          {partidoDestacado && (
+            <div className="match-spotlight reveal">
+              <div className="match-spotlight-content">
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--gold)', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '2px' }}>
+                  <span>Próximo partido</span><span>{partidoDestacado.stage}</span>
+                </div>
+                {torneoActual?.poster_url && <div style={{ height: '130px', margin: '18px 0', borderRadius: '14px', backgroundImage: `linear-gradient(rgba(0,0,0,.15),rgba(0,0,0,.7)),url("${torneoActual.poster_url}")`, backgroundSize: 'cover', backgroundPosition: 'center' }} />}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '15px', alignItems: 'center', textAlign: 'center', marginTop: '22px' }}>
+                  <div>{partidoDestacado.home?.shield_url ? <Image src={partidoDestacado.home.shield_url} alt="" width={76} height={76} unoptimized className="team-shield" /> : null}<p style={{ fontWeight: 900, textTransform: 'uppercase', marginTop: '8px' }}>{partidoDestacado.home?.name}</p></div>
+                  <div style={{ color: 'var(--gold)', fontFamily: 'impact', fontSize: '28px' }}>{partidoDestacado.status === 'finished' ? `${partidoDestacado.home_goals} - ${partidoDestacado.away_goals}` : 'VS'}</div>
+                  <div>{partidoDestacado.away?.shield_url ? <Image src={partidoDestacado.away.shield_url} alt="" width={76} height={76} unoptimized className="team-shield" /> : null}<p style={{ fontWeight: 900, textTransform: 'uppercase', marginTop: '8px' }}>{partidoDestacado.away?.name}</p></div>
+                </div>
+                <div style={{ marginTop: '22px', background: 'rgba(255,255,255,.04)', borderRadius: '12px', padding: '12px', textAlign: 'center', color: 'var(--gray)', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                  {partidoDestacado.match_date ? new Date(partidoDestacado.match_date).toLocaleString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Horario por confirmar'} · {partidoDestacado.court || 'Cancha por confirmar'}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

@@ -53,6 +53,34 @@ create index if not exists admin_activity_target_created_idx
 
 alter table public.admin_activity_log enable row level security;
 
+insert into storage.buckets (id, name, public)
+values ('identidad-torneos', 'identidad-torneos', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists tournament_identity_upload on storage.objects;
+create policy tournament_identity_upload
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'identidad-torneos'
+    and exists (
+      select 1 from public.tournaments
+      where id::text = (storage.foldername(name))[1]
+      and user_id = auth.uid()
+    )
+  );
+
+drop policy if exists tournament_identity_update on storage.objects;
+create policy tournament_identity_update
+  on storage.objects for update to authenticated
+  using (
+    bucket_id = 'identidad-torneos'
+    and exists (
+      select 1 from public.tournaments
+      where id::text = (storage.foldername(name))[1]
+      and user_id = auth.uid()
+    )
+  );
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
