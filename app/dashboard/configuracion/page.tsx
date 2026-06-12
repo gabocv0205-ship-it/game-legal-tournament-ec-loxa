@@ -118,8 +118,8 @@ export default function ConfiguracionPage() {
         nuevaUrlReglamento = publicUrlData.publicUrl;
       }
 
-      if (bannerArchivo) nuevoBannerUrl = await subirImagenTorneo(bannerArchivo, "banner", torneoId, 1920);
-      if (posterArchivo) nuevoPosterUrl = await subirImagenTorneo(posterArchivo, "poster", torneoId, 1080);
+      if (bannerArchivo) nuevoBannerUrl = await subirImagenTorneoSegura(bannerArchivo, "banner", torneoId, 1920);
+      if (posterArchivo) nuevoPosterUrl = await subirImagenTorneoSegura(posterArchivo, "poster", torneoId, 1080);
 
       // Actualizar Base de Datos (incluyendo los rubros financieros)
       const { error } = await supabase.from("tournaments").update({
@@ -354,6 +354,18 @@ function ImageUpload({ label, currentUrl, file, onChange }: any) {
     <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => onChange(e.target.files?.[0] || null)} className="hidden" />
     <span className="block text-gray-500 text-[10px] mt-2">{file ? file.name : currentUrl ? "Imagen actual. Selecciona otra para reemplazarla." : "JPG, PNG o WebP"}</span>
   </label>;
+}
+
+async function subirImagenTorneoSegura(file: File, tipo: string, torneoId: string, maxWidth: number) {
+  const optimized = await comprimirImagen(file, `${tipo}-${torneoId}-${Date.now()}.webp`, maxWidth);
+  const form = new FormData();
+  form.append("tournament_id", torneoId);
+  form.append("media_type", tipo);
+  form.append("file", optimized);
+  const response = await fetch("/api/tournaments/media", { method: "POST", credentials: "include", body: form });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "No se pudo subir la imagen del torneo.");
+  return data.url as string;
 }
 
 async function subirImagenTorneo(file: File, tipo: string, torneoId: string, maxWidth: number) {
