@@ -30,11 +30,6 @@ export default function JugadoresPage() {
       let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
       
       if (!activeId) {
-        const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
-        if (fallback) activeId = fallback.id;
-      }
-      
-      if (!activeId) {
         setCargandoDatos(false);
         return;
       }

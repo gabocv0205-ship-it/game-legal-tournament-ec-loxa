@@ -71,6 +71,8 @@ export function useTournamentData() {
 
   useEffect(() => {
     fetchData();
+    window.addEventListener("tournamentChanged", fetchData);
+    return () => window.removeEventListener("tournamentChanged", fetchData);
   }, [fetchData]);
 
   return { ...data, refetch: fetchData };

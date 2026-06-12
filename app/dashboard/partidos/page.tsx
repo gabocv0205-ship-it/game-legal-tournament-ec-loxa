@@ -4,7 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
-import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatchday, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 export default function PartidosPage() {
@@ -49,6 +49,8 @@ export default function PartidosPage() {
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
   const capturaRef = useRef<HTMLDivElement>(null);
   const [appUrl, setAppUrl] = useState("");
+  const [fondoPosterUrl, setFondoPosterUrl] = useState("");
+  const [usarFondoPersonalizado, setUsarFondoPersonalizado] = useState(true);
 
   const [partidoActivo, setPartidoActivo] = useState<any>(null);
   const [jugadores, setJugadores] = useState<any[]>([]);
@@ -95,10 +97,6 @@ export default function PartidosPage() {
 
   const cargarDatos = async () => {
     let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
-    if (!activeId) {
-      const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (fallback) activeId = fallback.id;
-    }
     if (!activeId) return;
     setTorneoId(activeId);
 
@@ -109,6 +107,7 @@ export default function PartidosPage() {
       const rules = normalizeTournamentConfig(tourney);
       setConfiguracion(rules);
       setAutoDuracion(rules.match_duration_minutes);
+      setFondoPosterUrl(tourney.match_poster_background_url || "");
     }
 
     const { data: teamsData } = await supabase.from("teams").select("id, name, group_name").eq("tournament_id", activeId).order("name");
@@ -335,10 +334,27 @@ export default function PartidosPage() {
   };
 
   // --- LÓGICA DE PARTIDO EN VIVO MANTENIDA ---
+  const cargarConvocatoria = async (partido: any) => {
+    const { data: playersData } = await supabase.from("players")
+      .select("id, full_name, team_id, teams(name)")
+      .in("team_id", [partido.home_team_id, partido.away_team_id])
+      .order("full_name");
+    const partidosPrevios = partidos.filter(p => p.status === "finished" && Number(p.matchday || 0) < Number(partido.matchday || 0));
+    const idsPrevios = partidosPrevios.map(p => p.id);
+    const { data: cardEvents } = idsPrevios.length
+      ? await supabase.from("match_events").select("match_id, player_id, event_type").in("match_id", idsPrevios).in("event_type", ["amarilla", "roja"])
+      : { data: [] as any[] };
+    const suspendidos = getSuspendedPlayerIdsForMatchday(cardEvents || [], partidosPrevios, configuracion, Number(partido.matchday || 0));
+    return {
+      habilitados: (playersData || []).filter(player => !suspendidos.has(player.id)),
+      suspendidos: (playersData || []).filter(player => suspendidos.has(player.id)),
+    };
+  };
+
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
-    const { data: playersData } = await supabase.from("players").select("id, full_name, team_id, teams(name)").in("team_id", [partido.home_team_id, partido.away_team_id]).order("full_name");
-    if (playersData) setJugadores(playersData);
+    const convocatoria = await cargarConvocatoria(partido);
+    setJugadores(convocatoria.habilitados);
     cargarEventos(partido.id);
     cargarPagosArbitraje(partido.id);
   };
@@ -438,7 +454,7 @@ export default function PartidosPage() {
   // ============================================================================
   // FUNCIÓN NUEVA: GENERAR E IMPRIMIR PLANILLA FÍSICA PDF/A4
   // ============================================================================
-  const imprimirPlanilla = () => {
+  const _imprimirPlanillaAnterior = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return alert("Por favor permite las ventanas emergentes (pop-ups) en tu navegador para imprimir.");
     
@@ -518,6 +534,38 @@ export default function PartidosPage() {
     setTimeout(() => {
       printWindow.print();
     }, 250);
+  };
+
+  const imprimirPlanilla = async (partido: any) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return alert("Permite las ventanas emergentes para generar la planilla.");
+    const { habilitados, suspendidos } = await cargarConvocatoria(partido);
+    const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
+    const crearNomina = (teamId: string) => {
+      const convocados = habilitados.filter(player => player.team_id === teamId).slice(0, configuracion.football_modality + configuracion.substitutes_count);
+      const filas = convocados.map((player, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(player.full_name)}</td><td>${index < configuracion.football_modality ? "Titular" : "Suplente"}</td><td></td><td></td><td></td></tr>`);
+      while (filas.length < configuracion.football_modality + configuracion.substitutes_count) filas.push("<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>");
+      return filas.join("");
+    };
+    const suspendidosTexto = suspendidos.length
+      ? suspendidos.map(player => escapeHtml(player.full_name)).join(", ")
+      : "Ninguno";
+    const fechaPartido = new Date(partido.match_date);
+    const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
+      @page{size:A4 landscape;margin:9mm}body{font-family:Arial;color:#111;margin:0}.header{text-align:center;border-bottom:3px solid #111;margin-bottom:10px}
+      h1{font-size:19px;margin:0 0 4px}.meta{display:flex;justify-content:space-between;font-size:11px;font-weight:bold;margin:8px 0}.teams{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+      table{border-collapse:collapse;width:100%;font-size:9px}th,td{border:1px solid #222;padding:4px;height:14px}th{background:#eee}.team-title{font-size:13px;text-align:center;background:#111;color:#fff;padding:6px;font-weight:bold}
+      .notice{margin-top:8px;border:1px solid #999;padding:5px;font-size:9px}.signatures{display:flex;justify-content:space-around;margin-top:28px;font-size:10px}.signature{border-top:1px solid #111;width:25%;text-align:center;padding-top:4px}
+    </style></head><body><div class="header"><h1>PLANILLA OFICIAL - FÚTBOL ${configuracion.football_modality}</h1><div>GAME-LEGAL PRO · Titulares: ${configuracion.football_modality} · Suplentes: ${configuracion.substitutes_count}</div></div>
+    <div class="meta"><span>Jornada ${escapeHtml(partido.matchday)} · ${escapeHtml(partido.stage)}</span><span>${fechaPartido.toLocaleString("es-EC")}</span><span>${escapeHtml(partido.court || "Cancha 1")}</span></div>
+    <div class="teams"><div><div class="team-title">${escapeHtml(partido.home?.name)} - LOCAL</div><table><tr><th>N°</th><th>Jugador habilitado</th><th>Rol</th><th>Gol</th><th>TA</th><th>TR</th></tr>${crearNomina(partido.home_team_id)}</table></div>
+    <div><div class="team-title">${escapeHtml(partido.away?.name)} - VISITANTE</div><table><tr><th>N°</th><th>Jugador habilitado</th><th>Rol</th><th>Gol</th><th>TA</th><th>TR</th></tr>${crearNomina(partido.away_team_id)}</table></div></div>
+    <div class="notice"><strong>No convocados automáticamente por suspensión para esta jornada:</strong> ${suspendidosTexto}</div>
+    <div class="signatures"><div class="signature">Capitán local</div><div class="signature">Árbitro / Vocal</div><div class="signature">Capitán visitante</div></div></body></html>`;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
   };
 
   const compartirEnlaceInvitacion = () => {
@@ -759,15 +807,16 @@ export default function PartidosPage() {
               💬 Invitación
             </button>
 
-            {/* BOTÓN NUEVO: DESCARGAR PLANILLA FÍSICA PDF */}
-            <button onClick={imprimirPlanilla} className="bg-gray-800 border border-gray-600 text-white hover:bg-gray-700 font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
-              🖨️ Planilla Física
-            </button>
-
             {/* BOTÓN POSTER */}
             <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               📸 Póster
             </button>
+            {fondoPosterUrl && (
+              <label className="flex items-center gap-2 text-[10px] text-gray-300 font-bold uppercase">
+                <input type="checkbox" checked={usarFondoPersonalizado} onChange={e => setUsarFondoPersonalizado(e.target.checked)} className="accent-[#D4A017]" />
+                Usar fondo personalizado
+              </label>
+            )}
           </div>
         </div>
 
@@ -801,6 +850,9 @@ export default function PartidosPage() {
                       📲 Notificar
                     </button>
                   )}
+                  <button onClick={() => imprimirPlanilla(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600">
+                    Planilla automática
+                  </button>
 
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
@@ -821,7 +873,10 @@ export default function PartidosPage() {
           📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO" MANTENIDO INTACTO
           ============================================================================== */}
       <div style={{ display: "none" }} ref={capturaRef}>
-        <div className="bg-[#0a0a0a] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-[#D4A017]">
+        <div
+          className="bg-[#0a0a0a] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-[#D4A017]"
+          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(rgba(10,10,10,.78), rgba(10,10,10,.9)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+        >
           <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A017]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
           <div className="flex justify-between items-start mb-10 relative z-10 border-b border-[#2E2E2E] pb-6">
             <div>

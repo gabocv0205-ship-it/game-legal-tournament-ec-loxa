@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const tournamentId = String(form.get('tournament_id') || '');
     const mediaType = String(form.get('media_type') || '');
     const file = form.get('file');
-    if (!tournamentId || !['banner', 'poster'].includes(mediaType) || !(file instanceof File)) return NextResponse.json({ error: 'Solicitud de imagen inválida' }, { status: 400 });
+    if (!tournamentId || !['banner', 'poster', 'match-poster'].includes(mediaType) || !(file instanceof File)) return NextResponse.json({ error: 'Solicitud de imagen inválida' }, { status: 400 });
     if (file.type !== 'image/webp' || file.size > 4 * 1024 * 1024) return NextResponse.json({ error: 'La imagen debe pesar menos de 4 MB' }, { status: 400 });
 
     const admin = createAdminClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });

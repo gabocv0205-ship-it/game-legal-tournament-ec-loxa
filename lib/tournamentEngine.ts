@@ -10,6 +10,8 @@ export type TournamentConfig = {
   court_count: number;
   match_duration_minutes: number;
   break_between_matches_minutes: number;
+  football_modality: number;
+  substitutes_count: number;
   yellow_cards_for_suspension: number;
   yellow_suspension_matches: number;
   red_suspension_matches: number;
@@ -27,6 +29,8 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   court_count: 1,
   match_duration_minutes: 60,
   break_between_matches_minutes: 10,
+  football_modality: 11,
+  substitutes_count: 5,
   yellow_cards_for_suspension: 3,
   yellow_suspension_matches: 1,
   red_suspension_matches: 1,
@@ -48,10 +52,41 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     court_count: number("court_count"),
     match_duration_minutes: number("match_duration_minutes", 15),
     break_between_matches_minutes: number("break_between_matches_minutes", 0),
+    football_modality: number("football_modality"),
+    substitutes_count: number("substitutes_count", 0),
     yellow_cards_for_suspension: number("yellow_cards_for_suspension"),
     yellow_suspension_matches: number("yellow_suspension_matches"),
     red_suspension_matches: number("red_suspension_matches"),
   };
+}
+
+export function getSuspendedPlayerIdsForMatchday(events: any[], matches: any[], config: Partial<TournamentConfig>, targetMatchday: number) {
+  const rules = normalizeTournamentConfig(config);
+  const matchdayById = Object.fromEntries(matches.map((match) => [match.id, Number(match.matchday || 0)]));
+  const yellowCount: Record<string, number> = {};
+  const suspensionWindows: Record<string, Array<{ from: number; to: number }>> = {};
+
+  [...events]
+    .filter((event) => event.player_id && matchdayById[event.match_id] < targetMatchday)
+    .sort((a, b) => matchdayById[a.match_id] - matchdayById[b.match_id])
+    .forEach((event) => {
+      const playerId = event.player_id;
+      const eventMatchday = matchdayById[event.match_id];
+      let suspensionMatches = 0;
+      if (event.event_type === "roja") {
+        suspensionMatches = rules.red_suspension_matches;
+      } else if (event.event_type === "amarilla") {
+        yellowCount[playerId] = (yellowCount[playerId] || 0) + 1;
+        if (yellowCount[playerId] % rules.yellow_cards_for_suspension === 0) suspensionMatches = rules.yellow_suspension_matches;
+      }
+      if (suspensionMatches > 0) {
+        (suspensionWindows[playerId] ||= []).push({ from: eventMatchday + 1, to: eventMatchday + suspensionMatches });
+      }
+    });
+
+  return new Set(Object.entries(suspensionWindows)
+    .filter(([, windows]) => windows.some((window) => targetMatchday >= window.from && targetMatchday <= window.to))
+    .map(([playerId]) => playerId));
 }
 
 export function sortStandings(a: any, b: any) {

@@ -34,10 +34,14 @@ export default function ConfiguracionPage() {
   const [fechaFin, setFechaFin] = useState("");
   const [duracionPartido, setDuracionPartido] = useState(60);
   const [descansoPartidos, setDescansoPartidos] = useState(10);
+  const [modalidadFutbol, setModalidadFutbol] = useState(11);
+  const [numSuplentes, setNumSuplentes] = useState(5);
   const [bannerUrl, setBannerUrl] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
+  const [fondoPartidosUrl, setFondoPartidosUrl] = useState("");
   const [bannerArchivo, setBannerArchivo] = useState<File | null>(null);
   const [posterArchivo, setPosterArchivo] = useState<File | null>(null);
+  const [fondoPartidosArchivo, setFondoPartidosArchivo] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
 
@@ -48,11 +52,6 @@ export default function ConfiguracionPage() {
   const cargarConfiguracion = async () => {
     // Leemos el torneo que el cliente seleccionó en el Hub
     let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
-
-    if (!activeId) {
-      const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
-      if (fallback) activeId = fallback.id;
-    }
 
     if (activeId) {
       const { data } = await supabase.from('tournaments').select('*').eq('id', activeId).single();
@@ -85,8 +84,11 @@ export default function ConfiguracionPage() {
         setFechaFin(data.estimated_end_date || "");
         setDuracionPartido(Number(data.match_duration_minutes || 60));
         setDescansoPartidos(Number(data.break_between_matches_minutes || 10));
+        setModalidadFutbol(Number(data.football_modality || 11));
+        setNumSuplentes(Number(data.substitutes_count ?? 5));
         setBannerUrl(data.banner_url || "");
         setPosterUrl(data.poster_url || "");
+        setFondoPartidosUrl(data.match_poster_background_url || "");
       }
     }
   };
@@ -100,6 +102,7 @@ export default function ConfiguracionPage() {
       let nuevaUrlReglamento = reglamentoUrl;
       let nuevoBannerUrl = bannerUrl;
       let nuevoPosterUrl = posterUrl;
+      let nuevoFondoPartidosUrl = fondoPartidosUrl;
 
       // Si el cliente seleccionó un nuevo PDF
       if (reglamento) {
@@ -120,6 +123,7 @@ export default function ConfiguracionPage() {
 
       if (bannerArchivo) nuevoBannerUrl = await subirImagenTorneoSegura(bannerArchivo, "banner", torneoId, 1920);
       if (posterArchivo) nuevoPosterUrl = await subirImagenTorneoSegura(posterArchivo, "poster", torneoId, 1080);
+      if (fondoPartidosArchivo) nuevoFondoPartidosUrl = await subirImagenTorneoSegura(fondoPartidosArchivo, "match-poster", torneoId, 1600);
 
       // Actualizar Base de Datos (incluyendo los rubros financieros)
       const { error } = await supabase.from("tournaments").update({
@@ -148,8 +152,11 @@ export default function ConfiguracionPage() {
         estimated_end_date: fechaFin || null,
         match_duration_minutes: duracionPartido,
         break_between_matches_minutes: descansoPartidos,
+        football_modality: modalidadFutbol,
+        substitutes_count: numSuplentes,
         banner_url: nuevoBannerUrl || null,
         poster_url: nuevoPosterUrl || null,
+        match_poster_background_url: nuevoFondoPartidosUrl || null,
         configuration_completed: true
       }).eq("id", torneoId);
 
@@ -160,6 +167,7 @@ export default function ConfiguracionPage() {
       setReglamento(null); // Limpiar el input de archivo
       setBannerArchivo(null);
       setPosterArchivo(null);
+      setFondoPartidosArchivo(null);
 
     } catch (error: any) {
       alert("Error al guardar: " + error.message);
@@ -223,6 +231,13 @@ export default function ConfiguracionPage() {
           <h3 className="text-purple-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Programación Automática</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <NumberField label="Canchas disponibles" value={numCanchas} onChange={setNumCanchas} />
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Modalidad</label>
+              <select value={modalidadFutbol} onChange={e => setModalidadFutbol(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none">
+                {[7, 8, 9, 11].map(numero => <option key={numero} value={numero}>Fútbol {numero}</option>)}
+              </select>
+            </div>
+            <NumberField label="Suplentes por planilla" value={numSuplentes} onChange={setNumSuplentes} min={0} />
             <NumberField label="Duración por partido (min)" value={duracionPartido} onChange={setDuracionPartido} min={15} />
             <NumberField label="Descanso entre partidos (min)" value={descansoPartidos} onChange={setDescansoPartidos} min={0} />
             <DateField label="Fecha de inicio" value={fechaInicio} onChange={setFechaInicio} required />
@@ -233,9 +248,10 @@ export default function ConfiguracionPage() {
         <div className="space-y-4">
           <h3 className="text-pink-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Identidad Visual del Torneo</h3>
           <p className="text-gray-500 text-xs">Selecciona cualquier publicidad, diseño, eslogan o fotografía. La aplicación la optimiza automáticamente antes de publicarla.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <ImageUpload label="Banner principal (horizontal)" currentUrl={bannerUrl} file={bannerArchivo} onChange={setBannerArchivo} />
             <ImageUpload label="Póster promocional (vertical)" currentUrl={posterUrl} file={posterArchivo} onChange={setPosterArchivo} />
+            <ImageUpload label="Fondo para pósteres de partidos (opcional)" currentUrl={fondoPartidosUrl} file={fondoPartidosArchivo} onChange={setFondoPartidosArchivo} />
           </div>
         </div>
 

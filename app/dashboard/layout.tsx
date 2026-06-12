@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { stats, tournamentId } = useTournamentData();
+  const { stats, tournamentId, refetch } = useTournamentData();
   
   // ==========================================
   // CEREBRO SAAS (Control de Perfil y Deudas)
@@ -49,6 +49,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     verificarIdentidad();
   }, [router]);
+
+  useEffect(() => {
+    const isTournamentHub = pathname === "/dashboard/torneos";
+    const isCorporateArea = pathname.startsWith("/superadmin");
+    if (!isTournamentHub && !isCorporateArea) return;
+    localStorage.removeItem("activeTournamentId");
+    localStorage.removeItem("activeTournamentName");
+    setNombreTorneoActivo("Seleccione un torneo");
+    window.dispatchEvent(new Event("tournamentChanged"));
+    refetch();
+  }, [pathname, refetch]);
 
   // NUEVO: Función para leer el Torneo Activo y mostrar su nombre
   useEffect(() => {
