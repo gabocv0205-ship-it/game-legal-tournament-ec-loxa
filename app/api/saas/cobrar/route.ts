@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
     // 4. Leer datos del pago
     const body = await request.json();
-    const { organizer_id, amount, concept, notes } = body;
+    const { organizer_id, amount, concept, notes, payment_method } = body;
     const numericAmount = Number(amount);
 
     if (!organizer_id || !Number.isFinite(numericAmount) || numericAmount <= 0 || !concept?.trim()) {
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
         amount: numericAmount,
         concept: concept.trim(),
         notes: notes?.trim() || null,
+        payment_method: String(payment_method || 'transferencia'),
         collected_by: user.id,
       }])
       .select('id')

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
-import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, normalizeTournamentConfig, scheduleFixtures, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 export default function PartidosPage() {
@@ -108,7 +108,6 @@ export default function PartidosPage() {
       setTorneoSlug(tourney.slug);
       const rules = normalizeTournamentConfig(tourney);
       setConfiguracion(rules);
-      setAutoHoraInicio(rules.operating_start_time.slice(0, 5));
       setAutoDuracion(rules.match_duration_minutes);
     }
 
@@ -125,6 +124,10 @@ export default function PartidosPage() {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     if (!torneoId) return alert("No hay torneo activo.");
+    const conflict = validateManualMatch({
+      home_team_id: localId, away_team_id: visitanteId, match_date: fecha, court: canchaManual, stage: faseManual
+    }, partidos, configuracion.match_duration_minutes);
+    if (conflict) return alert(conflict);
     setLoading(true);
     try {
       const { error } = await supabase.from("matches").insert([{
@@ -143,11 +146,7 @@ export default function PartidosPage() {
     try {
       const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase);
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
-      const matchesToInsert = scheduleFixtures(fixtures, autoDia, {
-        ...configuracion,
-        operating_start_time: autoHoraInicio,
-        match_duration_minutes: autoDuracion,
-      });
+      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion });
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       alert(`Fecha ${autoJornada} generada sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
@@ -176,7 +175,7 @@ export default function PartidosPage() {
       const fixtures = createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
-      const matchesToInsert = scheduleFixtures(fixtures, autoDia, { ...configuracion, operating_start_time: autoHoraInicio, match_duration_minutes: autoDuracion });
+      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion });
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       alert(`${faseGenerar} generada automáticamente con los equipos clasificados.`);
@@ -693,7 +692,7 @@ export default function PartidosPage() {
             </div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración (Min)</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración + descanso</label><div className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{configuracion.match_duration_minutes} + {configuracion.break_between_matches_minutes} min</div></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Instancia</label><select value={autoFase} onChange={e => setAutoFase(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <button type="submit" disabled={loading} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.4)] hover:bg-yellow-500 transition-all">⚡ Auto Generar</button>
@@ -729,7 +728,7 @@ export default function PartidosPage() {
                
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración</label><input type="number" value={autoDuracion} onChange={e => setAutoDuracion(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración + descanso</label><div className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{configuracion.match_duration_minutes} + {configuracion.break_between_matches_minutes} min</div></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
 
                <div className="md:col-span-4">

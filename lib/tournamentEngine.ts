@@ -8,9 +8,8 @@ export type TournamentConfig = {
   knockout_legs: number;
   final_legs: number;
   court_count: number;
-  operating_start_time: string;
-  operating_end_time: string;
   match_duration_minutes: number;
+  break_between_matches_minutes: number;
   yellow_cards_for_suspension: number;
   yellow_suspension_matches: number;
   red_suspension_matches: number;
@@ -26,9 +25,8 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   knockout_legs: 1,
   final_legs: 1,
   court_count: 1,
-  operating_start_time: "09:00",
-  operating_end_time: "18:00",
   match_duration_minutes: 60,
+  break_between_matches_minutes: 10,
   yellow_cards_for_suspension: 3,
   yellow_suspension_matches: 1,
   red_suspension_matches: 1,
@@ -48,9 +46,8 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     knockout_legs: number("knockout_legs"),
     final_legs: number("final_legs"),
     court_count: number("court_count"),
-    operating_start_time: source?.operating_start_time || DEFAULT_TOURNAMENT_CONFIG.operating_start_time,
-    operating_end_time: source?.operating_end_time || DEFAULT_TOURNAMENT_CONFIG.operating_end_time,
     match_duration_minutes: number("match_duration_minutes", 15),
+    break_between_matches_minutes: number("break_between_matches_minutes", 0),
     yellow_cards_for_suspension: number("yellow_cards_for_suspension"),
     yellow_suspension_matches: number("yellow_suspension_matches"),
     red_suspension_matches: number("red_suspension_matches"),
@@ -147,15 +144,35 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
   return fixtures;
 }
 
-export function scheduleFixtures(fixtures: any[], day: string, config: TournamentConfig) {
-  const start = new Date(`${day}T${config.operating_start_time}:00`);
-  const end = new Date(`${day}T${config.operating_end_time}:00`);
+export function scheduleFixtures(fixtures: any[], day: string, startTime: string, config: TournamentConfig) {
+  const start = new Date(`${day}T${startTime}:00`);
   return fixtures.map((fixture, index) => {
     const slot = Math.floor(index / config.court_count);
-    const date = new Date(start.getTime() + slot * config.match_duration_minutes * 60000);
-    if (date >= end) throw new Error("La jornada supera el horario de funcionamiento configurado.");
+    const interval = config.match_duration_minutes + config.break_between_matches_minutes;
+    const date = new Date(start.getTime() + slot * interval * 60000);
     return { ...fixture, court: `Cancha ${(index % config.court_count) + 1}`, match_date: date.toISOString() };
   });
+}
+
+export function validateManualMatch(candidate: any, matches: any[], durationMinutes: number) {
+  const start = new Date(candidate.match_date).getTime();
+  const end = start + durationMinutes * 60000;
+  const pair = [candidate.home_team_id, candidate.away_team_id].sort().join(":");
+  for (const match of matches) {
+    if (match.status === "finished") continue;
+    const existingPair = [match.home_team_id, match.away_team_id].sort().join(":");
+    if (existingPair === pair && match.stage === candidate.stage) return "Este cruce ya existe en la misma fase.";
+    if (!match.match_date) continue;
+    const existingStart = new Date(match.match_date).getTime();
+    const existingEnd = existingStart + durationMinutes * 60000;
+    const overlaps = start < existingEnd && end > existingStart;
+    if (!overlaps) continue;
+    if (match.court === candidate.court) return `${candidate.court} ya está ocupada en ese horario.`;
+    if ([candidate.home_team_id, candidate.away_team_id].includes(match.home_team_id) || [candidate.home_team_id, candidate.away_team_id].includes(match.away_team_id)) {
+      return "Uno de los equipos ya tiene un partido en ese horario.";
+    }
+  }
+  return null;
 }
 
 export function createKnockoutFixtures(qualified: any[], tournamentId: string, stage: string, matchday: number, legs: number) {

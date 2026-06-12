@@ -69,13 +69,19 @@ export async function GET() {
     const auth = await getSuperadminClients();
     if (auth.response) return auth.response;
 
-    const { data, error } = await auth.admin
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [profilesRes, tournamentsRes, activityRes] = await Promise.all([
+      auth.admin.from('profiles').select('*').order('created_at', { ascending: false }),
+      auth.admin.from('tournaments').select('id, name, user_id, status, registration_fee').neq('status', 'deleted'),
+      auth.admin.from('admin_activity_log').select('*').order('created_at', { ascending: false }).limit(100),
+    ]);
 
-    if (error) throw error;
-    return NextResponse.json({ clientes: data || [] });
+    if (profilesRes.error) throw profilesRes.error;
+    const clientes = (profilesRes.data || []).filter(cliente => !cliente.archived_at).map(cliente => ({
+      ...cliente,
+      tournaments: (tournamentsRes.data || []).filter(tournament => tournament.user_id === cliente.id),
+      activity: (activityRes.data || []).filter(activity => activity.target_id === cliente.id).slice(0, 10),
+    }));
+    return NextResponse.json({ clientes });
   } catch (error) {
     console.error('Error al cargar clientes SaaS:', error);
     return NextResponse.json({ error: 'No se pudieron cargar los clientes' }, { status: 500 });
@@ -90,13 +96,13 @@ export async function PATCH(request: Request) {
     const auth = await getSuperadminClients();
     if (auth.response) return auth.response;
 
-    const { id, saas_status, max_tournaments } = await request.json();
+    const { id, saas_status, max_tournaments, full_name, email, password } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'Cliente no especificado' }, { status: 400 });
     }
 
-    const updates: { saas_status?: string; max_tournaments?: number } = {};
+    const updates: { saas_status?: string; max_tournaments?: number; full_name?: string; email?: string } = {};
     if (saas_status !== undefined) {
       if (!['active', 'pending_payment', 'suspended'].includes(saas_status)) {
         return NextResponse.json({ error: 'Estado SaaS inválido' }, { status: 400 });
@@ -110,13 +116,23 @@ export async function PATCH(request: Request) {
       }
       updates.max_tournaments = limit;
     }
-    if (Object.keys(updates).length === 0) {
+    if (full_name !== undefined) {
+      const name = String(full_name).trim();
+      if (!name) return NextResponse.json({ error: 'Nombre inválido' }, { status: 400 });
+      updates.full_name = name;
+    }
+    if (email !== undefined) {
+      const normalizedEmail = String(email).trim().toLowerCase();
+      if (!normalizedEmail.includes('@')) return NextResponse.json({ error: 'Correo inválido' }, { status: 400 });
+      updates.email = normalizedEmail;
+    }
+    if (Object.keys(updates).length === 0 && password === undefined) {
       return NextResponse.json({ error: 'No hay cambios válidos' }, { status: 400 });
     }
 
     const { data: target, error: targetError } = await auth.admin
       .from('profiles')
-      .select('role')
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -127,6 +143,23 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'El perfil superadmin no puede modificarse desde este módulo' }, { status: 403 });
     }
 
+    if (email !== undefined || password !== undefined) {
+      const authUpdates: { email?: string; password?: string } = {};
+      if (email !== undefined) authUpdates.email = updates.email;
+      if (password !== undefined) {
+        const normalizedPassword = String(password);
+        if (normalizedPassword.length < 8) return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 });
+        authUpdates.password = normalizedPassword;
+      }
+      const { error: authError } = await auth.admin.auth.admin.updateUserById(id, authUpdates);
+      if (authError) throw authError;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      await auth.admin.from('admin_activity_log').insert({ actor_id: auth.user.id, target_id: id, action: 'password_reset' });
+      return NextResponse.json({ success: true, cliente: target });
+    }
+
     const { data, error } = await auth.admin
       .from('profiles')
       .update(updates)
@@ -135,10 +168,31 @@ export async function PATCH(request: Request) {
       .single();
 
     if (error) throw error;
+    await auth.admin.from('admin_activity_log').insert({ actor_id: auth.user.id, target_id: id, action: password ? 'password_reset' : 'client_updated', details: updates });
     return NextResponse.json({ success: true, cliente: data });
   } catch (error) {
     console.error('Error al actualizar cliente SaaS:', error);
     return NextResponse.json({ error: 'No se pudo actualizar el cliente' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const originError = rejectCrossOriginRequest(request);
+    if (originError) return originError;
+    const auth = await getSuperadminClients();
+    if (auth.response) return auth.response;
+    const { id } = await request.json();
+    const { data: target } = await auth.admin.from('profiles').select('role').eq('id', id).single();
+    if (!target || target.role === 'superadmin') return NextResponse.json({ error: 'Cliente inválido' }, { status: 400 });
+    const { error } = await auth.admin.from('profiles').update({ archived_at: new Date().toISOString(), saas_status: 'suspended' }).eq('id', id);
+    if (error) throw error;
+    await auth.admin.auth.admin.updateUserById(id, { ban_duration: '876000h' });
+    await auth.admin.from('admin_activity_log').insert({ actor_id: auth.user.id, target_id: id, action: 'client_archived' });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error al archivar cliente SaaS:', error);
+    return NextResponse.json({ error: 'No se pudo archivar el cliente' }, { status: 500 });
   }
 }
 

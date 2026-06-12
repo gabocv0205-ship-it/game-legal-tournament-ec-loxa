@@ -59,7 +59,7 @@ export default function BovedaSuperAdmin() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'No se pudo actualizar el cliente');
-    setClientes(actuales => actuales.map(cliente => cliente.id === id ? data.cliente : cliente));
+    setClientes(actuales => actuales.map(cliente => cliente.id === id ? { ...cliente, ...data.cliente } : cliente));
   };
 
   const actualizarEstado = async (id: string, nuevoEstado: string, esSuperAdmin: boolean) => {
@@ -83,6 +83,29 @@ export default function BovedaSuperAdmin() {
     } finally {
       setProcesandoId(null);
     }
+  };
+
+  const editarCliente = async (cliente: any) => {
+    const full_name = window.prompt("Nombre del cliente", cliente.full_name || "");
+    if (!full_name) return;
+    const email = window.prompt("Correo de acceso", cliente.email || "");
+    if (!email) return;
+    await actualizarCliente(cliente.id, { full_name, email });
+  };
+
+  const restablecerClave = async (cliente: any) => {
+    const password = window.prompt(`Nueva contraseña para ${cliente.full_name || cliente.email} (mínimo 8 caracteres)`);
+    if (!password) return;
+    await actualizarCliente(cliente.id, { password });
+    alert("Contraseña restablecida correctamente.");
+  };
+
+  const archivarCliente = async (cliente: any) => {
+    if (!window.confirm(`¿Archivar a ${cliente.full_name || cliente.email}? Se suspenderá el acceso y se conservarán sus datos.`)) return;
+    const response = await fetch('/api/clients', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ id: cliente.id }) });
+    const data = await response.json();
+    if (!response.ok) return alert(data.error || 'No se pudo archivar');
+    cargarClientes();
   };
 
   // Función para crear un cliente conectada a la API
@@ -176,6 +199,7 @@ export default function BovedaSuperAdmin() {
             <thead className="bg-[#0a0a0a] text-gray-500 uppercase text-[10px] tracking-widest border-b border-[#2E2E2E]">
               <tr>
                 <th className="p-4">Cliente / Organizador</th>
+                <th className="p-4">Torneos administrados</th>
                 <th className="p-4 text-center">Límite de Torneos</th>
                 <th className="p-4 text-center">Estado Financiero</th>
                 <th className="p-4 text-center">Acciones de Cobro</th>
@@ -183,7 +207,7 @@ export default function BovedaSuperAdmin() {
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
               {clientes.length === 0 ? (
-                <tr><td colSpan={4} className="p-8 text-center text-gray-500 italic">No hay clientes registrados.</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">No hay clientes registrados.</td></tr>
               ) : clientes.map(cliente => {
                 const esSuperAdmin = cliente.role === 'superadmin';
                 const isProcesando = procesandoId === cliente.id;
@@ -201,6 +225,14 @@ export default function BovedaSuperAdmin() {
                             {esSuperAdmin ? 'Dueño del Sistema' : cliente.email}
                           </p>
                         </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="space-y-1 max-w-[260px]">
+                        {(cliente.tournaments || []).length === 0 ? <span className="text-gray-600 text-xs">Sin torneos</span> : cliente.tournaments.map((torneo: any) => (
+                          <div key={torneo.id} className="flex justify-between gap-3 bg-[#1C1C1C] rounded px-2 py-1 text-xs"><span className="truncate">{torneo.name}</span><span className="text-gray-500 uppercase">{torneo.status}</span></div>
+                        ))}
+                        {cliente.activity?.[0] && <p className="text-[9px] text-gray-600 pt-1">Última actividad: {cliente.activity[0].action} · {new Date(cliente.activity[0].created_at).toLocaleDateString('es-EC')}</p>}
                       </div>
                     </td>
                     <td className="p-4 text-center">
@@ -239,6 +271,9 @@ export default function BovedaSuperAdmin() {
                         <button onClick={() => actualizarEstado(cliente.id, 'active', esSuperAdmin)} disabled={esSuperAdmin || isProcesando} className={`p-2 rounded transition-all ${cliente.saas_status === 'active' ? 'bg-green-900/30 text-green-500 cursor-not-allowed' : 'bg-[#2E2E2E] text-gray-400 hover:bg-green-600 hover:text-white'}`}><Icon path={Icons.check} size={16} /></button>
                         <button onClick={() => actualizarEstado(cliente.id, 'pending_payment', esSuperAdmin)} disabled={esSuperAdmin || isProcesando} className={`p-2 rounded transition-all ${cliente.saas_status === 'pending_payment' ? 'bg-yellow-900/30 text-yellow-500 cursor-not-allowed' : 'bg-[#2E2E2E] text-gray-400 hover:bg-yellow-600 hover:text-white'}`}><Icon path={Icons.alert} size={16} /></button>
                         <button onClick={() => actualizarEstado(cliente.id, 'suspended', esSuperAdmin)} disabled={esSuperAdmin || isProcesando} className={`p-2 rounded transition-all ${cliente.saas_status === 'suspended' ? 'bg-red-900/30 text-red-500 cursor-not-allowed' : 'bg-[#2E2E2E] text-gray-400 hover:bg-red-600 hover:text-white'}`}><Icon path={Icons.ban} size={16} /></button>
+                        {!esSuperAdmin && <button onClick={() => editarCliente(cliente)} className="px-2 py-1 rounded bg-[#2E2E2E] text-blue-400 text-[9px] font-black uppercase">Editar</button>}
+                        {!esSuperAdmin && <button onClick={() => restablecerClave(cliente)} className="px-2 py-1 rounded bg-[#2E2E2E] text-yellow-400 text-[9px] font-black uppercase">Clave</button>}
+                        {!esSuperAdmin && <button onClick={() => archivarCliente(cliente)} className="px-2 py-1 rounded bg-red-950 text-red-400 text-[9px] font-black uppercase">Archivar</button>}
                       </div>
                     </td>
                   </tr>

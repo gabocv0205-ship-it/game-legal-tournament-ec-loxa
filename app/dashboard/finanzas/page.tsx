@@ -27,6 +27,13 @@ export default function LibroMayorFinanzas() {
   const [montoPago, setMontoPago] = useState("");
   const [concepto, setConcepto] = useState("inscripcion");
   const [descripcion, setDescripcion] = useState("");
+  const [metodoPago, setMetodoPago] = useState("efectivo");
+  const [mostrarDetalle, setMostrarDetalle] = useState(false);
+  const [detallePagos, setDetallePagos] = useState<any[]>([]);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroMetodo, setFiltroMetodo] = useState("");
+  const [filtroFecha, setFiltroFecha] = useState("");
 
   useEffect(() => {
     cargarDatos();
@@ -111,7 +118,17 @@ export default function LibroMayorFinanzas() {
     setConcepto("inscripcion");
     setMontoPago(equipo.saldoPendiente > 0 ? equipo.saldoPendiente.toString() : "");
     setDescripcion("");
+    setMetodoPago("efectivo");
     setMostrarModal(true);
+  };
+
+  const abrirDetalleEquipo = async (equipo: any) => {
+    setEquipoSeleccionado(equipo);
+    setMostrarDetalle(true);
+    setCargandoDetalle(true);
+    const { data } = await supabase.from("payments").select("*").eq("tournament_id", torneoId).eq("team_id", equipo.id).order("created_at", { ascending: false });
+    setDetallePagos(data || []);
+    setCargandoDetalle(false);
   };
 
   const registrarPago = async (e: React.FormEvent) => {
@@ -125,6 +142,8 @@ export default function LibroMayorFinanzas() {
         team_id: equipoSeleccionado.id,
         amount: Number(montoPago),
         concept: concepto,
+        payment_method: metodoPago,
+        notes: descripcion || null,
         description: descripcion || `Liquidación de ${concepto}`
       }]);
 
@@ -137,6 +156,7 @@ export default function LibroMayorFinanzas() {
   };
 
   if (loading) return <div className="text-[#D4A017] text-center p-20 font-black animate-pulse">Auditando Liquidaciones...</div>;
+  const equiposFiltrados = equipos.filter(equipo => !filtroEstado || (filtroEstado === "aldia" ? equipo.saldoPendiente === 0 : filtroEstado === "parcial" ? equipo.saldoPendiente > 0 && equipo.pagadoTotal > 0 : equipo.saldoPendiente > 0 && equipo.pagadoTotal === 0));
 
   return (
     <div className="space-y-8">
@@ -151,6 +171,12 @@ export default function LibroMayorFinanzas() {
       </div>
 
       {/* TABLA DE LIQUIDACIÓN POR EQUIPO */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl">
+        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los estados</option><option value="aldia">Al día</option><option value="parcial">Pago parcial</option><option value="mora">En mora</option></select>
+        <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los métodos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select>
+        <input type="date" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg" style={{ colorScheme: 'dark' }} />
+      </div>
+
       <div className="bg-[#1C1C1C] rounded-2xl shadow-xl border border-[#2E2E2E] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-white whitespace-nowrap">
@@ -167,8 +193,8 @@ export default function LibroMayorFinanzas() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
-              {equipos.map(eq => (
-                <tr key={eq.id} className="hover:bg-[#141414] transition-colors">
+              {equiposFiltrados.map(eq => (
+                <tr key={eq.id} className="hover:bg-[#141414] transition-colors cursor-pointer" onClick={() => abrirDetalleEquipo(eq)}>
                   <td className="p-4 font-bold flex items-center gap-3">
                     {eq.shield_url ? <Image src={eq.shield_url} alt={`Escudo de ${eq.name}`} width={24} height={24} unoptimized className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
                     {eq.name}
@@ -184,13 +210,13 @@ export default function LibroMayorFinanzas() {
                   <td className="p-4 text-center text-green-400 font-mono bg-green-900/10">${eq.pagadoTotal.toFixed(2)}</td>
                   <td className="p-4 text-center">
                     {eq.saldoPendiente > 0 ? (
-                      <span className="bg-red-600 text-white px-3 py-1 rounded font-black font-mono shadow-[0_0_10px_rgba(220,38,38,0.3)]">${eq.saldoPendiente.toFixed(2)}</span>
+                      <span className={`${eq.pagadoTotal > 0 ? 'bg-yellow-600' : 'bg-red-600'} text-white px-3 py-1 rounded font-black font-mono`}>${eq.saldoPendiente.toFixed(2)} · {eq.pagadoTotal > 0 ? 'Parcial' : 'En mora'}</span>
                     ) : (
                       <span className="bg-green-600 text-white px-3 py-1 rounded font-black uppercase text-[10px] tracking-widest">Al Día</span>
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <button onClick={() => abrirModalPago(eq)} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
                       Abonar
                     </button>
                   </td>
@@ -200,6 +226,39 @@ export default function LibroMayorFinanzas() {
           </table>
         </div>
       </div>
+
+      <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden">
+        <h3 className="p-4 text-[#D4A017] font-black uppercase text-xs tracking-widest border-b border-[#2E2E2E]">Últimos pagos registrados</h3>
+        {historial.filter(pago => (!filtroMetodo || pago.payment_method === filtroMetodo) && (!filtroFecha || String(pago.created_at).startsWith(filtroFecha))).map(pago => (
+          <div key={pago.id} className="grid grid-cols-2 md:grid-cols-5 gap-2 p-4 border-b border-[#2E2E2E] text-xs">
+            <span className="text-white font-bold">{pago.teams?.name}</span><span className="text-green-400">${Number(pago.amount).toFixed(2)}</span><span className="text-[#D4A017] uppercase">{pago.payment_method || 'No especificado'}</span><span className="text-gray-400">{pago.description || pago.notes || '-'}</span><span className="text-gray-500">{new Date(pago.created_at).toLocaleString('es-EC')}</span>
+          </div>
+        ))}
+      </div>
+
+      {mostrarDetalle && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
+          <aside className="w-full max-w-lg h-full bg-[#141414] border-l border-[#D4A017]/40 p-6 overflow-y-auto shadow-2xl">
+            <div className="flex justify-between border-b border-[#2E2E2E] pb-4 mb-5">
+              <div><h3 className="text-xl font-black text-white uppercase">{equipoSeleccionado?.name}</h3><p className="text-xs text-gray-500">Detalle financiero bajo demanda</p></div>
+              <button onClick={() => setMostrarDetalle(false)} className="text-gray-400 hover:text-white text-xl">×</button>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <Summary label="Total" value={equipoSeleccionado?.totalDeudaGenerada} color="text-white" />
+              <Summary label="Cancelado" value={equipoSeleccionado?.pagadoTotal} color="text-green-400" />
+              <Summary label="Pendiente" value={equipoSeleccionado?.saldoPendiente} color="text-red-400" />
+            </div>
+            <button onClick={() => { setMostrarDetalle(false); abrirModalPago(equipoSeleccionado); }} className="w-full mb-6 py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl">Registrar nuevo pago</button>
+            {cargandoDetalle ? <p className="text-gray-500">Cargando historial...</p> : detallePagos.length === 0 ? <p className="text-gray-500">No existen pagos registrados.</p> : detallePagos.map(pago => (
+              <div key={pago.id} className="mb-3 bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-4">
+                <div className="flex justify-between"><span className="text-white font-bold">${Number(pago.amount).toFixed(2)}</span><span className="text-gray-500 text-xs">{new Date(pago.created_at).toLocaleString('es-EC')}</span></div>
+                <p className="text-[#D4A017] text-xs uppercase mt-2">{pago.payment_method || 'No especificado'} · {pago.concept}</p>
+                {(pago.notes || pago.description) && <p className="text-gray-400 text-xs mt-1">{pago.notes || pago.description}</p>}
+              </div>
+            ))}
+          </aside>
+        </div>
+      )}
 
       {/* MODAL CONTABLE (Igual que el anterior pero adaptado) */}
       {mostrarModal && (
@@ -220,6 +279,16 @@ export default function LibroMayorFinanzas() {
                 </select>
               </div>
               <div>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Método de pago</label>
+                <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl">
+                  <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="otro">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Observaciones</label>
+                <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl" />
+              </div>
+              <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Monto ($)</label>
                 <input type="number" step="0.01" max={equipoSeleccionado?.saldoPendiente} value={montoPago} onChange={(e) => setMontoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl outline-none" required />
                 <p className="text-[10px] text-gray-500 mt-2 text-right">Saldo máximo a cobrar: ${equipoSeleccionado?.saldoPendiente}</p>
@@ -234,4 +303,8 @@ export default function LibroMayorFinanzas() {
       )}
     </div>
   );
+}
+
+function Summary({ label, value, color }: any) {
+  return <div className="bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-3"><p className="text-[9px] text-gray-500 uppercase font-bold">{label}</p><p className={`font-mono font-black ${color}`}>${Number(value || 0).toFixed(2)}</p></div>;
 }

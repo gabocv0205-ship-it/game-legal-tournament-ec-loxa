@@ -47,7 +47,7 @@ export default function EstadisticasPage() {
         .eq("tournament_id", activeId)
         .eq("status", "finished");
       const { data: knockoutMatches } = await supabase.from("matches")
-        .select("*, home:home_team_id(id, name), away:away_team_id(id, name)")
+        .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
         .eq("tournament_id", activeId)
         .neq("stage", "Fase de Grupos")
         .order("match_date", { ascending: true });
@@ -234,9 +234,9 @@ export default function EstadisticasPage() {
                 <h4 className="text-xs text-[#D4A017] font-black uppercase tracking-widest">{stage}</h4>
                 {llaves.filter(l => l.stage === stage).map(match => (
                   <div key={match.id} className="bg-[#141414] border border-[#2E2E2E] rounded-xl p-3 text-sm text-white">
-                    <div className="flex justify-between"><span>{match.home?.name}</span><b>{match.status === 'finished' ? match.home_goals : '-'}</b></div>
+                    <div className="flex justify-between items-center"><span className="flex items-center gap-2">{match.home?.shield_url && <Image src={match.home.shield_url} alt="" width={20} height={20} unoptimized />}{match.home?.name}</span><b>{match.status === 'finished' ? match.home_goals : '-'}</b></div>
                     <div className="border-t border-[#2E2E2E] my-2" />
-                    <div className="flex justify-between"><span>{match.away?.name}</span><b>{match.status === 'finished' ? match.away_goals : '-'}</b></div>
+                    <div className="flex justify-between items-center"><span className="flex items-center gap-2">{match.away?.shield_url && <Image src={match.away.shield_url} alt="" width={20} height={20} unoptimized />}{match.away?.name}</span><b>{match.status === 'finished' ? match.away_goals : '-'}</b></div>
                   </div>
                 ))}
               </div>

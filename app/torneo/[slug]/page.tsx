@@ -218,7 +218,7 @@ export default function PortalTorneoDinamico() {
       </div>
 
       <section className="hero">
-        <div className="hero-bg"></div>
+        <div className="hero-bg" style={torneoActual?.banner_url ? { backgroundImage: `linear-gradient(rgba(13,13,13,.45), rgba(13,13,13,.92)), url("${torneoActual.banner_url}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}></div>
         <div style={{ zIndex: 1, maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
           <div className="reveal">
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>

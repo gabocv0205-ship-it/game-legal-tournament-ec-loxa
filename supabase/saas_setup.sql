@@ -12,13 +12,23 @@ alter table public.tournaments
   add column if not exists knockout_legs integer default 1,
   add column if not exists final_legs integer default 1,
   add column if not exists court_count integer default 1,
-  add column if not exists operating_start_time time default '09:00',
-  add column if not exists operating_end_time time default '18:00',
+  add column if not exists start_date date,
+  add column if not exists estimated_end_date date,
   add column if not exists match_duration_minutes integer default 60,
+  add column if not exists break_between_matches_minutes integer default 10,
+  add column if not exists banner_url text,
+  add column if not exists poster_url text,
   add column if not exists yellow_cards_for_suspension integer default 3,
   add column if not exists yellow_suspension_matches integer default 1,
   add column if not exists red_suspension_matches integer default 1,
   add column if not exists configuration_completed boolean default false;
+
+alter table public.payments
+  add column if not exists payment_method text default 'efectivo',
+  add column if not exists notes text;
+
+create index if not exists payments_tournament_team_created_idx
+  on public.payments (tournament_id, team_id, created_at desc);
 
 alter table public.profiles
   add column if not exists email text,
@@ -26,7 +36,22 @@ alter table public.profiles
   add column if not exists phone text,
   add column if not exists role text default 'organizer',
   add column if not exists saas_status text default 'active',
-  add column if not exists max_tournaments integer default 1;
+  add column if not exists max_tournaments integer default 1,
+  add column if not exists archived_at timestamptz;
+
+create table if not exists public.admin_activity_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references public.profiles(id) on delete set null,
+  target_id uuid references public.profiles(id) on delete set null,
+  action text not null,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists admin_activity_target_created_idx
+  on public.admin_activity_log (target_id, created_at desc);
+
+alter table public.admin_activity_log enable row level security;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -100,6 +125,7 @@ alter table public.saas_payments
   add column if not exists amount numeric(12, 2),
   add column if not exists concept text,
   add column if not exists notes text,
+  add column if not exists payment_method text default 'transferencia',
   add column if not exists collected_by uuid,
   add column if not exists created_at timestamptz default now();
 

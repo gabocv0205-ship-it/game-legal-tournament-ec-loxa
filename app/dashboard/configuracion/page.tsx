@@ -30,9 +30,12 @@ export default function ConfiguracionPage() {
   const [partidosEliminatoria, setPartidosEliminatoria] = useState(1);
   const [partidosFinal, setPartidosFinal] = useState(1);
   const [numCanchas, setNumCanchas] = useState(1);
-  const [horaInicio, setHoraInicio] = useState("09:00");
-  const [horaFin, setHoraFin] = useState("18:00");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
   const [duracionPartido, setDuracionPartido] = useState(60);
+  const [descansoPartidos, setDescansoPartidos] = useState(10);
+  const [bannerUrl, setBannerUrl] = useState("");
+  const [posterUrl, setPosterUrl] = useState("");
 
   const [loading, setLoading] = useState(false);
 
@@ -76,9 +79,12 @@ export default function ConfiguracionPage() {
         setPartidosEliminatoria(Number(data.knockout_legs || 1));
         setPartidosFinal(Number(data.final_legs || 1));
         setNumCanchas(Number(data.court_count || 1));
-        setHoraInicio((data.operating_start_time || "09:00").slice(0, 5));
-        setHoraFin((data.operating_end_time || "18:00").slice(0, 5));
+        setFechaInicio(data.start_date || "");
+        setFechaFin(data.estimated_end_date || "");
         setDuracionPartido(Number(data.match_duration_minutes || 60));
+        setDescansoPartidos(Number(data.break_between_matches_minutes || 10));
+        setBannerUrl(data.banner_url || "");
+        setPosterUrl(data.poster_url || "");
       }
     }
   };
@@ -131,9 +137,12 @@ export default function ConfiguracionPage() {
         knockout_legs: partidosEliminatoria,
         final_legs: partidosFinal,
         court_count: numCanchas,
-        operating_start_time: horaInicio,
-        operating_end_time: horaFin,
+        start_date: fechaInicio || null,
+        estimated_end_date: fechaFin || null,
         match_duration_minutes: duracionPartido,
+        break_between_matches_minutes: descansoPartidos,
+        banner_url: bannerUrl || null,
+        poster_url: posterUrl || null,
         configuration_completed: true
       }).eq("id", torneoId);
 
@@ -206,8 +215,17 @@ export default function ConfiguracionPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <NumberField label="Canchas disponibles" value={numCanchas} onChange={setNumCanchas} />
             <NumberField label="Duración por partido (min)" value={duracionPartido} onChange={setDuracionPartido} min={15} />
-            <TimeField label="Hora de inicio" value={horaInicio} onChange={setHoraInicio} />
-            <TimeField label="Hora de cierre" value={horaFin} onChange={setHoraFin} />
+            <NumberField label="Descanso entre partidos (min)" value={descansoPartidos} onChange={setDescansoPartidos} min={0} />
+            <DateField label="Fecha de inicio" value={fechaInicio} onChange={setFechaInicio} required />
+            <DateField label="Finalización estimada" value={fechaFin} onChange={setFechaFin} />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-pink-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Identidad Visual del Torneo</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TextField label="URL del banner principal" value={bannerUrl} onChange={setBannerUrl} placeholder="https://..." />
+            <TextField label="URL del póster oficial" value={posterUrl} onChange={setPosterUrl} placeholder="https://..." />
           </div>
         </div>
 
@@ -314,6 +332,10 @@ function SelectField({ label, value, onChange }: any) {
   return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><select value={value} onChange={e => onChange(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl"><option value={1}>Partido único</option><option value={2}>Ida y vuelta</option></select></div>;
 }
 
-function TimeField({ label, value, onChange }: any) {
-  return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><input type="time" value={value} onChange={e => onChange(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl" style={{ colorScheme: "dark" }} /></div>;
+function DateField({ label, value, onChange, required = false }: any) {
+  return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><input type="date" required={required} value={value} onChange={e => onChange(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl" style={{ colorScheme: "dark" }} /></div>;
+}
+
+function TextField({ label, value, onChange, placeholder }: any) {
+  return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><input type="url" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl" /></div>;
 }
