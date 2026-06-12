@@ -57,16 +57,38 @@ insert into storage.buckets (id, name, public)
 values ('identidad-torneos', 'identidad-torneos', true)
 on conflict (id) do update set public = true;
 
+create or replace function public.can_manage_tournament_media(tournament_id_text text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.tournaments t
+    where t.id::text = tournament_id_text
+      and (
+        t.user_id = auth.uid()
+        or exists (
+          select 1
+          from public.profiles p
+          where p.id = auth.uid()
+            and p.role = 'superadmin'
+        )
+      )
+  );
+$$;
+
+revoke all on function public.can_manage_tournament_media(text) from public, anon;
+grant execute on function public.can_manage_tournament_media(text) to authenticated;
+
 drop policy if exists tournament_identity_upload on storage.objects;
 create policy tournament_identity_upload
   on storage.objects for insert to authenticated
   with check (
     bucket_id = 'identidad-torneos'
-    and exists (
-      select 1 from public.tournaments
-      where id::text = (storage.foldername(name))[1]
-      and user_id = auth.uid()
-    )
+    and public.can_manage_tournament_media((storage.foldername(name))[1])
   );
 
 drop policy if exists tournament_identity_update on storage.objects;
@@ -74,11 +96,11 @@ create policy tournament_identity_update
   on storage.objects for update to authenticated
   using (
     bucket_id = 'identidad-torneos'
-    and exists (
-      select 1 from public.tournaments
-      where id::text = (storage.foldername(name))[1]
-      and user_id = auth.uid()
-    )
+    and public.can_manage_tournament_media((storage.foldername(name))[1])
+  )
+  with check (
+    bucket_id = 'identidad-torneos'
+    and public.can_manage_tournament_media((storage.foldername(name))[1])
   );
 
 create or replace function public.handle_new_user()

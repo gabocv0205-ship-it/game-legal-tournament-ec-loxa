@@ -360,7 +360,12 @@ async function subirImagenTorneo(file: File, tipo: string, torneoId: string, max
   const optimized = await comprimirImagen(file, `${tipo}-${torneoId}-${Date.now()}.webp`, maxWidth);
   const path = `${torneoId}/${optimized.name}`;
   const { error } = await supabase.storage.from("identidad-torneos").upload(path, optimized, { upsert: true });
-  if (error) throw error;
+  if (error) {
+    if (error.message.toLowerCase().includes("row-level security")) {
+      throw new Error("Supabase bloqueó la imagen por una política anterior. Ejecuta nuevamente supabase/saas_setup.sql y vuelve a guardar.");
+    }
+    throw error;
+  }
   return supabase.storage.from("identidad-torneos").getPublicUrl(path).data.publicUrl;
 }
 
