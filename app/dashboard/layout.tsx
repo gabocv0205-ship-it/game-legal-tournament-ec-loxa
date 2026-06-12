@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { stats } = useTournamentData();
+  const { stats, tournamentId } = useTournamentData();
   
   // ==========================================
   // CEREBRO SAAS (Control de Perfil y Deudas)
@@ -122,12 +122,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
         
         <div className="px-4 pt-4 space-y-2">
-          {stats.suspended > 0 && (
+          {tournamentId && !pathname.startsWith('/superadmin') && stats.suspended > 0 && (
             <div className="flex items-center gap-2 bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-3 py-2 rounded-lg text-xs font-bold animate-pulse">
               <Icon path={Icons.alert} size={14} /> <span>{stats.suspended} jugador(es) suspendido(s)</span>
             </div>
           )}
-          {stats.debts > 0 && (
+          {tournamentId && !pathname.startsWith('/superadmin') && stats.debts > 0 && (
             <div className="flex items-center gap-2 bg-red-900/40 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-xs font-bold">
               <Icon path={Icons.alert} size={14} /> <span>{stats.debts} equipo(s) con deudas</span>
             </div>
