@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import { calculateStandings, normalizeTournamentConfig } from "@/lib/tournamentEngine";
 
 export default function EstadisticasPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -9,6 +10,7 @@ export default function EstadisticasPage() {
   const [goleadores, setGoleadores] = useState<any[]>([]);
   const [sanciones, setSanciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [llaves, setLlaves] = useState<any[]>([]);
 
   useEffect(() => {
     cargarEstadisticas();
@@ -31,6 +33,8 @@ export default function EstadisticasPage() {
       }
       
       setTorneoId(activeId);
+      const { data: tournament } = await supabase.from("tournaments").select("*").eq("id", activeId).single();
+      const rules = normalizeTournamentConfig(tournament || {});
 
       // 2. Obtener Todos los Equipos estrictamente de ESTE torneo
       const { data: teams } = await supabase.from("teams")
@@ -42,6 +46,12 @@ export default function EstadisticasPage() {
         .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
         .eq("tournament_id", activeId)
         .eq("status", "finished");
+      const { data: knockoutMatches } = await supabase.from("matches")
+        .select("*, home:home_team_id(id, name), away:away_team_id(id, name)")
+        .eq("tournament_id", activeId)
+        .neq("stage", "Fase de Grupos")
+        .order("match_date", { ascending: true });
+      setLlaves(knockoutMatches || []);
 
       // 4. Obtener Eventos (Goles y Tarjetas)
       const matchIds = matches?.map(m => m.id) || [];
@@ -86,12 +96,8 @@ export default function EstadisticasPage() {
         }
       });
 
-      const tablaArray = Object.values(stats).map(s => {
-        s.gd = s.gf - s.gc;
-        return s;
-      }).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-
-      setTabla(tablaArray);
+      const groups = calculateStandings(teams || [], matches || [], events, rules);
+      setTabla(Object.values(groups).flat());
 
       // ==========================================
       // CÁLCULO DE GOLEADORES
@@ -121,7 +127,10 @@ export default function EstadisticasPage() {
 
       const sancionesArray = Object.values(sancionesObj).map(s => {
          // Regla de suspensión: 1 Roja directa o 3 Amarillas acumuladas
-         s.suspendido = s.rojas >= 1 || s.amarillas >= 3;
+         s.partidosSuspension = s.rojas > 0
+           ? s.rojas * rules.red_suspension_matches
+           : Math.floor(s.amarillas / rules.yellow_cards_for_suspension) * rules.yellow_suspension_matches;
+         s.suspendido = s.partidosSuspension > 0;
          return s;
       }).sort((a, b) => (b.suspendido === a.suspendido ? b.rojas - a.rojas : b.suspendido ? 1 : -1));
 
@@ -185,12 +194,13 @@ export default function EstadisticasPage() {
                 <th className="px-3 py-3" title="Goles a Favor">GF</th>
                 <th className="px-3 py-3" title="Goles en Contra">GC</th>
                 <th className="px-3 py-3" title="Gol Diferencia">GD</th>
+                <th className="px-3 py-3" title="Puntos Fair Play (menos es mejor)">FP</th>
                 <th className="px-4 py-3 font-black text-[#D4A017] text-xs">PTS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
               {tabla.map((s, index) => (
-                <tr key={s.id} className="hover:bg-[#141414] transition-colors">
+                <tr key={s.id} className={`hover:bg-[#141414] transition-colors border-l-4 ${s.classificationStatus === 'qualified' ? 'border-l-green-500' : s.classificationStatus === 'repechage' ? 'border-l-yellow-500' : 'border-l-gray-600'}`}>
                   <td className="px-4 py-3 font-black text-gray-500">{index + 1}</td>
                   <td className="px-4 py-3 text-left font-bold flex items-center gap-3">
                     {s.shield ? <Image src={s.shield} alt={`Escudo de ${s.name}`} width={24} height={24} unoptimized className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
@@ -203,12 +213,36 @@ export default function EstadisticasPage() {
                   <td className="px-3 py-3 text-gray-300">{s.gf}</td>
                   <td className="px-3 py-3 text-gray-300">{s.gc}</td>
                   <td className="px-3 py-3 font-bold text-white">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
+                  <td className="px-3 py-3 font-bold text-blue-300">{s.fairPlay}</td>
                   <td className="px-4 py-3 font-black text-lg text-[#D4A017] bg-[#D4A017]/5">{s.pts}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-2xl">
+        <div className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4">
+          <h3 className="text-[#D4A017] font-black uppercase tracking-widest text-sm">Cuadro Eliminatorio Profesional</h3>
+          <p className="text-gray-500 text-xs mt-1">Cruces generados según clasificación y formato configurado.</p>
+        </div>
+        {llaves.length === 0 ? <p className="p-8 text-center text-gray-500">Las llaves aparecerán cuando se genere la fase final.</p> : (
+          <div className="p-6 flex gap-6 overflow-x-auto">
+            {Array.from(new Set(llaves.map(l => l.stage))).map(stage => (
+              <div key={stage} className="min-w-[250px] space-y-3">
+                <h4 className="text-xs text-[#D4A017] font-black uppercase tracking-widest">{stage}</h4>
+                {llaves.filter(l => l.stage === stage).map(match => (
+                  <div key={match.id} className="bg-[#141414] border border-[#2E2E2E] rounded-xl p-3 text-sm text-white">
+                    <div className="flex justify-between"><span>{match.home?.name}</span><b>{match.status === 'finished' ? match.home_goals : '-'}</b></div>
+                    <div className="border-t border-[#2E2E2E] my-2" />
+                    <div className="flex justify-between"><span>{match.away?.name}</span><b>{match.status === 'finished' ? match.away_goals : '-'}</b></div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -275,7 +309,7 @@ export default function EstadisticasPage() {
                     <td className="px-2 py-3 text-center font-bold text-red-500">{s.rojas > 0 ? s.rojas : '-'}</td>
                     <td className="px-4 py-3 text-right">
                       {s.suspendido ? (
-                        <span className="inline-block bg-red-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded animate-pulse">Suspendido</span>
+                        <span className="inline-block bg-red-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded animate-pulse">Suspendido {s.partidosSuspension} partido(s)</span>
                       ) : (
                         <span className="inline-block border border-green-600/50 text-green-500 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded">Habilitado</span>
                       )}

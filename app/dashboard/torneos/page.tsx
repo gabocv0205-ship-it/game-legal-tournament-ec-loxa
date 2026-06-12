@@ -67,20 +67,25 @@ export default function GestorTorneos() {
       const randomID = Math.random().toString(36).substring(2, 7);
       const slugUnico = `${baseSlug}-${randomID}`;
 
-      const { error } = await supabase.from('tournaments').insert([{
+      const { data: created, error } = await supabase.from('tournaments').insert([{
         name: nombreTorneo,
         slug: slugUnico,
         user_id: session?.user.id,
         registration_fee: 150.00,
         status: 'active' // Estado explícito al crear
-      }]);
+      }]).select('id, name').single();
 
       if (error) throw error;
 
+      if (created) {
+        localStorage.setItem('activeTournamentId', created.id);
+        localStorage.setItem('activeTournamentName', created.name);
+      }
       setMostrarModal(false);
       setNombreTorneo("");
       cargarDatos();
-      alert("¡Torneo creado con éxito!");
+      alert("Torneo creado. Completa su configuración inicial antes de continuar.");
+      router.push('/dashboard/configuracion');
 
     } catch (error: any) {
       alert("Error al crear el torneo: " + error.message);
@@ -117,10 +122,10 @@ export default function GestorTorneos() {
     }
   };
 
-  const administrarTorneo = (torneoId: string, torneoNombre: string) => {
+  const administrarTorneo = (torneoId: string, torneoNombre: string, configurado = true) => {
     localStorage.setItem('activeTournamentId', torneoId);
     localStorage.setItem('activeTournamentName', torneoNombre);
-    router.push('/dashboard');
+    router.push(configurado ? '/dashboard' : '/dashboard/configuracion');
   };
 
   const verPortalPublico = (slug: string) => {
@@ -221,7 +226,7 @@ export default function GestorTorneos() {
 
                 <div className="relative z-10 flex gap-3 mt-auto pt-4 border-t border-[#2E2E2E]">
                   <button 
-                    onClick={() => administrarTorneo(t.id, t.name)}
+                    onClick={() => administrarTorneo(t.id, t.name, Boolean(t.configuration_completed))}
                     className="flex-1 bg-[#1C1C1C] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] hover:border-transparent py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                   >
                     <Icon path={Icons.settings} size={14} /> Gestionar

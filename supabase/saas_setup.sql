@@ -3,6 +3,23 @@
 
 create extension if not exists pgcrypto;
 
+alter table public.tournaments
+  add column if not exists group_count integer default 1,
+  add column if not exists teams_per_group integer default 4,
+  add column if not exists qualifiers_per_group integer default 2,
+  add column if not exists repechage_enabled boolean default false,
+  add column if not exists repechage_slots integer default 0,
+  add column if not exists knockout_legs integer default 1,
+  add column if not exists final_legs integer default 1,
+  add column if not exists court_count integer default 1,
+  add column if not exists operating_start_time time default '09:00',
+  add column if not exists operating_end_time time default '18:00',
+  add column if not exists match_duration_minutes integer default 60,
+  add column if not exists yellow_cards_for_suspension integer default 3,
+  add column if not exists yellow_suspension_matches integer default 1,
+  add column if not exists red_suspension_matches integer default 1,
+  add column if not exists configuration_completed boolean default false;
+
 alter table public.profiles
   add column if not exists email text,
   add column if not exists full_name text,

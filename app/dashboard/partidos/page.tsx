@@ -4,6 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
+import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, normalizeTournamentConfig, scheduleFixtures, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 export default function PartidosPage() {
@@ -15,6 +16,7 @@ export default function PartidosPage() {
   const [partidos, setPartidos] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [configuracion, setConfiguracion] = useState<TournamentConfig>(normalizeTournamentConfig({}));
 
   // ESTADO OFFLINE
   const [isOffline, setIsOffline] = useState(false);
@@ -100,13 +102,17 @@ export default function PartidosPage() {
     if (!activeId) return;
     setTorneoId(activeId);
 
-    const { data: tourney } = await supabase.from('tournaments').select('referee_fee, slug').eq('id', activeId).single();
+    const { data: tourney } = await supabase.from('tournaments').select('*').eq('id', activeId).single();
     if (tourney) {
       setCostoArbitraje(Number(tourney.referee_fee || 20));
       setTorneoSlug(tourney.slug);
+      const rules = normalizeTournamentConfig(tourney);
+      setConfiguracion(rules);
+      setAutoHoraInicio(rules.operating_start_time.slice(0, 5));
+      setAutoDuracion(rules.match_duration_minutes);
     }
 
-    const { data: teamsData } = await supabase.from("teams").select("id, name").eq("tournament_id", activeId).order("name");
+    const { data: teamsData } = await supabase.from("teams").select("id, name, group_name").eq("tournament_id", activeId).order("name");
     if (teamsData) setEquipos(teamsData);
 
     const { data: matchesData } = await supabase.from("matches")
@@ -128,6 +134,58 @@ export default function PartidosPage() {
       if (error) throw error;
       setLocalId(""); setVisitanteId(""); setFecha(""); cargarDatos();
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
+  };
+
+  const generarFechaInteligente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
+    setLoading(true);
+    try {
+      const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase);
+      if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
+      const matchesToInsert = scheduleFixtures(fixtures, autoDia, {
+        ...configuracion,
+        operating_start_time: autoHoraInicio,
+        match_duration_minutes: autoDuracion,
+      });
+      const { error } = await supabase.from("matches").insert(matchesToInsert);
+      if (error) throw error;
+      alert(`Fecha ${autoJornada} generada sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
+      cargarDatos();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generarLlavesInteligentes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
+    setLoading(true);
+    try {
+      const required: Record<string, number> = { "Octavos de Final": 16, "Cuartos de Final": 8, "Semifinal": 4, "Final": 2 };
+      const count = required[faseGenerar] || 0;
+      const previousStage: Record<string, string> = { "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
+      const previous = previousStage[faseGenerar];
+      const winners = previous ? getStageWinners(partidos, equipos, previous) : [];
+      const groups = calculateStandings(equipos, partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
+      const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
+      if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados según las reglas del torneo.`);
+      const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
+      const fixtures = createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
+      const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
+      if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
+      const matchesToInsert = scheduleFixtures(fixtures, autoDia, { ...configuracion, operating_start_time: autoHoraInicio, match_duration_minutes: autoDuracion });
+      const { error } = await supabase.from("matches").insert(matchesToInsert);
+      if (error) throw error;
+      alert(`${faseGenerar} generada automáticamente con los equipos clasificados.`);
+      cargarDatos();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ============================================================================
@@ -625,7 +683,7 @@ export default function PartidosPage() {
         )}
 
         {modoProgramacion === "automatico" && (
-          <form onSubmit={generarFechaAutomatica} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end bg-[#1C1C1C] p-6 border border-[#D4A017]/30 rounded-xl">
+          <form onSubmit={generarFechaInteligente} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end bg-[#1C1C1C] p-6 border border-[#D4A017]/30 rounded-xl">
             <div className="md:col-span-6 flex items-center justify-between border-b border-[#2E2E2E] pb-3 mb-2">
               <h4 className="text-[#D4A017] font-black uppercase text-sm">Generador de Fase de Grupos / Liga</h4>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -651,7 +709,7 @@ export default function PartidosPage() {
               <p className="text-gray-400 text-sm">El sistema extraerá la tabla de posiciones y armará los cruces matemáticamente (El 1ro vs el Peor Clasificado).</p>
             </div>
             
-            <form onSubmit={generarLlavesAutomaticas} className="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+            <form onSubmit={generarLlavesInteligentes} className="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
                <div className="md:col-span-2">
                  <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Formato de Llave</label>
                  <select value={formatoEliminatoria} onChange={e => setFormatoEliminatoria(e.target.value)} className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded outline-none">

@@ -19,6 +19,20 @@ export default function ConfiguracionPage() {
   const [costoArbitraje, setCostoArbitraje] = useState("20.00");
   const [costoAmarilla, setCostoAmarilla] = useState("2.00");
   const [costoRoja, setCostoRoja] = useState("5.00");
+  const [amarillasSuspension, setAmarillasSuspension] = useState(3);
+  const [partidosSuspensionAmarillas, setPartidosSuspensionAmarillas] = useState(1);
+  const [partidosSuspensionRoja, setPartidosSuspensionRoja] = useState(1);
+  const [numGrupos, setNumGrupos] = useState(1);
+  const [equiposPorGrupo, setEquiposPorGrupo] = useState(4);
+  const [clasificadosPorGrupo, setClasificadosPorGrupo] = useState(2);
+  const [repechaje, setRepechaje] = useState(false);
+  const [cuposRepechaje, setCuposRepechaje] = useState(0);
+  const [partidosEliminatoria, setPartidosEliminatoria] = useState(1);
+  const [partidosFinal, setPartidosFinal] = useState(1);
+  const [numCanchas, setNumCanchas] = useState(1);
+  const [horaInicio, setHoraInicio] = useState("09:00");
+  const [horaFin, setHoraFin] = useState("18:00");
+  const [duracionPartido, setDuracionPartido] = useState(60);
 
   const [loading, setLoading] = useState(false);
 
@@ -51,6 +65,20 @@ export default function ConfiguracionPage() {
         if (data.referee_fee) setCostoArbitraje(data.referee_fee.toString());
         if (data.yellow_card_fee) setCostoAmarilla(data.yellow_card_fee.toString());
         if (data.red_card_fee) setCostoRoja(data.red_card_fee.toString());
+        setAmarillasSuspension(Number(data.yellow_cards_for_suspension || 3));
+        setPartidosSuspensionAmarillas(Number(data.yellow_suspension_matches || 1));
+        setPartidosSuspensionRoja(Number(data.red_suspension_matches || 1));
+        setNumGrupos(Number(data.group_count || 1));
+        setEquiposPorGrupo(Number(data.teams_per_group || 4));
+        setClasificadosPorGrupo(Number(data.qualifiers_per_group || 2));
+        setRepechaje(Boolean(data.repechage_enabled));
+        setCuposRepechaje(Number(data.repechage_slots || 0));
+        setPartidosEliminatoria(Number(data.knockout_legs || 1));
+        setPartidosFinal(Number(data.final_legs || 1));
+        setNumCanchas(Number(data.court_count || 1));
+        setHoraInicio((data.operating_start_time || "09:00").slice(0, 5));
+        setHoraFin((data.operating_end_time || "18:00").slice(0, 5));
+        setDuracionPartido(Number(data.match_duration_minutes || 60));
       }
     }
   };
@@ -91,7 +119,22 @@ export default function ConfiguracionPage() {
         registration_fee: parseFloat(costoInscripcion) || 0,
         referee_fee: parseFloat(costoArbitraje) || 0,
         yellow_card_fee: parseFloat(costoAmarilla) || 0,
-        red_card_fee: parseFloat(costoRoja) || 0
+        red_card_fee: parseFloat(costoRoja) || 0,
+        yellow_cards_for_suspension: amarillasSuspension,
+        yellow_suspension_matches: partidosSuspensionAmarillas,
+        red_suspension_matches: partidosSuspensionRoja,
+        group_count: numGrupos,
+        teams_per_group: equiposPorGrupo,
+        qualifiers_per_group: clasificadosPorGrupo,
+        repechage_enabled: repechaje,
+        repechage_slots: repechaje ? cuposRepechaje : 0,
+        knockout_legs: partidosEliminatoria,
+        final_legs: partidosFinal,
+        court_count: numCanchas,
+        operating_start_time: horaInicio,
+        operating_end_time: horaFin,
+        match_duration_minutes: duracionPartido,
+        configuration_completed: true
       }).eq("id", torneoId);
 
       if (error) throw error;
@@ -127,12 +170,53 @@ export default function ConfiguracionPage() {
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Formato de Competición</label>
               <select value={formato} onChange={e => setFormato(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all cursor-pointer">
-                <option value="todos_contra_todos">Liga (Todos contra Todos)</option>
-                <option value="grupos_eliminatoria">Fase de Grupos + Eliminatorias</option>
-                <option value="eliminatoria_ida_vuelta">Eliminatoria Ida y Vuelta</option>
-                <option value="eliminatoria_directa">Eliminatoria Directa</option>
+                <option value="mundial">Copa Mundial</option>
+                <option value="libertadores">Copa Libertadores</option>
+                <option value="sudamericana">Copa Sudamericana</option>
+                <option value="champions">UEFA Champions League</option>
+                <option value="europa_league">UEFA Europa League</option>
+                <option value="liguilla">Liguilla / Todos contra Todos</option>
+                <option value="eliminatoria_directa">Eliminación Directa</option>
+                <option value="personalizado">Formato Personalizado</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <h3 className="text-blue-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Reglas de Competición y Clasificación</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <NumberField label="Número de grupos" value={numGrupos} onChange={setNumGrupos} />
+            <NumberField label="Equipos por grupo" value={equiposPorGrupo} onChange={setEquiposPorGrupo} />
+            <NumberField label="Clasificados por grupo" value={clasificadosPorGrupo} onChange={setClasificadosPorGrupo} />
+            <NumberField label="Cupos de repechaje" value={cuposRepechaje} onChange={setCuposRepechaje} min={0} disabled={!repechaje} />
+          </div>
+          <label className="flex items-center gap-3 bg-[#1c1c1c] border border-[#2e2e2e] rounded-xl p-4 cursor-pointer">
+            <input type="checkbox" checked={repechaje} onChange={e => setRepechaje(e.target.checked)} className="w-5 h-5 accent-[#D4A017]" />
+            <span className="text-white font-bold text-sm">Habilitar zona de repechaje</span>
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SelectField label="Fases eliminatorias" value={partidosEliminatoria} onChange={setPartidosEliminatoria} />
+            <SelectField label="Final" value={partidosFinal} onChange={setPartidosFinal} />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-purple-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Programación Automática</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <NumberField label="Canchas disponibles" value={numCanchas} onChange={setNumCanchas} />
+            <NumberField label="Duración por partido (min)" value={duracionPartido} onChange={setDuracionPartido} min={15} />
+            <TimeField label="Hora de inicio" value={horaInicio} onChange={setHoraInicio} />
+            <TimeField label="Hora de cierre" value={horaFin} onChange={setHoraFin} />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-red-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Reglas Disciplinarias Automáticas</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <NumberField label="Amarillas para suspensión" value={amarillasSuspension} onChange={setAmarillasSuspension} />
+            <NumberField label="Partidos por acumulación" value={partidosSuspensionAmarillas} onChange={setPartidosSuspensionAmarillas} />
+            <NumberField label="Partidos por roja" value={partidosSuspensionRoja} onChange={setPartidosSuspensionRoja} />
           </div>
         </div>
 
@@ -220,4 +304,16 @@ export default function ConfiguracionPage() {
       </form>
     </div>
   );
+}
+
+function NumberField({ label, value, onChange, min = 1, disabled = false }: any) {
+  return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><input type="number" min={min} value={value} disabled={disabled} onChange={e => onChange(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#1c1c1c] disabled:opacity-40 text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none" /></div>;
+}
+
+function SelectField({ label, value, onChange }: any) {
+  return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><select value={value} onChange={e => onChange(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl"><option value={1}>Partido único</option><option value={2}>Ida y vuelta</option></select></div>;
+}
+
+function TimeField({ label, value, onChange }: any) {
+  return <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label><input type="time" value={value} onChange={e => onChange(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl" style={{ colorScheme: "dark" }} /></div>;
 }
