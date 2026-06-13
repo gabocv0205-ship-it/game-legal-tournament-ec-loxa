@@ -1,8 +1,9 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { calculateStandings, normalizeTournamentConfig } from "@/lib/tournamentEngine";
+import html2canvas from "html2canvas";
 
 export default function EstadisticasPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -11,6 +12,11 @@ export default function EstadisticasPage() {
   const [sanciones, setSanciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [llaves, setLlaves] = useState<any[]>([]);
+  const [exportando, setExportando] = useState(false);
+  const [nombreTorneo, setNombreTorneo] = useState("Torneo Oficial");
+  const [fondoPosterUrl, setFondoPosterUrl] = useState("");
+  const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
+  const posterPosicionesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     cargarEstadisticas();
@@ -23,11 +29,6 @@ export default function EstadisticasPage() {
       let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
       
       if (!activeId) {
-        const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
-        if (fallback) activeId = fallback.id;
-      }
-      
-      if (!activeId) {
         setLoading(false);
         return;
       }
@@ -35,6 +36,9 @@ export default function EstadisticasPage() {
       setTorneoId(activeId);
       const { data: tournament } = await supabase.from("tournaments").select("*").eq("id", activeId).single();
       const rules = normalizeTournamentConfig(tournament || {});
+      setNombreTorneo(tournament?.name || "Torneo Oficial");
+      setFondoPosterUrl(tournament?.match_poster_background_url || "");
+      setAnioTorneo(rules.tournament_year);
 
       // 2. Obtener Todos los Equipos estrictamente de ESTE torneo
       const { data: teams } = await supabase.from("teams")
@@ -96,7 +100,10 @@ export default function EstadisticasPage() {
         }
       });
 
-      const groups = calculateStandings(teams || [], matches || [], events, rules);
+      const groupMatches = (matches || []).filter(match => match.stage === "Fase de Grupos");
+      const groupMatchIds = new Set(groupMatches.map(match => match.id));
+      const groupEvents = events.filter(event => groupMatchIds.has(event.match_id));
+      const groups = calculateStandings(teams || [], groupMatches, groupEvents, rules);
       setTabla(Object.values(groups).flat());
 
       // ==========================================
@@ -154,6 +161,35 @@ export default function EstadisticasPage() {
 
   // Filtrar suspendidos para la alerta superior
   const suspendidosActivos = sanciones.filter(s => s.suspendido);
+  const posicionesPorGrupo = tabla.reduce<Record<string, any[]>>((groups, team) => {
+    (groups[team.group || "General"] ||= []).push(team);
+    return groups;
+  }, {});
+
+  const descargarPosiciones = async () => {
+    if (!posterPosicionesRef.current) return;
+    setExportando(true);
+    try {
+      const ancho = posterPosicionesRef.current.scrollWidth;
+      const canvas = await html2canvas(posterPosicionesRef.current, { backgroundColor: "#06132f", scale: 2, useCORS: true, width: ancho, windowWidth: ancho });
+      const socialCanvas = document.createElement("canvas");
+      socialCanvas.width = 1080; socialCanvas.height = 1350;
+      const context = socialCanvas.getContext("2d");
+      if (!context) throw new Error("No se pudo preparar el póster");
+      context.fillStyle = "#06132f"; context.fillRect(0, 0, 1080, 1350);
+      const scale = Math.min(1040 / canvas.width, 1310 / canvas.height);
+      const width = canvas.width * scale; const height = canvas.height * scale;
+      context.drawImage(canvas, (1080 - width) / 2, (1350 - height) / 2, width, height);
+      const link = document.createElement("a");
+      link.href = socialCanvas.toDataURL("image/png");
+      link.download = `Posiciones-${nombreTorneo}-${anioTorneo}.png`;
+      link.click();
+    } catch {
+      alert("No se pudo generar el póster de posiciones.");
+    } finally {
+      setExportando(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -180,6 +216,9 @@ export default function EstadisticasPage() {
            <h3 className="text-[#D4A017] font-black uppercase tracking-widest text-sm flex items-center gap-2">
              <span>🏆</span> Tabla de Posiciones Oficial
            </h3>
+           <button onClick={descargarPosiciones} disabled={exportando || tabla.length === 0} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 disabled:opacity-50">
+             {exportando ? "Generando..." : "Descargar póster de posiciones"}
+           </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-center text-sm text-white whitespace-nowrap">
@@ -222,8 +261,46 @@ export default function EstadisticasPage() {
         </div>
       </div>
 
+      <div ref={posterPosicionesRef} className="relative overflow-hidden rounded-2xl border border-[#D4A017]/40 p-7 bg-[#06132f]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(150deg, rgba(3,12,35,.9), rgba(8,39,84,.84), rgba(3,12,35,.95)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 18%, rgba(28,122,218,.42), transparent 32%), linear-gradient(150deg, #020817, #0a3068 48%, #020817)" }}>
+        <div className="absolute inset-4 rounded-xl border border-[#D4A017]/20 pointer-events-none" />
+        <div className="relative text-center mb-6">
+          <div className="mx-auto w-14 h-14 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#173e72] to-[#07122d] text-[#E7C36B] flex items-center justify-center font-black shadow-[0_0_25px_rgba(59,130,246,.45)]">G·L</div>
+          <h3 className="text-2xl text-white font-black uppercase tracking-widest mt-3">{nombreTorneo}</h3>
+          <p className="text-[#E7C36B] font-black uppercase tracking-[0.28em] text-xs mt-1">Tabla de posiciones · {anioTorneo}</p>
+          <div className="mt-4 mx-auto h-px max-w-2xl bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
+        </div>
+        <div className={`relative grid gap-4 ${Object.keys(posicionesPorGrupo).length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+          {Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+            <div key={grupo} className="overflow-hidden rounded-xl border border-[#D4A017]/45 bg-[#06142d]/95 shadow-[0_12px_30px_rgba(0,0,0,.35)]">
+              <div className="bg-gradient-to-r from-[#07152f] via-[#173d70] to-[#07152f] border-b border-[#D4A017]/45 px-3 py-2 flex justify-between">
+                <span className="text-[#E7C36B] text-xs font-black uppercase tracking-widest">Grupo {grupo}</span>
+                <span className="text-blue-200/70 text-[8px] font-bold uppercase">PJ · GD · PTS</span>
+              </div>
+              <div className="p-2">
+                {equipos.map((team, index) => (
+                  <div key={team.id} className={`grid grid-cols-[18px_24px_1fr_24px_28px_30px] items-center gap-1 border-b border-white/10 py-2 last:border-0 border-l-2 ${team.classificationStatus === "qualified" ? "border-l-green-400" : team.classificationStatus === "repechage" ? "border-l-yellow-400" : "border-l-gray-600"}`}>
+                    <span className="text-[9px] font-black text-blue-200 text-center">{index + 1}</span>
+                    {team.shield ? <Image src={team.shield} alt="" width={20} height={20} unoptimized crossOrigin="anonymous" className="w-5 h-5 object-contain" /> : <div className="w-5 h-5 rounded-full bg-white/10" />}
+                    <span className="truncate text-[9px] text-white font-black uppercase">{team.name}</span>
+                    <span className="text-[9px] text-blue-100 text-center">{team.pj}</span>
+                    <span className="text-[9px] text-blue-100 text-center">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
+                    <span className="text-xs text-[#E7C36B] font-black text-center">{team.pts}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="relative mt-6 pt-4 border-t border-[#D4A017]/30 flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
+          <span className="text-green-400">Verde · Clasificado</span>
+          <span className="text-yellow-400">Amarillo · Repechaje</span>
+          <span className="text-gray-400">Gris · Eliminado</span>
+          <span className="text-[#E7C36B]">GAME LEGAL</span>
+        </div>
+      </div>
+
       <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-2xl">
-        <div className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4">
+        <div className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4 flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-[#D4A017] font-black uppercase tracking-widest text-sm">Cuadro Eliminatorio Profesional</h3>
           <p className="text-gray-500 text-xs mt-1">Cruces generados según clasificación y formato configurado.</p>
         </div>

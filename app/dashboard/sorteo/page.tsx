@@ -176,25 +176,29 @@ export default function SorteoPage() {
       {/* ZONA DE CAPTURA DE IMAGEN 
         Todo lo que esté dentro de este div (ref={capturaRef}) saldrá en la foto final.
       */}
-      <div ref={capturaRef} className="p-8 bg-[#07122d] rounded-xl relative overflow-hidden" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(4,12,38,.82), rgba(4,12,38,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+      <div ref={capturaRef} className="p-8 bg-[#06132f] rounded-xl relative overflow-hidden border border-[#D4A017]/40" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(135deg, rgba(3,12,35,.88), rgba(4,30,72,.82), rgba(3,12,35,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 42%, rgba(18,116,211,.38), transparent 30%), linear-gradient(135deg, #020817, #09275a 52%, #020817)" }}>
+        <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full border-[18px] border-[#D4A017]/10" />
+        <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full border-[22px] border-blue-400/10" />
+        <div className="absolute inset-4 rounded-2xl border border-[#D4A017]/20 pointer-events-none" />
         {/* Título solo visible en la imagen o al descargar */}
-        <div className="text-center mb-6 border-b border-[#2E2E2E] pb-4">
+        <div className="relative text-center mb-7 pb-5">
+          <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#163e73] to-[#07122d] text-[#E7C36B] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(59,130,246,.45)]">G·L</div>
           <h1 className="text-3xl font-black text-white tracking-widest uppercase">{nombreTorneo}</h1>
           <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Conformación Oficial de Grupos</p>
         </div>
 
-        <div className={`grid gap-4 ${numGrupos <= 4 ? "grid-cols-2" : numGrupos <= 8 ? "grid-cols-4" : "grid-cols-5"}`}>
+        <div className={`relative grid gap-4 ${numGrupos <= 4 ? "grid-cols-2" : numGrupos <= 8 ? "grid-cols-4" : "grid-cols-5"}`}>
           {equiposPorGrupo.map(grupo => (
-            <div key={grupo.letra} className="bg-[#141414] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-xl">
-              <div className="bg-[#1C1C1C] border-b border-[#2E2E2E] py-3 text-center">
-                <h3 className="text-[#D4A017] font-black text-xl">GRUPO {grupo.letra}</h3>
+            <div key={grupo.letra} className="bg-[#06142d]/95 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(0,0,0,.38)]">
+              <div className="bg-gradient-to-r from-[#07152f] via-[#173d70] to-[#07152f] border-b border-[#D4A017]/50 py-3 text-center">
+                <h3 className="text-[#E7C36B] font-black text-base tracking-[0.18em]">GRUPO {grupo.letra}</h3>
               </div>
-              <div className="p-4 space-y-2">
+              <div className="p-3 space-y-1">
                 {grupo.equipos.length === 0 ? (
                   <p className="text-gray-600 text-xs text-center italic py-4">Grupo Vacío</p>
                 ) : (
                   grupo.equipos.map(equipo => (
-                    <div key={equipo.id} className="flex items-center justify-between bg-[#1C1C1C] border border-[#2E2E2E] p-2 rounded-lg">
+                    <div key={equipo.id} className="flex items-center justify-between border-b border-white/10 p-2 last:border-0">
                       <div className="flex items-center gap-3">
                         {equipo.shield_url ? (
                           // crossOrigin="anonymous" es vital para que html2canvas pueda capturar imágenes de Supabase
@@ -202,7 +206,7 @@ export default function SorteoPage() {
                         ) : (
                           <div className="w-6 h-6 bg-[#2E2E2E] rounded-full flex items-center justify-center text-[10px]">🛡️</div>
                         )}
-                        <span className="text-white font-bold text-sm truncate w-24">{equipo.name}</span>
+                        <span className="text-white font-black text-xs uppercase truncate w-24">{equipo.name}</span>
                       </div>
                       {/* En la foto no queremos que salga el botón de borrar, pero se mantiene interactivo aquí */}
                       <button data-html2canvas-ignore onClick={() => cambiarGrupoManual(equipo.id, "Libre")} className="text-red-500 hover:text-red-400 text-xs">✖</button>
@@ -215,8 +219,9 @@ export default function SorteoPage() {
         </div>
         
         {/* Marca de agua elegante al final de la imagen */}
-        <div className="text-center mt-8 pt-4 border-t border-[#2E2E2E]">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Generado por GAME-LEGAL</p>
+        <div className="relative text-center mt-8 pt-4 border-t border-[#D4A017]/30">
+          <p className="text-xs font-black text-[#E7C36B] uppercase tracking-[0.35em]">El camino al campeonato comienza aquí</p>
+          <p className="text-[9px] font-bold text-blue-200/60 uppercase tracking-widest mt-2">Generado por GAME LEGAL</p>
         </div>
       </div>
 
