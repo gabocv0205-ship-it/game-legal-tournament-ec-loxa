@@ -4,7 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
-import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatchday, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 export default function PartidosPage() {
@@ -162,9 +162,9 @@ export default function PartidosPage() {
     if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
     setLoading(true);
     try {
-      const required: Record<string, number> = { "Octavos de Final": 16, "Cuartos de Final": 8, "Semifinal": 4, "Final": 2 };
+      const required: Record<string, number> = { "16vos de Final": 32, "Octavos de Final": 16, "Cuartos de Final": 8, "Semifinal": 4, "Final": 2 };
       const count = required[faseGenerar] || 0;
-      const previousStage: Record<string, string> = { "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
+      const previousStage: Record<string, string> = { "Octavos de Final": "16vos de Final", "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
       const previous = previousStage[faseGenerar];
       const winners = previous ? getStageWinners(partidos, equipos, previous) : [];
       const groups = calculateStandings(equipos, partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
@@ -174,7 +174,8 @@ export default function PartidosPage() {
       const fixtures = createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
-      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion });
+      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion })
+        .map(match => faseGenerar === "Final" && configuracion.final_venue ? { ...match, court: configuracion.final_venue } : match);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       alert(`${faseGenerar} generada automáticamente con los equipos clasificados.`);
@@ -339,12 +340,11 @@ export default function PartidosPage() {
       .select("id, full_name, team_id, teams(name)")
       .in("team_id", [partido.home_team_id, partido.away_team_id])
       .order("full_name");
-    const partidosPrevios = partidos.filter(p => p.status === "finished" && Number(p.matchday || 0) < Number(partido.matchday || 0));
-    const idsPrevios = partidosPrevios.map(p => p.id);
-    const { data: cardEvents } = idsPrevios.length
-      ? await supabase.from("match_events").select("match_id, player_id, event_type").in("match_id", idsPrevios).in("event_type", ["amarilla", "roja"])
+    const idsPartidos = partidos.map(p => p.id);
+    const { data: cardEvents } = idsPartidos.length
+      ? await supabase.from("match_events").select("match_id, player_id, team_id, event_type").in("match_id", idsPartidos).in("event_type", ["amarilla", "roja"])
       : { data: [] as any[] };
-    const suspendidos = getSuspendedPlayerIdsForMatchday(cardEvents || [], partidosPrevios, configuracion, Number(partido.matchday || 0));
+    const suspendidos = getSuspendedPlayerIdsForMatch(cardEvents || [], partidos, configuracion, partido);
     return {
       habilitados: (playersData || []).filter(player => !suspendidos.has(player.id)),
       suspendidos: (playersData || []).filter(player => suspendidos.has(player.id)),
@@ -541,27 +541,42 @@ export default function PartidosPage() {
     if (!printWindow) return alert("Permite las ventanas emergentes para generar la planilla.");
     const { habilitados, suspendidos } = await cargarConvocatoria(partido);
     const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
-    const crearNomina = (teamId: string) => {
-      const convocados = habilitados.filter(player => player.team_id === teamId).slice(0, configuracion.football_modality + configuracion.substitutes_count);
-      const filas = convocados.map((player, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(player.full_name)}</td><td>${index < configuracion.football_modality ? "Titular" : "Suplente"}</td><td></td><td></td><td></td></tr>`);
-      while (filas.length < configuracion.football_modality + configuracion.substitutes_count) filas.push("<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>");
-      return filas.join("");
-    };
-    const suspendidosTexto = suspendidos.length
-      ? suspendidos.map(player => escapeHtml(player.full_name)).join(", ")
-      : "Ninguno";
     const fechaPartido = new Date(partido.match_date);
+    const crearCasillas = (cantidad: number) => Array.from({ length: cantidad }, (_, index) => `<tr><td>${index + 1}</td><td></td><td></td><td></td><td></td></tr>`).join("");
+    const crearPaginaEquipo = (teamId: string, teamName: string, rivalName: string) => {
+      const habilitadosEquipo = habilitados.filter(player => player.team_id === teamId);
+      const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
+      const listaHabilitados = habilitadosEquipo.length
+        ? habilitadosEquipo.map(player => escapeHtml(player.full_name)).join(" · ")
+        : "No existen jugadores habilitados registrados.";
+      const suspendidosTexto = suspendidosEquipo.length
+        ? suspendidosEquipo.map(player => escapeHtml(player.full_name)).join(", ")
+        : "Ninguno";
+      return `<section class="sheet">
+        <div class="brand"><div><strong>GAME-LEGAL PRO</strong><span>Planilla oficial de convocatoria</span></div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
+        <h1>${escapeHtml(teamName)}</h1>
+        <div class="subtitle">Fútbol ${configuracion.football_modality} · Selección a cargo del director técnico</div>
+        <div class="meta"><span><b>Rival:</b> ${escapeHtml(rivalName)}</span><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha:</b> ${fechaPartido.toLocaleString("es-EC")}</span></div>
+        <div class="eligible"><b>Jugadores habilitados para seleccionar:</b><p>${listaHabilitados}</p></div>
+        <h2>Titulares · seleccionar ${configuracion.football_modality}</h2>
+        <table><tr><th>N°</th><th>Jugador elegido por el DT</th><th>Dorsal</th><th>Firma</th><th>Capitán</th></tr>${crearCasillas(configuracion.football_modality)}</table>
+        <h2>Suplentes · seleccionar hasta ${configuracion.substitutes_count}</h2>
+        <table><tr><th>N°</th><th>Jugador elegido por el DT</th><th>Dorsal</th><th>Firma</th><th>Ingreso</th></tr>${crearCasillas(configuracion.substitutes_count)}</table>
+        <div class="suspended"><b>No convocados automáticamente por suspensión para esta jornada:</b> ${suspendidosTexto}</div>
+        <div class="observations"><b>Observaciones del equipo:</b></div>
+        <div class="signatures"><div>Director técnico</div><div>Capitán</div><div>Árbitro / Vocal</div></div>
+      </section>`;
+    };
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
-      @page{size:A4 landscape;margin:9mm}body{font-family:Arial;color:#111;margin:0}.header{text-align:center;border-bottom:3px solid #111;margin-bottom:10px}
-      h1{font-size:19px;margin:0 0 4px}.meta{display:flex;justify-content:space-between;font-size:11px;font-weight:bold;margin:8px 0}.teams{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-      table{border-collapse:collapse;width:100%;font-size:9px}th,td{border:1px solid #222;padding:4px;height:14px}th{background:#eee}.team-title{font-size:13px;text-align:center;background:#111;color:#fff;padding:6px;font-weight:bold}
-      .notice{margin-top:8px;border:1px solid #999;padding:5px;font-size:9px}.signatures{display:flex;justify-content:space-around;margin-top:28px;font-size:10px}.signature{border-top:1px solid #111;width:25%;text-align:center;padding-top:4px}
-    </style></head><body><div class="header"><h1>PLANILLA OFICIAL - FÚTBOL ${configuracion.football_modality}</h1><div>GAME-LEGAL PRO · Titulares: ${configuracion.football_modality} · Suplentes: ${configuracion.substitutes_count}</div></div>
-    <div class="meta"><span>Jornada ${escapeHtml(partido.matchday)} · ${escapeHtml(partido.stage)}</span><span>${fechaPartido.toLocaleString("es-EC")}</span><span>${escapeHtml(partido.court || "Cancha 1")}</span></div>
-    <div class="teams"><div><div class="team-title">${escapeHtml(partido.home?.name)} - LOCAL</div><table><tr><th>N°</th><th>Jugador habilitado</th><th>Rol</th><th>Gol</th><th>TA</th><th>TR</th></tr>${crearNomina(partido.home_team_id)}</table></div>
-    <div><div class="team-title">${escapeHtml(partido.away?.name)} - VISITANTE</div><table><tr><th>N°</th><th>Jugador habilitado</th><th>Rol</th><th>Gol</th><th>TA</th><th>TR</th></tr>${crearNomina(partido.away_team_id)}</table></div></div>
-    <div class="notice"><strong>No convocados automáticamente por suspensión para esta jornada:</strong> ${suspendidosTexto}</div>
-    <div class="signatures"><div class="signature">Capitán local</div><div class="signature">Árbitro / Vocal</div><div class="signature">Capitán visitante</div></div></body></html>`;
+      @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}body{font-family:Arial;color:#182033;margin:0;background:#fff}.sheet{min-height:277mm;page-break-after:always;padding:7mm;border:2px solid #d4a017}.sheet:last-child{page-break-after:auto}
+      .brand{display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid #d4a017;padding-bottom:8px}.brand strong{display:block;font-size:18px;letter-spacing:2px}.brand span{font-size:9px;text-transform:uppercase;color:#657085}.year{font-size:22px;font-weight:900;color:#d4a017}
+      h1{text-align:center;font-size:22px;text-transform:uppercase;margin:12px 0 2px}.subtitle{text-align:center;font-size:10px;color:#657085;text-transform:uppercase;letter-spacing:1px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:10px 0;font-size:9px;background:#f4f5f7;padding:7px}
+      .eligible,.suspended{border-left:4px solid #d4a017;background:#fff8df;padding:7px;font-size:8px;margin:7px 0}.eligible p{margin:4px 0 0;line-height:1.4}.suspended{border-color:#b42318;background:#fff0ee}
+      h2{font-size:10px;text-transform:uppercase;background:#182033;color:#fff;padding:5px;margin:8px 0 0}table{border-collapse:collapse;width:100%;font-size:8px}th,td{border:1px solid #9da4b1;padding:3px;height:16px}th{background:#edf0f4;text-transform:uppercase}.observations{height:42px;border:1px solid #9da4b1;padding:6px;font-size:9px;margin-top:8px}.signatures{display:flex;justify-content:space-between;margin-top:24px}.signatures div{border-top:1px solid #182033;width:28%;text-align:center;padding-top:4px;font-size:8px;text-transform:uppercase}
+    </style></head><body>
+      ${crearPaginaEquipo(partido.home_team_id, partido.home?.name, partido.away?.name)}
+      ${crearPaginaEquipo(partido.away_team_id, partido.away?.name, partido.home?.name)}
+    </body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
@@ -586,6 +601,8 @@ export default function PartidosPage() {
   };
 
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
+  const fasesCuadro = ["16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Final"];
+  const fasesVisibles = fasesCuadro.filter(fase => partidos.some(partido => partido.stage === fase || partido.stage === `${fase} (Vuelta)`));
 
   // ============================================================================
   // VISTA 2: PANEL DE CONTROL EN VIVO
@@ -767,6 +784,7 @@ export default function PartidosPage() {
                <div className="md:col-span-2">
                  <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Fase a Generar</label>
                  <select value={faseGenerar} onChange={e => setFaseGenerar(e.target.value)} className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded outline-none">
+                   <option>16vos de Final</option>
                    <option>Octavos de Final</option>
                    <option>Cuartos de Final</option>
                    <option>Semifinal</option>
@@ -785,6 +803,42 @@ export default function PartidosPage() {
                  </button>
                </div>
             </form>
+
+            {fasesVisibles.length > 0 && (
+              <div className="relative z-10 rounded-2xl border border-blue-400/30 bg-gradient-to-b from-[#081a46] via-[#07122d] to-[#050914] p-5 overflow-x-auto">
+                <div className="text-center mb-7">
+                  <p className="text-blue-300 text-[10px] uppercase tracking-[0.35em] font-black">Cuadro eliminatorio oficial</p>
+                  <h3 className="text-white text-2xl font-black uppercase mt-2">{configuracion.tournament_year}</h3>
+                  <p className="text-[#D4A017] text-xs font-bold uppercase mt-1">Final · {configuracion.final_venue || "Cancha por confirmar"}</p>
+                </div>
+                <div className="flex min-w-max items-stretch justify-center gap-8 pb-3">
+                  {fasesVisibles.map((fase, faseIndex) => {
+                    const partidosFase = partidos.filter(partido => partido.stage === fase || partido.stage === `${fase} (Vuelta)`);
+                    return (
+                      <div key={fase} className="w-60 flex flex-col">
+                        <div className="text-center text-blue-200 font-black uppercase tracking-widest text-[10px] mb-4">{fase}</div>
+                        <div className="flex-1 flex flex-col justify-around gap-4">
+                          {partidosFase.map(partido => (
+                            <button key={partido.id} onClick={() => abrirPartido(partido)} className="relative text-left rounded-xl border border-blue-300/30 bg-white/10 hover:bg-white/20 hover:border-[#D4A017] p-3 shadow-[0_0_25px_rgba(37,99,235,.15)] transition-all group">
+                              {faseIndex < fasesVisibles.length - 1 && <span className="absolute top-1/2 -right-9 w-9 border-t border-blue-300/40" />}
+                              {[["home", partido.home, partido.home_goals], ["away", partido.away, partido.away_goals]].map(([lado, equipo, goles]: any) => (
+                                <div key={lado} className="flex items-center gap-2 py-1">
+                                  {equipo?.shield_url ? <Image src={equipo.shield_url} alt="" width={22} height={22} unoptimized className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 rounded-full bg-blue-300/20" />}
+                                  <span className="flex-1 text-white text-[10px] font-black uppercase truncate">{equipo?.name || "Por definir"}</span>
+                                  <span className="text-[#D4A017] font-black text-xs">{partido.status === "finished" ? goles : "-"}</span>
+                                </div>
+                              ))}
+                              <div className="border-t border-white/10 mt-1 pt-1 text-[8px] text-blue-200 uppercase">{partido.court || "Cancha por confirmar"} · {new Date(partido.match_date).toLocaleDateString("es-EC")}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-center text-blue-200/60 text-[9px] uppercase tracking-widest mt-4">Selecciona una llave para abrir su gestión y detalles</p>
+              </div>
+            )}
           </div>
         )}
       </div>

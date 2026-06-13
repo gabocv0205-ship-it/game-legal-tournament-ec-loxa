@@ -36,6 +36,8 @@ export default function ConfiguracionPage() {
   const [descansoPartidos, setDescansoPartidos] = useState(10);
   const [modalidadFutbol, setModalidadFutbol] = useState(11);
   const [numSuplentes, setNumSuplentes] = useState(5);
+  const [canchaFinal, setCanchaFinal] = useState("");
+  const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
   const [bannerUrl, setBannerUrl] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
   const [fondoPartidosUrl, setFondoPartidosUrl] = useState("");
@@ -86,6 +88,8 @@ export default function ConfiguracionPage() {
         setDescansoPartidos(Number(data.break_between_matches_minutes || 10));
         setModalidadFutbol(Number(data.football_modality || 11));
         setNumSuplentes(Number(data.substitutes_count ?? 5));
+        setCanchaFinal(data.final_venue || "");
+        setAnioTorneo(Number(data.tournament_year || new Date().getFullYear()));
         setBannerUrl(data.banner_url || "");
         setPosterUrl(data.poster_url || "");
         setFondoPartidosUrl(data.match_poster_background_url || "");
@@ -154,6 +158,8 @@ export default function ConfiguracionPage() {
         break_between_matches_minutes: descansoPartidos,
         football_modality: modalidadFutbol,
         substitutes_count: numSuplentes,
+        final_venue: canchaFinal || null,
+        tournament_year: anioTorneo,
         banner_url: nuevoBannerUrl || null,
         poster_url: nuevoPosterUrl || null,
         match_poster_background_url: nuevoFondoPartidosUrl || null,
@@ -238,6 +244,11 @@ export default function ConfiguracionPage() {
               </select>
             </div>
             <NumberField label="Suplentes por planilla" value={numSuplentes} onChange={setNumSuplentes} min={0} />
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cancha de la final</label>
+              <input type="text" value={canchaFinal} onChange={e => setCanchaFinal(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none" placeholder="Ej: Estadio Reina del Cisne" />
+            </div>
+            <NumberField label="Año del torneo" value={anioTorneo} onChange={setAnioTorneo} min={2000} />
             <NumberField label="Duración por partido (min)" value={duracionPartido} onChange={setDuracionPartido} min={15} />
             <NumberField label="Descanso entre partidos (min)" value={descansoPartidos} onChange={setDescansoPartidos} min={0} />
             <DateField label="Fecha de inicio" value={fechaInicio} onChange={setFechaInicio} required />

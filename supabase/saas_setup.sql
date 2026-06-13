@@ -21,6 +21,8 @@ alter table public.tournaments
   add column if not exists match_poster_background_url text,
   add column if not exists football_modality integer default 11,
   add column if not exists substitutes_count integer default 5,
+  add column if not exists final_venue text,
+  add column if not exists tournament_year integer default extract(year from current_date)::integer,
   add column if not exists yellow_cards_for_suspension integer default 3,
   add column if not exists yellow_suspension_matches integer default 1,
   add column if not exists red_suspension_matches integer default 1,
