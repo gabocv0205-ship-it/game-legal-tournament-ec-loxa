@@ -23,10 +23,72 @@ alter table public.tournaments
   add column if not exists substitutes_count integer default 5,
   add column if not exists final_venue text,
   add column if not exists tournament_year integer default extract(year from current_date)::integer,
+  add column if not exists is_auto_template_enabled boolean default false,
+  add column if not exists max_players_per_team integer default 25,
   add column if not exists yellow_cards_for_suspension integer default 3,
   add column if not exists yellow_suspension_matches integer default 1,
   add column if not exists red_suspension_matches integer default 1,
   add column if not exists configuration_completed boolean default false;
+
+create index if not exists players_tournament_team_idx
+  on public.players (tournament_id, team_id);
+
+create index if not exists players_tournament_cedula_lookup_idx
+  on public.players (tournament_id, lower(btrim(cedula)));
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'players_full_name_required') then
+    alter table public.players add constraint players_full_name_required check (length(btrim(full_name)) > 0) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'players_cedula_required') then
+    alter table public.players add constraint players_cedula_required check (length(btrim(cedula)) > 0) not valid;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from public.players
+    where cedula is not null and btrim(cedula) <> ''
+    group by tournament_id, lower(btrim(cedula))
+    having count(*) > 1
+  ) then
+    create unique index if not exists players_tournament_cedula_unique_idx
+      on public.players (tournament_id, lower(btrim(cedula)))
+      where cedula is not null and btrim(cedula) <> '';
+  end if;
+end $$;
+
+create or replace function public.enforce_player_identity()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.full_name := btrim(new.full_name);
+  new.cedula := btrim(new.cedula);
+  if length(coalesce(new.full_name, '')) = 0 or length(coalesce(new.cedula, '')) = 0 then
+    raise exception 'La cédula y el nombre completo son obligatorios';
+  end if;
+  if exists (
+    select 1 from public.players p
+    where p.tournament_id = new.tournament_id
+      and lower(btrim(p.cedula)) = lower(new.cedula)
+      and p.id is distinct from new.id
+  ) then
+    raise exception 'Esta cédula ya está registrada en otro equipo del torneo';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_player_identity_before_write on public.players;
+create trigger enforce_player_identity_before_write
+  before insert or update of tournament_id, cedula, full_name on public.players
+  for each row execute function public.enforce_player_identity();
+
+revoke all on function public.enforce_player_identity() from public, anon, authenticated;
 
 alter table public.payments
   add column if not exists payment_method text default 'efectivo',
@@ -87,6 +149,134 @@ $$;
 
 revoke all on function public.can_manage_tournament_media(text) from public, anon;
 grant execute on function public.can_manage_tournament_media(text) to authenticated;
+
+create or replace function public.register_tournament_player(
+  p_tournament_id uuid,
+  p_team_id uuid,
+  p_full_name text,
+  p_cedula text
+)
+returns public.players
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tournament public.tournaments;
+  v_player public.players;
+  v_cedula text := lower(btrim(p_cedula));
+begin
+  if not public.can_manage_tournament_media(p_tournament_id::text) then
+    raise exception 'No tienes permiso para administrar este torneo';
+  end if;
+  if length(btrim(coalesce(p_full_name, ''))) = 0 or length(v_cedula) = 0 then
+    raise exception 'La cédula y el nombre completo son obligatorios';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_tournament_id::text || ':' || v_cedula));
+  perform pg_advisory_xact_lock(hashtext(p_tournament_id::text || ':team:' || p_team_id::text));
+  select * into v_tournament from public.tournaments where id = p_tournament_id;
+  if not exists (select 1 from public.teams where id = p_team_id and tournament_id = p_tournament_id) then
+    raise exception 'El equipo no pertenece al torneo seleccionado';
+  end if;
+  if exists (select 1 from public.players where tournament_id = p_tournament_id and lower(btrim(cedula)) = v_cedula) then
+    raise exception 'Esta cédula ya está registrada en otro equipo del torneo';
+  end if;
+  if coalesce(v_tournament.is_auto_template_enabled, false) and (
+    select count(*) from public.players where tournament_id = p_tournament_id and team_id = p_team_id
+  ) >= greatest(1, coalesce(v_tournament.max_players_per_team, 25)) then
+    raise exception 'El equipo alcanzó el límite configurado de jugadores';
+  end if;
+
+  insert into public.players (tournament_id, team_id, full_name, cedula)
+  values (p_tournament_id, p_team_id, btrim(p_full_name), btrim(p_cedula))
+  returning * into v_player;
+  return v_player;
+end;
+$$;
+
+create or replace function public.update_tournament_player(
+  p_player_id uuid,
+  p_full_name text,
+  p_cedula text
+)
+returns public.players
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_existing public.players;
+  v_player public.players;
+  v_cedula text := lower(btrim(p_cedula));
+begin
+  select * into v_existing from public.players where id = p_player_id;
+  if v_existing.id is null or not public.can_manage_tournament_media(v_existing.tournament_id::text) then
+    raise exception 'No tienes permiso para modificar este jugador';
+  end if;
+  if length(btrim(coalesce(p_full_name, ''))) = 0 or length(v_cedula) = 0 then
+    raise exception 'La cédula y el nombre completo son obligatorios';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(v_existing.tournament_id::text || ':' || v_cedula));
+  if exists (
+    select 1 from public.players
+    where tournament_id = v_existing.tournament_id
+      and id <> p_player_id
+      and lower(btrim(cedula)) = v_cedula
+  ) then
+    raise exception 'Esta cédula ya está registrada en otro equipo del torneo';
+  end if;
+
+  update public.players set full_name = btrim(p_full_name), cedula = btrim(p_cedula)
+  where id = p_player_id returning * into v_player;
+  return v_player;
+end;
+$$;
+
+create or replace function public.delete_tournament_player(p_player_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tournament_id uuid;
+begin
+  select tournament_id into v_tournament_id from public.players where id = p_player_id;
+  if v_tournament_id is null or not public.can_manage_tournament_media(v_tournament_id::text) then
+    raise exception 'No tienes permiso para eliminar este jugador';
+  end if;
+  delete from public.players where id = p_player_id;
+end;
+$$;
+
+revoke all on function public.register_tournament_player(uuid, uuid, text, text) from public, anon;
+revoke all on function public.update_tournament_player(uuid, text, text) from public, anon;
+revoke all on function public.delete_tournament_player(uuid) from public, anon;
+grant execute on function public.register_tournament_player(uuid, uuid, text, text) to authenticated;
+grant execute on function public.update_tournament_player(uuid, text, text) to authenticated;
+grant execute on function public.delete_tournament_player(uuid) to authenticated;
+
+-- Las escrituras pasan únicamente por funciones atómicas con validación de tenant.
+revoke insert, update, delete on public.players from authenticated;
+
+alter table public.players enable row level security;
+
+drop policy if exists players_manager_select on public.players;
+create policy players_manager_select
+  on public.players for select to authenticated
+  using (public.can_manage_tournament_media(tournament_id::text));
+
+revoke select on public.players from anon;
+grant select on public.players to authenticated;
+
+create or replace view public.public_players as
+  select id, tournament_id, team_id, full_name
+  from public.players;
+
+revoke all on public.public_players from public;
+grant select on public.public_players to anon, authenticated;
 
 drop policy if exists tournament_identity_upload on storage.objects;
 create policy tournament_identity_upload

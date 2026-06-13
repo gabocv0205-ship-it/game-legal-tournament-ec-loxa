@@ -38,6 +38,8 @@ export default function ConfiguracionPage() {
   const [numSuplentes, setNumSuplentes] = useState(5);
   const [canchaFinal, setCanchaFinal] = useState("");
   const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
+  const [plantillaAutomatica, setPlantillaAutomatica] = useState(false);
+  const [maxJugadoresEquipo, setMaxJugadoresEquipo] = useState(25);
   const [bannerUrl, setBannerUrl] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
   const [fondoPartidosUrl, setFondoPartidosUrl] = useState("");
@@ -90,6 +92,8 @@ export default function ConfiguracionPage() {
         setNumSuplentes(Number(data.substitutes_count ?? 5));
         setCanchaFinal(data.final_venue || "");
         setAnioTorneo(Number(data.tournament_year || new Date().getFullYear()));
+        setPlantillaAutomatica(Boolean(data.is_auto_template_enabled));
+        setMaxJugadoresEquipo(Number(data.max_players_per_team || 25));
         setBannerUrl(data.banner_url || "");
         setPosterUrl(data.poster_url || "");
         setFondoPartidosUrl(data.match_poster_background_url || "");
@@ -160,6 +164,8 @@ export default function ConfiguracionPage() {
         substitutes_count: numSuplentes,
         final_venue: canchaFinal || null,
         tournament_year: anioTorneo,
+        is_auto_template_enabled: plantillaAutomatica,
+        max_players_per_team: maxJugadoresEquipo,
         banner_url: nuevoBannerUrl || null,
         poster_url: nuevoPosterUrl || null,
         match_poster_background_url: nuevoFondoPartidosUrl || null,
@@ -272,6 +278,18 @@ export default function ConfiguracionPage() {
             <NumberField label="Amarillas para suspensión" value={amarillasSuspension} onChange={setAmarillasSuspension} />
             <NumberField label="Partidos por acumulación" value={partidosSuspensionAmarillas} onChange={setPartidosSuspensionAmarillas} />
             <NumberField label="Partidos por roja" value={partidosSuspensionRoja} onChange={setPartidosSuspensionRoja} />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-cyan-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Plantilla Oficial Automatizada</h3>
+          <p className="text-gray-500 text-xs">Opcional. Mantiene una nómina permanente con cédulas únicas por torneo. La planilla abierta por partido seguirá disponible para jugadores ocasionales.</p>
+          <label className="flex items-center gap-3 bg-[#1c1c1c] border border-[#2e2e2e] rounded-xl p-4 cursor-pointer">
+            <input type="checkbox" checked={plantillaAutomatica} onChange={e => setPlantillaAutomatica(e.target.checked)} className="w-5 h-5 accent-cyan-400" />
+            <span className="text-white font-bold text-sm">Activar control estricto de plantilla oficial</span>
+          </label>
+          <div className="max-w-xs">
+            <NumberField label="Máximo de jugadores por equipo" value={maxJugadoresEquipo} onChange={setMaxJugadoresEquipo} min={1} disabled={!plantillaAutomatica} />
           </div>
         </div>
 

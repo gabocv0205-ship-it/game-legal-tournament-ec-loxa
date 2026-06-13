@@ -75,12 +75,15 @@ export default function PortalTorneoDinamico() {
 
         const matchIds = matches?.map(m => m.id) || [];
         if (matchIds.length > 0) {
-          const { data: events } = await supabase.from("match_events")
-            .select("*, players(full_name), teams(name)").in("match_id", matchIds).eq("event_type", "gol");
+          const [{ data: events }, { data: publicPlayers }] = await Promise.all([
+            supabase.from("match_events").select("*, teams(name)").in("match_id", matchIds).eq("event_type", "gol"),
+            supabase.from("public_players").select("id, full_name").eq("tournament_id", tourney.id),
+          ]);
+          const playerNames = Object.fromEntries((publicPlayers || []).map(player => [player.id, player.full_name]));
           const golesObj: Record<string, any> = {};
           events?.forEach(e => {
              const pId = e.player_id;
-             if (!golesObj[pId]) golesObj[pId] = { id: pId, name: e.players?.full_name, team: e.teams?.name, goles: 0 };
+             if (!golesObj[pId]) golesObj[pId] = { id: pId, name: playerNames[pId] || "Jugador", team: e.teams?.name, goles: 0 };
              golesObj[pId].goles++;
           });
           setGoleadores(Object.values(golesObj).sort((a, b) => b.goles - a.goles).slice(0, 10));

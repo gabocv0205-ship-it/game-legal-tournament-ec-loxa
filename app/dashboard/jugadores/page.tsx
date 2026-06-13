@@ -6,6 +6,8 @@ export default function JugadoresPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
+  const [plantillaAutomatica, setPlantillaAutomatica] = useState(false);
+  const [maxJugadoresEquipo, setMaxJugadoresEquipo] = useState(25);
   
   // Formulario alineado con la base de datos (full_name y cedula)
   const [nombre, setNombre] = useState("");
@@ -36,6 +38,13 @@ export default function JugadoresPage() {
       
       setTorneoId(activeId);
 
+      const { data: tournamentData } = await supabase.from("tournaments")
+        .select("is_auto_template_enabled, max_players_per_team")
+        .eq("id", activeId)
+        .single();
+      setPlantillaAutomatica(Boolean(tournamentData?.is_auto_template_enabled));
+      setMaxJugadoresEquipo(Number(tournamentData?.max_players_per_team || 25));
+
       // 2. Traer SOLO los equipos de este torneo
       const { data: teamsData } = await supabase.from("teams")
         .select("id, name")
@@ -64,12 +73,15 @@ export default function JugadoresPage() {
     setLoading(true);
     try {
       // Inserción vinculada estrictamente al torneo activo
-      const { error } = await supabase.from("players").insert([{ 
-        full_name: nombre, 
-        cedula: cedula, 
-        team_id: equipoId,
-        tournament_id: torneoId
-      }]);
+      const nombreLimpio = nombre.trim();
+      const cedulaLimpia = cedula.trim();
+      if (!nombreLimpio || !cedulaLimpia) throw new Error("La cédula y el nombre completo son obligatorios.");
+      const { error } = await supabase.rpc("register_tournament_player", {
+        p_tournament_id: torneoId,
+        p_team_id: equipoId,
+        p_full_name: nombreLimpio,
+        p_cedula: cedulaLimpia,
+      });
       
       // Manejo del candado de cédulas duplicadas (Solo dentro del mismo torneo)
       if (error) {
@@ -93,17 +105,19 @@ export default function JugadoresPage() {
   const eliminarJugador = async (id: string) => {
     if (!window.confirm("¿Eliminar a este jugador del torneo?")) return;
     try {
-      await supabase.from("players").delete().eq("id", id);
+      const { error } = await supabase.rpc("delete_tournament_player", { p_player_id: id });
+      if (error) throw error;
       cargarDatos();
-    } catch (error) { alert("Error al eliminar."); }
+    } catch (error: any) { alert("Error al eliminar: " + error.message); }
   };
 
   const guardarEdicion = async (id: string) => {
     try {
-      const { error } = await supabase.from("players").update({ 
-        full_name: nombreEditado,
-        cedula: cedulaEditada 
-      }).eq("id", id);
+      const { error } = await supabase.rpc("update_tournament_player", {
+        p_player_id: id,
+        p_full_name: nombreEditado.trim(),
+        p_cedula: cedulaEditada.trim(),
+      });
 
       if (error) {
         if (error.message.includes("unique") || error.message.includes("cedula")) {
@@ -125,6 +139,10 @@ export default function JugadoresPage() {
     <div className="space-y-6">
       <h2 className="text-3xl font-black text-white uppercase tracking-wider">Gestión de Jugadores</h2>
       <p className="text-gray-400 text-sm">Administra la nómina oficial del torneo seleccionado.</p>
+      <div className={`rounded-xl border p-4 text-sm ${plantillaAutomatica ? "bg-cyan-950/30 border-cyan-500/40 text-cyan-200" : "bg-[#141414] border-[#2E2E2E] text-gray-400"}`}>
+        <strong className="uppercase text-xs tracking-widest">{plantillaAutomatica ? "Control estricto activo" : "Plantilla oficial opcional"}</strong>
+        <p className="mt-1">{plantillaAutomatica ? `Cada equipo admite máximo ${maxJugadoresEquipo} jugadores oficiales. Una cédula no puede pertenecer a dos equipos del torneo.` : "Puedes registrar jugadores oficiales sin límite configurado. Las planillas abiertas por partido permanecen disponibles."}</p>
+      </div>
 
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
         <form onSubmit={guardarJugador} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
@@ -141,7 +159,7 @@ export default function JugadoresPage() {
             <select value={equipoId} onChange={e => setEquipoId(e.target.value)} required className="w-full p-3 mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white rounded-xl focus:outline-none focus:border-[#D4A017] cursor-pointer">
               <option value="" disabled>Selecciona un equipo...</option>
               {equipos.map(eq => (
-                <option key={eq.id} value={eq.id}>{eq.name}</option>
+                <option key={eq.id} value={eq.id}>{eq.name} ({jugadores.filter(jugador => jugador.team_id === eq.id).length}{plantillaAutomatica ? `/${maxJugadoresEquipo}` : ""})</option>
               ))}
             </select>
           </div>
