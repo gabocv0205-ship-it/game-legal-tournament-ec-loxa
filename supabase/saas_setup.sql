@@ -94,6 +94,11 @@ alter table public.payments
   add column if not exists payment_method text default 'efectivo',
   add column if not exists notes text;
 
+alter table public.matches
+  add column if not exists resolved_by_penalties boolean default false,
+  add column if not exists home_penalties integer,
+  add column if not exists away_penalties integer;
+
 create index if not exists payments_tournament_team_created_idx
   on public.payments (tournament_id, team_id, created_at desc);
 

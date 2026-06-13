@@ -9,6 +9,7 @@ import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO 
 
 export default function PartidosPage() {
   const [torneoSlug, setTorneoSlug] = useState<string>("");
+  const [torneoNombre, setTorneoNombre] = useState<string>("Torneo Oficial");
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [costoArbitraje, setCostoArbitraje] = useState<number>(20);
   const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]);
@@ -48,6 +49,7 @@ export default function PartidosPage() {
 
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
   const capturaRef = useRef<HTMLDivElement>(null);
+  const bracketPosterRef = useRef<HTMLDivElement>(null);
   const [appUrl, setAppUrl] = useState("");
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [usarFondoPersonalizado, setUsarFondoPersonalizado] = useState(true);
@@ -103,6 +105,7 @@ export default function PartidosPage() {
     const { data: tourney } = await supabase.from('tournaments').select('*').eq('id', activeId).single();
     if (tourney) {
       setCostoArbitraje(Number(tourney.referee_fee || 20));
+      setTorneoNombre(tourney.name || "Torneo Oficial");
       setTorneoSlug(tourney.slug);
       const rules = normalizeTournamentConfig(tourney);
       setConfiguracion(rules);
@@ -437,8 +440,31 @@ export default function PartidosPage() {
     setLoading(true);
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
-    await supabase.from("matches").update({ status: "finished", home_goals: golesLocal, away_goals: golesVisitante }).eq("id", partidoActivo.id);
+    const update: any = { status: "finished", home_goals: golesLocal, away_goals: golesVisitante };
+    const esEliminatoria = partidoActivo.stage !== "Fase de Grupos";
+    const otrosLlave = partidos.filter(p => p.id !== partidoActivo.id && p.status === "finished" && esMismaLlave(p, partidoActivo));
+    const globalLocal = golesLocal + otrosLlave.reduce((sum, p) => sum + Number(p.home_team_id === partidoActivo.home_team_id ? p.home_goals : p.away_goals), 0);
+    const globalVisita = golesVisitante + otrosLlave.reduce((sum, p) => sum + Number(p.home_team_id === partidoActivo.away_team_id ? p.home_goals : p.away_goals), 0);
+    if (esEliminatoria && globalLocal === globalVisita && window.confirm("La llave terminó empatada. ¿Registrar definición por penales?")) {
+      const localPenales = Number(window.prompt(`Penales de ${partidoActivo.home?.name}`, "0"));
+      const visitaPenales = Number(window.prompt(`Penales de ${partidoActivo.away?.name}`, "0"));
+      if (Number.isFinite(localPenales) && Number.isFinite(visitaPenales) && localPenales !== visitaPenales) {
+        update.resolved_by_penalties = true; update.home_penalties = localPenales; update.away_penalties = visitaPenales;
+      }
+    }
+    await supabase.from("matches").update(update).eq("id", partidoActivo.id);
     setPartidoActivo(null); cargarDatos(); setLoading(false);
+  };
+
+  const registrarPenales = async (partido: any) => {
+    const resultado = resultadoLlave(partido);
+    if (resultado.home !== resultado.away) return alert("Solo se pueden registrar penales cuando el marcador global de la llave está empatado.");
+    const local = Number(window.prompt(`Penales de ${partido.home?.name}`, String(partido.home_penalties ?? 0)));
+    const visita = Number(window.prompt(`Penales de ${partido.away?.name}`, String(partido.away_penalties ?? 0)));
+    if (!Number.isFinite(local) || !Number.isFinite(visita) || local === visita) return alert("El resultado de penales debe tener un ganador.");
+    const { error } = await supabase.from("matches").update({ resolved_by_penalties: true, home_penalties: local, away_penalties: visita }).eq("id", partido.id);
+    if (error) return alert("No se pudo registrar la definición por penales.");
+    cargarDatos();
   };
 
   const descargarCalendario = async () => {
@@ -536,6 +562,28 @@ export default function PartidosPage() {
     }, 250);
   };
 
+  const descargarCuadroEliminatorio = async () => {
+    if (!bracketPosterRef.current) return;
+    setLoading(true);
+    try {
+      const anchoCompleto = bracketPosterRef.current.scrollWidth;
+      const canvas = await html2canvas(bracketPosterRef.current, { backgroundColor: "#07122d", scale: 2, useCORS: true, width: anchoCompleto, windowWidth: anchoCompleto });
+      const socialCanvas = document.createElement("canvas");
+      socialCanvas.width = 1080; socialCanvas.height = 1080;
+      const context = socialCanvas.getContext("2d");
+      if (!context) throw new Error("No se pudo preparar el póster");
+      context.fillStyle = "#07122d"; context.fillRect(0, 0, 1080, 1080);
+      const scale = Math.min(1040 / canvas.width, 1040 / canvas.height);
+      const width = canvas.width * scale; const height = canvas.height * scale;
+      context.drawImage(canvas, (1080 - width) / 2, (1080 - height) / 2, width, height);
+      const link = document.createElement("a"); link.href = socialCanvas.toDataURL("image/png"); link.download = `Cuadro-Eliminatorio-${configuracion.tournament_year}.png`; link.click();
+    } catch (error) {
+      alert("No se pudo generar el póster eliminatorio.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const imprimirPlanilla = async (partido: any, esEstandar = false) => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return alert("Permite las ventanas emergentes para generar la planilla.");
@@ -600,6 +648,19 @@ export default function PartidosPage() {
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
   const fasesCuadro = ["16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Final"];
   const fasesVisibles = fasesCuadro.filter(fase => partidos.some(partido => partido.stage === fase || partido.stage === `${fase} (Vuelta)`));
+  const faseBase = (stage: string) => String(stage || "").replace(" (Vuelta)", "");
+  const esMismaLlave = (a: any, b: any) =>
+    faseBase(a.stage) === faseBase(b.stage) &&
+    [a.home_team_id, a.away_team_id].sort().join(":") === [b.home_team_id, b.away_team_id].sort().join(":");
+  const resultadoLlave = (partido: any) => {
+    const llave = partidos.filter(p => p.status === "finished" && esMismaLlave(p, partido));
+    const home = llave.reduce((sum, p) => sum + Number(p.home_team_id === partido.home_team_id ? p.home_goals : p.away_goals), 0);
+    const away = llave.reduce((sum, p) => sum + Number(p.home_team_id === partido.away_team_id ? p.home_goals : p.away_goals), 0);
+    const penalties = llave.find(p => p.resolved_by_penalties);
+    const homePenalties = penalties ? Number(penalties.home_team_id === partido.home_team_id ? penalties.home_penalties : penalties.away_penalties) : null;
+    const awayPenalties = penalties ? Number(penalties.home_team_id === partido.away_team_id ? penalties.home_penalties : penalties.away_penalties) : null;
+    return { home, away, homePenalties, awayPenalties };
+  };
 
   // ============================================================================
   // VISTA 2: PANEL DE CONTROL EN VIVO
@@ -802,11 +863,12 @@ export default function PartidosPage() {
             </form>
 
             {fasesVisibles.length > 0 && (
-              <div className="relative z-10 rounded-2xl border border-blue-400/30 bg-gradient-to-b from-[#081a46] via-[#07122d] to-[#050914] p-5 overflow-x-auto">
+              <div ref={bracketPosterRef} className="relative z-10 rounded-2xl border border-blue-400/30 bg-gradient-to-b from-[#081a46] via-[#07122d] to-[#050914] p-5 overflow-x-auto" style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(rgba(4,12,38,.82), rgba(4,12,38,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                 <div className="text-center mb-7">
                   <p className="text-blue-300 text-[10px] uppercase tracking-[0.35em] font-black">Cuadro eliminatorio oficial</p>
-                  <h3 className="text-white text-2xl font-black uppercase mt-2">{configuracion.tournament_year}</h3>
+                  <h3 className="text-white text-2xl font-black uppercase mt-2">{torneoNombre} · {configuracion.tournament_year}</h3>
                   <p className="text-[#D4A017] text-xs font-bold uppercase mt-1">Final · {configuracion.final_venue || "Cancha por confirmar"}</p>
+                  <button data-html2canvas-ignore onClick={descargarCuadroEliminatorio} disabled={loading} className="mt-4 px-5 py-2 rounded-lg bg-blue-500 text-white font-black uppercase text-[10px] hover:bg-blue-400">Descargar póster del cuadro</button>
                 </div>
                 <div className="flex min-w-max items-stretch justify-center gap-8 pb-3">
                   {fasesVisibles.map((fase, faseIndex) => {
@@ -820,11 +882,15 @@ export default function PartidosPage() {
                               {faseIndex < fasesVisibles.length - 1 && <span className="absolute top-1/2 -right-9 w-9 border-t border-blue-300/40" />}
                               {[["home", partido.home, partido.home_goals], ["away", partido.away, partido.away_goals]].map(([lado, equipo, goles]: any) => (
                                 <div key={lado} className="flex items-center gap-2 py-1">
-                                  {equipo?.shield_url ? <Image src={equipo.shield_url} alt="" width={22} height={22} unoptimized className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 rounded-full bg-blue-300/20" />}
+                                  {equipo?.shield_url ? <Image src={equipo.shield_url} alt="" width={22} height={22} unoptimized crossOrigin="anonymous" className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 rounded-full bg-blue-300/20" />}
                                   <span className="flex-1 text-white text-[10px] font-black uppercase truncate">{equipo?.name || "Por definir"}</span>
                                   <span className="text-[#D4A017] font-black text-xs">{partido.status === "finished" ? goles : "-"}</span>
                                 </div>
                               ))}
+                              {partido.status === "finished" && (() => {
+                                const resultado = resultadoLlave(partido);
+                                return <div className="text-[8px] text-[#D4A017] font-black uppercase mt-1">Global {resultado.home}-{resultado.away}{resultado.homePenalties !== null ? ` · Penales ${resultado.homePenalties}-${resultado.awayPenalties}` : ""}</div>;
+                              })()}
                               <div className="border-t border-white/10 mt-1 pt-1 text-[8px] text-blue-200 uppercase">{partido.court || "Cancha por confirmar"} · {new Date(partido.match_date).toLocaleDateString("es-EC")}</div>
                             </button>
                           ))}
@@ -907,6 +973,11 @@ export default function PartidosPage() {
                   <button onClick={() => imprimirPlanilla(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600">
                     Planilla abierta
                   </button>
+                  {p.status === "finished" && p.stage !== "Fase de Grupos" && (
+                    <button onClick={() => registrarPenales(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-blue-950 text-blue-300 hover:bg-blue-800 border border-blue-700">
+                      Penales
+                    </button>
+                  )}
 
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}

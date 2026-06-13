@@ -7,6 +7,8 @@ import html2canvas from "html2canvas";
 export default function SorteoPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [numGrupos, setNumGrupos] = useState<number>(4);
+  const [nombreTorneo, setNombreTorneo] = useState("Torneo Oficial");
+  const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [loading, setLoading] = useState(false);
   
   // Referencia para capturar la imagen
@@ -19,8 +21,13 @@ export default function SorteoPage() {
   }, []);
 
   const cargarEquipos = async () => {
-    const { data: tourney } = await supabase.from('tournaments').select('id').limit(1).single();
+    const activeId = typeof window !== "undefined" ? localStorage.getItem("activeTournamentId") : null;
+    if (!activeId) return;
+    const { data: tourney } = await supabase.from('tournaments').select('id, name, group_count, match_poster_background_url').eq("id", activeId).single();
     if (!tourney) return;
+    setNombreTorneo(tourney.name || "Torneo Oficial");
+    setNumGrupos(Number(tourney.group_count || 4));
+    setFondoPosterUrl(tourney.match_poster_background_url || "");
 
     const { data } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id).order("name");
     if (data) setEquipos(data);
@@ -79,13 +86,24 @@ export default function SorteoPage() {
     if (!capturaRef.current) return;
     setLoading(true);
     try {
+      const anchoCompleto = capturaRef.current.scrollWidth;
       const canvas = await html2canvas(capturaRef.current, {
         backgroundColor: "#0a0a0a", // Fondo oscuro para mantener la estética
         scale: 2, // Alta calidad para Instagram/Facebook
-        useCORS: true // Permite cargar los escudos desde Supabase en la imagen
+        useCORS: true, // Permite cargar los escudos desde Supabase en la imagen
+        width: anchoCompleto,
+        windowWidth: anchoCompleto
       });
       
-      const image = canvas.toDataURL("image/png");
+      const socialCanvas = document.createElement("canvas");
+      socialCanvas.width = 1080; socialCanvas.height = 1080;
+      const context = socialCanvas.getContext("2d");
+      if (!context) throw new Error("No se pudo preparar el póster");
+      context.fillStyle = "#07122d"; context.fillRect(0, 0, 1080, 1080);
+      const scale = Math.min(1080 / canvas.width, 1080 / canvas.height);
+      const width = canvas.width * scale; const height = canvas.height * scale;
+      context.drawImage(canvas, (1080 - width) / 2, (1080 - height) / 2, width, height);
+      const image = socialCanvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = image;
       link.download = `Sorteo-Oficial-${Date.now()}.png`;
@@ -158,14 +176,14 @@ export default function SorteoPage() {
       {/* ZONA DE CAPTURA DE IMAGEN 
         Todo lo que esté dentro de este div (ref={capturaRef}) saldrá en la foto final.
       */}
-      <div ref={capturaRef} className="p-4 bg-[#0a0a0a] rounded-xl">
+      <div ref={capturaRef} className="p-8 bg-[#07122d] rounded-xl relative overflow-hidden" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(4,12,38,.82), rgba(4,12,38,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
         {/* Título solo visible en la imagen o al descargar */}
         <div className="text-center mb-6 border-b border-[#2E2E2E] pb-4">
-          <h1 className="text-2xl font-black text-white tracking-widest uppercase">Sorteo Oficial</h1>
-          <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Fase de Grupos</p>
+          <h1 className="text-3xl font-black text-white tracking-widest uppercase">{nombreTorneo}</h1>
+          <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Conformación Oficial de Grupos</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className={`grid gap-4 ${numGrupos <= 4 ? "grid-cols-2" : numGrupos <= 8 ? "grid-cols-4" : "grid-cols-5"}`}>
           {equiposPorGrupo.map(grupo => (
             <div key={grupo.letra} className="bg-[#141414] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-xl">
               <div className="bg-[#1C1C1C] border-b border-[#2E2E2E] py-3 text-center">
