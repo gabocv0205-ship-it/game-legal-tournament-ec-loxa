@@ -125,6 +125,7 @@ export default function GestorTorneos() {
   const administrarTorneo = (torneoId: string, torneoNombre: string, configurado = true) => {
     localStorage.setItem('activeTournamentId', torneoId);
     localStorage.setItem('activeTournamentName', torneoNombre);
+    window.dispatchEvent(new Event('tournamentChanged'));
     router.push(configurado ? '/dashboard' : '/dashboard/configuracion');
   };
 

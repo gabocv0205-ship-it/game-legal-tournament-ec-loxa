@@ -1,13 +1,15 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { getSuspendedPlayerIdsForMatch, normalizeTournamentConfig } from "@/lib/tournamentEngine";
 
 export function useTournamentData() {
   const [data, setData] = useState({
     players: [] as any[],
     teams: [] as any[],
     matches: [] as any[],
-    stats: { suspended: 0, debts: 0 },
+    stats: { suspended: 0, debts: 0, nextMatchday: null as number | null },
+    disciplinaryAlerts: { suspended: [] as any[], eligibleAgain: [] as any[] },
     loading: true,
     tournamentId: null as string | null,
     tournamentName: "",
@@ -20,16 +22,22 @@ export function useTournamentData() {
 
       // Never infer another client's tournament. Indicators only belong to the explicitly selected tournament.
       if (!activeId) {
-        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0 }, loading: false, tournamentId: null, tournamentName: "" });
+        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
         return;
       }
 
       const [tournamentRes, playersRes, teamsRes, matchesRes] = await Promise.all([
-        supabase.from("tournaments").select("name, registration_fee, referee_fee, yellow_card_fee, red_card_fee").eq("id", activeId).single(),
+        supabase.from("tournaments").select("*").eq("id", activeId).single(),
         supabase.from("players").select("*, teams(name, shield_url)").eq("tournament_id", activeId),
         supabase.from("teams").select("*, payments(amount)").eq("tournament_id", activeId),
         supabase.from("matches").select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)").eq("tournament_id", activeId),
       ]);
+      if (tournamentRes.error || !tournamentRes.data) {
+        localStorage.removeItem("activeTournamentId");
+        localStorage.removeItem("activeTournamentName");
+        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
+        return;
+      }
 
       const players = playersRes.data || [];
       const teams = teamsRes.data || [];
@@ -37,10 +45,35 @@ export function useTournamentData() {
       const finished = matches.filter((match: any) => match.status === "finished");
       const matchIds = finished.map((match: any) => match.id);
       const eventsRes = matchIds.length
-        ? await supabase.from("match_events").select("team_id, event_type").in("match_id", matchIds)
+        ? await supabase.from("match_events").select("match_id, player_id, team_id, event_type").in("match_id", matchIds)
         : { data: [] as any[] };
       const events = eventsRes.data || [];
       const tournament = tournamentRes.data;
+      const rules = normalizeTournamentConfig(tournament || {});
+      const upcoming = matches
+        .filter((match: any) => match.status !== "finished" && match.match_date)
+        .sort((a: any, b: any) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
+      const nextMatchday = upcoming.length ? Number(upcoming[0].matchday || 0) : null;
+      const nextMatches = nextMatchday === null ? [] : upcoming.filter((match: any) => Number(match.matchday || 0) === nextMatchday);
+      const suspendedIds = new Set<string>();
+      const eligibleAgainIds = new Set<string>();
+      nextMatches.forEach((nextMatch: any) => {
+        const currentSuspended = getSuspendedPlayerIdsForMatch(events, matches, rules, nextMatch);
+        currentSuspended.forEach(id => suspendedIds.add(id));
+        [nextMatch.home_team_id, nextMatch.away_team_id].forEach((teamId: string) => {
+          const previous = matches
+            .filter((match: any) => match.status === "finished" && (match.home_team_id === teamId || match.away_team_id === teamId) && new Date(match.match_date).getTime() < new Date(nextMatch.match_date).getTime())
+            .sort((a: any, b: any) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())[0];
+          if (!previous) return;
+          const previouslySuspended = getSuspendedPlayerIdsForMatch(events, matches, rules, previous);
+          previouslySuspended.forEach(id => {
+            if (!currentSuspended.has(id)) eligibleAgainIds.add(id);
+          });
+        });
+      });
+      const playerAlert = (player: any) => ({ id: player.id, name: player.full_name, team: player.teams?.name || "Equipo" });
+      const suspendedAlerts = players.filter((player: any) => suspendedIds.has(player.id)).map(playerAlert);
+      const eligibleAgainAlerts = players.filter((player: any) => eligibleAgainIds.has(player.id)).map(playerAlert);
 
       const registration = Number(tournament?.registration_fee || 0);
       const referee = Number(tournament?.referee_fee || 0);
@@ -58,14 +91,15 @@ export function useTournamentData() {
         players,
         teams,
         matches,
-        stats: { suspended: players.filter((player: any) => player.suspended).length, debts },
+        stats: { suspended: suspendedAlerts.length, debts, nextMatchday },
+        disciplinaryAlerts: { suspended: suspendedAlerts, eligibleAgain: eligibleAgainAlerts },
         loading: false,
         tournamentId: activeId,
         tournamentName: tournament?.name || activeName || "Torneo Oficial",
       });
     } catch (error) {
       console.error("Error cargando datos del torneo:", error);
-      setData(prev => ({ ...prev, loading: false }));
+      setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
     }
   }, []);
 

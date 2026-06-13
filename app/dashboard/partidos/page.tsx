@@ -536,51 +536,48 @@ export default function PartidosPage() {
     }, 250);
   };
 
-  const imprimirPlanilla = async (partido: any) => {
+  const imprimirPlanilla = async (partido: any, esEstandar = false) => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return alert("Permite las ventanas emergentes para generar la planilla.");
-    const { habilitados, suspendidos } = await cargarConvocatoria(partido);
+    const { suspendidos } = esEstandar ? { suspendidos: [] as any[] } : await cargarConvocatoria(partido);
     const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
     const fechaPartido = new Date(partido.match_date);
-    const crearCasillas = (cantidad: number) => Array.from({ length: cantidad }, (_, index) => `<tr><td>${index + 1}</td><td></td><td></td><td></td><td></td></tr>`).join("");
-    const crearPaginaEquipo = (teamId: string, teamName: string, rivalName: string) => {
-      const habilitadosEquipo = habilitados.filter(player => player.team_id === teamId);
+    const crearCasillas = () => Array.from({ length: configuracion.football_modality + configuracion.substitutes_count }, (_, index) => `<tr><td>${index + 1}</td><td>${index < configuracion.football_modality ? "T" : "S"}</td><td></td><td></td><td></td></tr>`).join("");
+    const crearEquipo = (teamId: string, teamName: string) => {
       const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
-      const listaHabilitados = habilitadosEquipo.length
-        ? habilitadosEquipo.map(player => escapeHtml(player.full_name)).join(" · ")
-        : "No existen jugadores habilitados registrados.";
       const suspendidosTexto = suspendidosEquipo.length
         ? suspendidosEquipo.map(player => escapeHtml(player.full_name)).join(", ")
-        : "Ninguno";
-      return `<section class="sheet">
-        <div class="brand"><div><strong>GAME-LEGAL PRO</strong><span>Planilla oficial de convocatoria</span></div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
-        <h1>${escapeHtml(teamName)}</h1>
-        <div class="subtitle">Fútbol ${configuracion.football_modality} · Selección a cargo del director técnico</div>
-        <div class="meta"><span><b>Rival:</b> ${escapeHtml(rivalName)}</span><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha:</b> ${fechaPartido.toLocaleString("es-EC")}</span></div>
-        <div class="eligible"><b>Jugadores habilitados para seleccionar:</b><p>${listaHabilitados}</p></div>
-        <h2>Titulares · seleccionar ${configuracion.football_modality}</h2>
-        <table><tr><th>N°</th><th>Jugador elegido por el DT</th><th>Dorsal</th><th>Firma</th><th>Capitán</th></tr>${crearCasillas(configuracion.football_modality)}</table>
-        <h2>Suplentes · seleccionar hasta ${configuracion.substitutes_count}</h2>
-        <table><tr><th>N°</th><th>Jugador elegido por el DT</th><th>Dorsal</th><th>Firma</th><th>Ingreso</th></tr>${crearCasillas(configuracion.substitutes_count)}</table>
-        <div class="suspended"><b>No convocados automáticamente por suspensión para esta jornada:</b> ${suspendidosTexto}</div>
-        <div class="observations"><b>Observaciones del equipo:</b></div>
-        <div class="signatures"><div>Director técnico</div><div>Capitán</div><div>Árbitro / Vocal</div></div>
-      </section>`;
+        : esEstandar ? "________________________________________________" : "Ninguno";
+      return `<div class="team"><h2>${escapeHtml(teamName)}</h2><div class="legend">T = Titular (${configuracion.football_modality}) · S = Suplente (${configuracion.substitutes_count})</div>
+        <table><tr><th>N°</th><th>Rol</th><th>Jugador inscrito para esta fecha</th><th>Dorsal</th><th>Firma</th></tr>${crearCasillas()}</table>
+        <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
+        <div class="observations"><b>Observaciones del equipo:</b></div></div>`;
     };
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
-      @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}body{font-family:Arial;color:#182033;margin:0;background:#fff}.sheet{min-height:277mm;page-break-after:always;padding:7mm;border:2px solid #d4a017}.sheet:last-child{page-break-after:auto}
+      @page{size:A4 portrait;margin:8mm}*{box-sizing:border-box}body{font-family:Arial;color:#182033;margin:0;background:#fff}.sheet{min-height:281mm;padding:6mm;border:2px solid #d4a017}
       .brand{display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid #d4a017;padding-bottom:8px}.brand strong{display:block;font-size:18px;letter-spacing:2px}.brand span{font-size:9px;text-transform:uppercase;color:#657085}.year{font-size:22px;font-weight:900;color:#d4a017}
-      h1{text-align:center;font-size:22px;text-transform:uppercase;margin:12px 0 2px}.subtitle{text-align:center;font-size:10px;color:#657085;text-transform:uppercase;letter-spacing:1px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:10px 0;font-size:9px;background:#f4f5f7;padding:7px}
-      .eligible,.suspended{border-left:4px solid #d4a017;background:#fff8df;padding:7px;font-size:8px;margin:7px 0}.eligible p{margin:4px 0 0;line-height:1.4}.suspended{border-color:#b42318;background:#fff0ee}
-      h2{font-size:10px;text-transform:uppercase;background:#182033;color:#fff;padding:5px;margin:8px 0 0}table{border-collapse:collapse;width:100%;font-size:8px}th,td{border:1px solid #9da4b1;padding:3px;height:16px}th{background:#edf0f4;text-transform:uppercase}.observations{height:42px;border:1px solid #9da4b1;padding:6px;font-size:9px;margin-top:8px}.signatures{display:flex;justify-content:space-between;margin-top:24px}.signatures div{border-top:1px solid #182033;width:28%;text-align:center;padding-top:4px;font-size:8px;text-transform:uppercase}
-    </style></head><body>
-      ${crearPaginaEquipo(partido.home_team_id, partido.home?.name, partido.away?.name)}
-      ${crearPaginaEquipo(partido.away_team_id, partido.away?.name, partido.home?.name)}
-    </body></html>`;
+      h1{text-align:center;font-size:16px;text-transform:uppercase;margin:8px 0 2px}.subtitle{text-align:center;font-size:9px;color:#657085;text-transform:uppercase}.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:8px 0;font-size:8px;background:#f4f5f7;padding:6px}.teams{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+      h2{font-size:10px;text-align:center;text-transform:uppercase;background:#182033;color:#fff;padding:5px;margin:0}.legend{text-align:center;font-size:7px;padding:3px;background:#edf0f4}table{border-collapse:collapse;width:100%;font-size:7px}th,td{border:1px solid #9da4b1;padding:2px;height:14px}th{background:#edf0f4;text-transform:uppercase}.suspended{border-left:3px solid #b42318;background:#fff0ee;padding:5px;font-size:7px;margin-top:5px;min-height:28px}.observations{height:35px;border:1px solid #9da4b1;padding:5px;font-size:7px;margin-top:5px}.general{height:45px;border:1px solid #9da4b1;padding:6px;font-size:8px;margin-top:7px}.signatures{display:flex;justify-content:space-between;margin-top:22px}.signatures div{border-top:1px solid #182033;width:22%;text-align:center;padding-top:3px;font-size:7px;text-transform:uppercase}
+    </style></head><body><section class="sheet">
+      <div class="brand"><div><strong>GAME-LEGAL PRO</strong><span>Planilla abierta por partido</span></div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
+      <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Fútbol ${configuracion.football_modality} · Inscripción libre para esta fecha</div>
+      <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
+      <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
+      <div class="general"><b>Observaciones generales del partido:</b></div>
+      <div class="signatures"><div>DT local</div><div>DT visitante</div><div>Árbitro</div><div>Vocal</div></div>
+    </section></body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 250);
+  };
+
+  const imprimirPlanillaEstandar = () => {
+    const partidoVacio = {
+      home_team_id: "", away_team_id: "", home: { name: "Equipo local: __________________" }, away: { name: "Equipo visitante: __________________" },
+      matchday: "____", stage: "________________", court: "________________", match_date: new Date().toISOString(),
+    };
+    imprimirPlanilla(partidoVacio, true);
   };
 
   const compartirEnlaceInvitacion = () => {
@@ -865,6 +862,9 @@ export default function PartidosPage() {
             <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               📸 Póster
             </button>
+            <button onClick={imprimirPlanillaEstandar} className="bg-gray-800 border border-gray-600 text-white hover:bg-gray-700 font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all">
+              Planilla estándar
+            </button>
             {fondoPosterUrl && (
               <label className="flex items-center gap-2 text-[10px] text-gray-300 font-bold uppercase">
                 <input type="checkbox" checked={usarFondoPersonalizado} onChange={e => setUsarFondoPersonalizado(e.target.checked)} className="accent-[#D4A017]" />
@@ -905,7 +905,7 @@ export default function PartidosPage() {
                     </button>
                   )}
                   <button onClick={() => imprimirPlanilla(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600">
-                    Planilla automática
+                    Planilla abierta
                   </button>
 
                   <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>

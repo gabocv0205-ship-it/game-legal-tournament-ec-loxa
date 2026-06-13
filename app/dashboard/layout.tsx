@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { stats, tournamentId, refetch } = useTournamentData();
+  const { stats, disciplinaryAlerts, tournamentId, refetch } = useTournamentData();
   
   // ==========================================
   // CEREBRO SAAS (Control de Perfil y Deudas)
@@ -134,8 +134,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         <div className="px-4 pt-4 space-y-2">
           {tournamentId && !pathname.startsWith('/superadmin') && stats.suspended > 0 && (
-            <div className="flex items-center gap-2 bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-3 py-2 rounded-lg text-xs font-bold animate-pulse">
-              <Icon path={Icons.alert} size={14} /> <span>{stats.suspended} jugador(es) suspendido(s)</span>
+            <div className="bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-3 py-2 rounded-lg text-xs font-bold">
+              <div className="flex items-center gap-2"><Icon path={Icons.alert} size={14} /> <span>Fecha {stats.nextMatchday}: {stats.suspended} suspendido(s)</span></div>
+              <p className="text-[9px] mt-1 text-yellow-100">{disciplinaryAlerts.suspended.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
+            </div>
+          )}
+          {tournamentId && !pathname.startsWith('/superadmin') && disciplinaryAlerts.eligibleAgain.length > 0 && (
+            <div className="bg-green-900/30 border border-green-500/50 text-green-400 px-3 py-2 rounded-lg text-xs font-bold">
+              <div>Fecha {stats.nextMatchday}: ya puede(n) jugar</div>
+              <p className="text-[9px] mt-1 text-green-200">{disciplinaryAlerts.eligibleAgain.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
             </div>
           )}
           {tournamentId && !pathname.startsWith('/superadmin') && stats.debts > 0 && (
