@@ -3,11 +3,14 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function SorteoPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [numGrupos, setNumGrupos] = useState<number>(4);
   const [nombreTorneo, setNombreTorneo] = useState("Torneo Oficial");
+  const [torneoSlug, setTorneoSlug] = useState("");
+  const [appUrl, setAppUrl] = useState("");
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [loading, setLoading] = useState(false);
   
@@ -18,14 +21,16 @@ export default function SorteoPage() {
 
   useEffect(() => {
     cargarEquipos();
+    if (typeof window !== "undefined") setAppUrl(window.location.origin);
   }, []);
 
   const cargarEquipos = async () => {
     const activeId = typeof window !== "undefined" ? localStorage.getItem("activeTournamentId") : null;
     if (!activeId) return;
-    const { data: tourney } = await supabase.from('tournaments').select('id, name, group_count, match_poster_background_url').eq("id", activeId).single();
+    const { data: tourney } = await supabase.from('tournaments').select('id, name, slug, group_count, match_poster_background_url').eq("id", activeId).single();
     if (!tourney) return;
     setNombreTorneo(tourney.name || "Torneo Oficial");
+    setTorneoSlug(tourney.slug || "");
     setNumGrupos(Number(tourney.group_count || 4));
     setFondoPosterUrl(tourney.match_poster_background_url || "");
 
@@ -176,21 +181,25 @@ export default function SorteoPage() {
       {/* ZONA DE CAPTURA DE IMAGEN 
         Todo lo que esté dentro de este div (ref={capturaRef}) saldrá en la foto final.
       */}
-      <div ref={capturaRef} className="p-8 bg-[#06132f] rounded-xl relative overflow-hidden border border-[#D4A017]/40" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(135deg, rgba(3,12,35,.88), rgba(4,30,72,.82), rgba(3,12,35,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 42%, rgba(18,116,211,.38), transparent 30%), linear-gradient(135deg, #020817, #09275a 52%, #020817)" }}>
+      <div ref={capturaRef} className="p-8 bg-[#0a0a0a] rounded-xl relative overflow-hidden border-8 border-[#D4A017]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(10,10,10,.78), rgba(10,10,10,.9)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 25%, rgba(212,160,23,.18), transparent 34%), linear-gradient(145deg, #080808, #17130a 50%, #080808)" }}>
         <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full border-[18px] border-[#D4A017]/10" />
-        <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full border-[22px] border-blue-400/10" />
+        <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full border-[22px] border-[#D4A017]/10" />
         <div className="absolute inset-4 rounded-2xl border border-[#D4A017]/20 pointer-events-none" />
         {/* Título solo visible en la imagen o al descargar */}
-        <div className="relative text-center mb-7 pb-5">
-          <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#163e73] to-[#07122d] text-[#E7C36B] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(59,130,246,.45)]">G·L</div>
+        <div className="relative text-center mb-7 pb-5 border-b border-[#2E2E2E]">
+          <div className="absolute right-0 top-0 bg-[#1C1C1C] p-2 rounded-xl flex flex-col items-center shadow-2xl border border-[#D4A017]">
+            {appUrl && torneoSlug && <QRCodeSVG value={`${appUrl}/torneo/${torneoSlug}#posiciones`} size={90} level="H" fgColor="#D4A017" bgColor="#1C1C1C" />}
+            <span className="text-[9px] text-white font-black uppercase mt-1">Tabla en vivo</span>
+          </div>
+          <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#2b2412] to-[#0a0a0a] text-[#E7C36B] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(212,160,23,.35)]">G·L</div>
           <h1 className="text-3xl font-black text-white tracking-widest uppercase">{nombreTorneo}</h1>
           <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Conformación Oficial de Grupos</p>
         </div>
 
         <div className={`relative grid gap-4 ${numGrupos <= 4 ? "grid-cols-2" : numGrupos <= 8 ? "grid-cols-4" : "grid-cols-5"}`}>
           {equiposPorGrupo.map(grupo => (
-            <div key={grupo.letra} className="bg-[#06142d]/95 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(0,0,0,.38)]">
-              <div className="bg-gradient-to-r from-[#07152f] via-[#173d70] to-[#07152f] border-b border-[#D4A017]/50 py-3 text-center">
+            <div key={grupo.letra} className="bg-[#141414]/90 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(0,0,0,.38)] backdrop-blur-sm">
+              <div className="bg-gradient-to-r from-[#141414] via-[#2b2412] to-[#141414] border-b border-[#D4A017]/50 py-3 text-center">
                 <h3 className="text-[#E7C36B] font-black text-base tracking-[0.18em]">GRUPO {grupo.letra}</h3>
               </div>
               <div className="p-3 space-y-1">
@@ -221,7 +230,7 @@ export default function SorteoPage() {
         {/* Marca de agua elegante al final de la imagen */}
         <div className="relative text-center mt-8 pt-4 border-t border-[#D4A017]/30">
           <p className="text-xs font-black text-[#E7C36B] uppercase tracking-[0.35em]">El camino al campeonato comienza aquí</p>
-          <p className="text-[9px] font-bold text-blue-200/60 uppercase tracking-widest mt-2">Generado por GAME LEGAL</p>
+          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-2">Generado por GAME LEGAL</p>
         </div>
       </div>
 
