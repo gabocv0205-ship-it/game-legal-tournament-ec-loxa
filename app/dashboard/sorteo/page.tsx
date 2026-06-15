@@ -119,6 +119,13 @@ export default function SorteoPage() {
       poster.style.minWidth = "1080px";
       poster.style.height = "1080px";
       poster.style.minHeight = "1080px";
+      await Promise.all(Array.from(poster.querySelectorAll("img")).map(image => {
+        if (image.complete) return image.decode?.().catch(() => undefined);
+        return new Promise<void>(resolve => {
+          image.addEventListener("load", () => resolve(), { once: true });
+          image.addEventListener("error", () => resolve(), { once: true });
+        });
+      }));
       const canvas = await html2canvas(poster, {
         backgroundColor: "#0a0a0a",
         scale: 1,
@@ -156,6 +163,11 @@ export default function SorteoPage() {
     equipos: equipos.filter(e => e.group_name === letra)
   }));
   const equiposLibres = equipos.filter(e => !e.group_name);
+  const maxEquiposPorGrupo = Math.max(1, ...equiposPorGrupo.map(grupo => grupo.equipos.length));
+  const columnasPoster = numGrupos <= 4 ? 2 : numGrupos <= 6 ? 3 : numGrupos <= 8 ? 4 : 5;
+  const posterDenso = maxEquiposPorGrupo > 6 || numGrupos > 8;
+  const posterCompacto = maxEquiposPorGrupo > 4 || numGrupos > 6;
+  const tamanoEscudo = posterDenso ? 20 : posterCompacto ? 24 : 30;
 
   return (
     <div className="space-y-6">
@@ -228,29 +240,29 @@ export default function SorteoPage() {
           <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Conformación Oficial de Grupos</p>
         </div>
 
-        <div className={`relative grid gap-4 flex-1 content-center ${numGrupos <= 4 ? "grid-cols-2" : numGrupos <= 8 ? "grid-cols-4" : "grid-cols-5"}`}>
+        <div className={`relative grid flex-1 content-center ${posterDenso ? "gap-2" : posterCompacto ? "gap-3" : "gap-4"}`} style={{ gridTemplateColumns: `repeat(${columnasPoster}, minmax(0, 1fr))` }}>
           {equiposPorGrupo.map(grupo => (
-            <div key={grupo.letra} className="bg-[#141414]/90 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(0,0,0,.38)] backdrop-blur-sm">
-              <div className="bg-gradient-to-r from-[#141414] via-[#2b2412] to-[#141414] border-b border-[#D4A017]/50 py-3 text-center">
-                <h3 className="text-[#E7C36B] font-black text-base tracking-[0.18em]">GRUPO {grupo.letra}</h3>
+            <div key={grupo.letra} className="min-w-0 bg-[#141414]/90 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(0,0,0,.38)] backdrop-blur-sm">
+              <div className={`bg-gradient-to-r from-[#141414] via-[#2b2412] to-[#141414] border-b border-[#D4A017]/50 text-center ${posterDenso ? "py-1.5" : posterCompacto ? "py-2" : "py-3"}`}>
+                <h3 className={`text-[#E7C36B] font-black tracking-[0.18em] ${posterDenso ? "text-xs" : "text-base"}`}>GRUPO {grupo.letra}</h3>
               </div>
-              <div className="p-3 space-y-1">
+              <div className={posterDenso ? "p-1.5" : posterCompacto ? "p-2" : "p-3"}>
                 {grupo.equipos.length === 0 ? (
                   <p className="text-gray-600 text-xs text-center italic py-4">Grupo Vacío</p>
                 ) : (
                   grupo.equipos.map(equipo => (
-                    <div key={equipo.id} className="flex items-center justify-between border-b border-white/10 p-2 last:border-0">
-                      <div className="flex items-center gap-3">
+                    <div key={equipo.id} className={`relative flex items-center min-w-0 border-b border-white/10 last:border-0 ${posterDenso ? "gap-1.5 px-1 py-1" : posterCompacto ? "gap-2 px-1.5 py-1.5" : "gap-3 p-2"}`}>
+                      <div className="shrink-0 flex items-center justify-center" style={{ width: tamanoEscudo, height: tamanoEscudo }}>
                         {equipo.shield_url ? (
                           // crossOrigin="anonymous" es vital para que html2canvas pueda capturar imágenes de Supabase
-                          <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={24} height={24} unoptimized crossOrigin="anonymous" className="w-6 h-6 object-contain rounded-full bg-white/5" />
+                          <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={tamanoEscudo} height={tamanoEscudo} unoptimized crossOrigin="anonymous" className="w-full h-full object-contain" />
                         ) : (
-                          <div className="w-6 h-6 bg-[#2E2E2E] rounded-full flex items-center justify-center text-[10px]">🛡️</div>
+                          <div className="w-full h-full bg-[#2E2E2E] rounded-full flex items-center justify-center text-[9px]">🛡️</div>
                         )}
-                        <span className="text-white font-black text-xs uppercase truncate w-24">{equipo.name}</span>
                       </div>
+                      <span className={`min-w-0 flex-1 text-white font-black uppercase leading-tight break-words ${posterDenso ? "text-[8px]" : posterCompacto ? "text-[9px]" : "text-xs"}`}>{equipo.name}</span>
                       {/* En la foto no queremos que salga el botón de borrar, pero se mantiene interactivo aquí */}
-                      <button data-html2canvas-ignore onClick={() => cambiarGrupoManual(equipo.id, "Libre")} className="text-red-500 hover:text-red-400 text-xs">✖</button>
+                      <button data-html2canvas-ignore onClick={() => cambiarGrupoManual(equipo.id, "Libre")} className="absolute right-1 top-1 text-red-500 hover:text-red-400 text-[8px]">✖</button>
                     </div>
                   ))
                 )}
