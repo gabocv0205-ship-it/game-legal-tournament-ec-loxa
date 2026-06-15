@@ -107,24 +107,34 @@ export default function SorteoPage() {
   const descargarImagen = async () => {
     if (!capturaRef.current) return;
     setLoading(true);
+    const poster = capturaRef.current;
+    const previousStyle = {
+      width: poster.style.width,
+      minWidth: poster.style.minWidth,
+      height: poster.style.height,
+      minHeight: poster.style.minHeight,
+    };
     try {
-      const anchoCompleto = capturaRef.current.scrollWidth;
-      const canvas = await html2canvas(capturaRef.current, {
-        backgroundColor: "#0a0a0a", // Fondo oscuro para mantener la estética
-        scale: 2, // Alta calidad para Instagram/Facebook
-        useCORS: true, // Permite cargar los escudos desde Supabase en la imagen
-        width: anchoCompleto,
-        windowWidth: anchoCompleto
+      poster.style.width = "1080px";
+      poster.style.minWidth = "1080px";
+      poster.style.height = "1080px";
+      poster.style.minHeight = "1080px";
+      const canvas = await html2canvas(poster, {
+        backgroundColor: "#0a0a0a",
+        scale: 1,
+        useCORS: true,
+        width: 1080,
+        height: 1080,
+        windowWidth: 1080,
+        windowHeight: 1080,
       });
       
       const socialCanvas = document.createElement("canvas");
       socialCanvas.width = 1080; socialCanvas.height = 1080;
       const context = socialCanvas.getContext("2d");
       if (!context) throw new Error("No se pudo preparar el póster");
-      context.fillStyle = "#07122d"; context.fillRect(0, 0, 1080, 1080);
-      const scale = Math.min(1080 / canvas.width, 1080 / canvas.height);
-      const width = canvas.width * scale; const height = canvas.height * scale;
-      context.drawImage(canvas, (1080 - width) / 2, (1080 - height) / 2, width, height);
+      context.fillStyle = "#0a0a0a"; context.fillRect(0, 0, 1080, 1080);
+      context.drawImage(canvas, 0, 0, 1080, 1080);
       const image = socialCanvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = image;
@@ -133,6 +143,10 @@ export default function SorteoPage() {
     } catch (error: any) {
       alert(`Error al generar la imagen: ${error.message || "intenta nuevamente"}`);
     } finally {
+      poster.style.width = previousStyle.width;
+      poster.style.minWidth = previousStyle.minWidth;
+      poster.style.height = previousStyle.height;
+      poster.style.minHeight = previousStyle.minHeight;
       setLoading(false);
     }
   };
@@ -199,7 +213,7 @@ export default function SorteoPage() {
       {/* ZONA DE CAPTURA DE IMAGEN 
         Todo lo que esté dentro de este div (ref={capturaRef}) saldrá en la foto final.
       */}
-      <div ref={capturaRef} className="p-8 bg-[#0a0a0a] rounded-xl relative overflow-hidden border-8 border-[#D4A017]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(10,10,10,.78), rgba(10,10,10,.9)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 25%, rgba(212,160,23,.18), transparent 34%), linear-gradient(145deg, #080808, #17130a 50%, #080808)" }}>
+      <div ref={capturaRef} className="p-8 bg-[#0a0a0a] rounded-xl relative overflow-hidden border-8 border-[#D4A017] flex flex-col" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(10,10,10,.78), rgba(10,10,10,.9)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 25%, rgba(212,160,23,.18), transparent 34%), linear-gradient(145deg, #080808, #17130a 50%, #080808)" }}>
         <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full border-[18px] border-[#D4A017]/10" />
         <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full border-[22px] border-[#D4A017]/10" />
         <div className="absolute inset-4 rounded-2xl border border-[#D4A017]/20 pointer-events-none" />
@@ -214,7 +228,7 @@ export default function SorteoPage() {
           <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Conformación Oficial de Grupos</p>
         </div>
 
-        <div className={`relative grid gap-4 ${numGrupos <= 4 ? "grid-cols-2" : numGrupos <= 8 ? "grid-cols-4" : "grid-cols-5"}`}>
+        <div className={`relative grid gap-4 flex-1 content-center ${numGrupos <= 4 ? "grid-cols-2" : numGrupos <= 8 ? "grid-cols-4" : "grid-cols-5"}`}>
           {equiposPorGrupo.map(grupo => (
             <div key={grupo.letra} className="bg-[#141414]/90 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(0,0,0,.38)] backdrop-blur-sm">
               <div className="bg-gradient-to-r from-[#141414] via-[#2b2412] to-[#141414] border-b border-[#D4A017]/50 py-3 text-center">
