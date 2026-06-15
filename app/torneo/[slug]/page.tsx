@@ -75,21 +75,9 @@ export default function PortalTorneoDinamico() {
           .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
         setTabla(ordenada);
 
-        const matchIds = matches?.map(m => m.id) || [];
-        if (matchIds.length > 0) {
-          const [{ data: events }, { data: publicPlayers }] = await Promise.all([
-            supabase.from("match_events").select("*, teams(name)").in("match_id", matchIds).eq("event_type", "gol"),
-            supabase.from("public_players").select("id, full_name").eq("tournament_id", tourney.id),
-          ]);
-          const playerNames = Object.fromEntries((publicPlayers || []).map(player => [player.id, player.full_name]));
-          const golesObj: Record<string, any> = {};
-          events?.forEach(e => {
-             const pId = e.player_id;
-             if (!golesObj[pId]) golesObj[pId] = { id: pId, name: playerNames[pId] || "Jugador", team: e.teams?.name, goles: 0 };
-             golesObj[pId].goles++;
-          });
-          setGoleadores(Object.values(golesObj).sort((a, b) => b.goles - a.goles).slice(0, 10));
-        }
+        const scorersResponse = await fetch(`/api/public/tournaments/${encodeURIComponent(String(slug))}/scorers`, { cache: "no-store" });
+        const scorersData = await scorersResponse.json();
+        setGoleadores(scorersResponse.ok ? scorersData.scorers || [] : []);
       } catch (err) {
         console.error("Error cargando portal:", err);
         setErrorTorneo(true);
