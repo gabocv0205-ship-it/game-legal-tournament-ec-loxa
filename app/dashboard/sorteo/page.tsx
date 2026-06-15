@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeCanvas } from "qrcode.react";
 
 export default function SorteoPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
@@ -13,6 +13,7 @@ export default function SorteoPage() {
   const [appUrl, setAppUrl] = useState("");
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mensaje, setMensaje] = useState("");
   
   // Referencia para capturar la imagen
   const capturaRef = useRef<HTMLDivElement>(null);
@@ -26,16 +27,27 @@ export default function SorteoPage() {
 
   const cargarEquipos = async () => {
     const activeId = typeof window !== "undefined" ? localStorage.getItem("activeTournamentId") : null;
-    if (!activeId) return;
-    const { data: tourney } = await supabase.from('tournaments').select('id, name, slug, group_count, match_poster_background_url').eq("id", activeId).single();
-    if (!tourney) return;
-    setNombreTorneo(tourney.name || "Torneo Oficial");
-    setTorneoSlug(tourney.slug || "");
-    setNumGrupos(Number(tourney.group_count || 4));
-    setFondoPosterUrl(tourney.match_poster_background_url || "");
-
-    const { data } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id).order("name");
-    if (data) setEquipos(data);
+    if (!activeId) return setMensaje("Selecciona primero un torneo desde Mis Torneos.");
+    setLoading(true);
+    setMensaje("");
+    const [tournamentResult, teamsResult] = await Promise.all([
+      supabase.from("tournaments").select("id, name, slug, group_count, match_poster_background_url").eq("id", activeId).maybeSingle(),
+      supabase.from("teams").select("id, name, shield_url, group_name, tournament_id").eq("tournament_id", activeId).order("name"),
+    ]);
+    if (tournamentResult.data) {
+      setNombreTorneo(tournamentResult.data.name || "Torneo Oficial");
+      setTorneoSlug(tournamentResult.data.slug || "");
+      setNumGrupos(Math.max(2, Number(tournamentResult.data.group_count || 4)));
+      setFondoPosterUrl(tournamentResult.data.match_poster_background_url || "");
+    }
+    if (teamsResult.error) {
+      setEquipos([]);
+      setMensaje(`No se pudieron cargar los equipos: ${teamsResult.error.message}`);
+    } else {
+      setEquipos(teamsResult.data || []);
+      if (!teamsResult.data?.length) setMensaje("Este torneo todavía no tiene equipos registrados.");
+    }
+    setLoading(false);
   };
 
   const sorteoAutomatico = async () => {
@@ -54,10 +66,12 @@ export default function SorteoPage() {
     });
 
     try {
-      await Promise.all(actualizaciones);
-      cargarEquipos();
-    } catch (error) {
-      alert("Error al realizar el sorteo.");
+      const resultados = await Promise.all(actualizaciones);
+      const error = resultados.find(resultado => resultado.error)?.error;
+      if (error) throw error;
+      await cargarEquipos();
+    } catch (error: any) {
+      alert(`Error al realizar el sorteo: ${error.message || "operación bloqueada"}`);
     } finally {
       setLoading(false);
     }
@@ -65,10 +79,11 @@ export default function SorteoPage() {
 
   const cambiarGrupoManual = async (equipoId: string, nuevoGrupo: string) => {
     try {
-      await supabase.from("teams").update({ group_name: nuevoGrupo === "Libre" ? null : nuevoGrupo }).eq("id", equipoId);
-      cargarEquipos();
-    } catch (error) {
-      alert("Error al asignar grupo.");
+      const { error } = await supabase.from("teams").update({ group_name: nuevoGrupo === "Libre" ? null : nuevoGrupo }).eq("id", equipoId);
+      if (error) throw error;
+      await cargarEquipos();
+    } catch (error: any) {
+      alert(`Error al asignar grupo: ${error.message || "operación bloqueada"}`);
     }
   };
 
@@ -77,10 +92,12 @@ export default function SorteoPage() {
     setLoading(true);
     const actualizaciones = equipos.map(equipo => supabase.from("teams").update({ group_name: null }).eq("id", equipo.id));
     try {
-      await Promise.all(actualizaciones);
-      cargarEquipos();
-    } catch (error) {
-      alert("Error al limpiar.");
+      const resultados = await Promise.all(actualizaciones);
+      const error = resultados.find(resultado => resultado.error)?.error;
+      if (error) throw error;
+      await cargarEquipos();
+    } catch (error: any) {
+      alert(`Error al limpiar: ${error.message || "operación bloqueada"}`);
     } finally {
       setLoading(false);
     }
@@ -113,8 +130,8 @@ export default function SorteoPage() {
       link.href = image;
       link.download = `Sorteo-Oficial-${Date.now()}.png`;
       link.click();
-    } catch (error) {
-      alert("Error al generar la imagen. Intenta nuevamente.");
+    } catch (error: any) {
+      alert(`Error al generar la imagen: ${error.message || "intenta nuevamente"}`);
     } finally {
       setLoading(false);
     }
@@ -154,6 +171,7 @@ export default function SorteoPage() {
           </button>
         </div>
       </div>
+      {mensaje && <div className="rounded-xl border border-amber-700/60 bg-amber-950/30 p-4 text-sm font-bold text-amber-200">{mensaje}</div>}
 
       {/* EQUIPOS SIN ASIGNAR */}
       {equiposLibres.length > 0 && (
@@ -188,7 +206,7 @@ export default function SorteoPage() {
         {/* Título solo visible en la imagen o al descargar */}
         <div className="relative text-center mb-7 pb-5 border-b border-[#2E2E2E]">
           <div className="absolute right-0 top-0 bg-[#1C1C1C] p-2 rounded-xl flex flex-col items-center shadow-2xl border border-[#D4A017]">
-            {appUrl && torneoSlug && <QRCodeSVG value={`${appUrl}/torneo/${torneoSlug}#posiciones`} size={90} level="H" fgColor="#D4A017" bgColor="#1C1C1C" />}
+            {appUrl && torneoSlug && <QRCodeCanvas value={`${appUrl}/torneo/${torneoSlug}#posiciones`} size={90} level="H" fgColor="#D4A017" bgColor="#1C1C1C" />}
             <span className="text-[9px] text-white font-black uppercase mt-1">Tabla en vivo</span>
           </div>
           <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#2b2412] to-[#0a0a0a] text-[#E7C36B] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(212,160,23,.35)]">G·L</div>
