@@ -97,6 +97,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard/partidos", label: "Partidos", icon: Icons.calendar },
     { href: "/dashboard/finanzas", label: "Finanzas", icon: Icons.dollar },
     { href: "/dashboard/estadisticas", label: "Estadísticas", icon: Icons.chart },
+    { href: "/dashboard/roles", label: "Roles y Permisos", icon: Icons.user },
+    { href: "/dashboard/auditoria", label: "Auditoría", icon: Icons.eye },
   ];
 
   if (perfilUsuario?.saas_status === 'suspended' && perfilUsuario?.role !== 'superadmin') {

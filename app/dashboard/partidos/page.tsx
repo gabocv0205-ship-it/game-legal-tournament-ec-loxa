@@ -339,8 +339,8 @@ export default function PartidosPage() {
 
   // --- LÓGICA DE PARTIDO EN VIVO MANTENIDA ---
   const cargarConvocatoria = async (partido: any) => {
-    const { data: playersData } = await supabase.from("players")
-      .select("id, full_name, team_id, teams(name)")
+    const { data: playersData } = await supabase.from("public_players")
+      .select("id, full_name, team_id")
       .in("team_id", [partido.home_team_id, partido.away_team_id])
       .order("full_name");
     const idsPartidos = partidos.map(p => p.id);

@@ -26,11 +26,12 @@ export function useTournamentData() {
         return;
       }
 
-      const [tournamentRes, playersRes, teamsRes, matchesRes] = await Promise.all([
+      const [tournamentRes, playersRes, teamsRes, matchesRes, ledgerRes] = await Promise.all([
         supabase.from("tournaments").select("*").eq("id", activeId).single(),
         supabase.from("players").select("*, teams(name, shield_url)").eq("tournament_id", activeId),
         supabase.from("teams").select("*, payments(amount)").eq("tournament_id", activeId),
         supabase.from("matches").select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)").eq("tournament_id", activeId),
+        supabase.from("financial_ledger").select("team_id, entry_type, amount").eq("tournament_id", activeId),
       ]);
       if (tournamentRes.error || !tournamentRes.data) {
         localStorage.removeItem("activeTournamentId");
@@ -80,6 +81,16 @@ export function useTournamentData() {
       const yellow = Number(tournament?.yellow_card_fee || 0);
       const red = Number(tournament?.red_card_fee || 0);
       const debts = teams.filter((team: any) => {
+        const ledger = ledgerRes.data?.filter((entry: any) => entry.team_id === team.id) || [];
+        if (ledger.length) {
+          const charges = ledger
+            .filter((entry: any) => ["charge", "adjustment"].includes(entry.entry_type))
+            .reduce((sum: number, entry: any) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount || 0), 0);
+          const paid = ledger
+            .filter((entry: any) => ["payment", "reversal"].includes(entry.entry_type))
+            .reduce((sum: number, entry: any) => sum + (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0), 0);
+          return charges - paid > 0;
+        }
         const paid = team.payments?.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0) || 0;
         const played = finished.filter((match: any) => match.home_team_id === team.id || match.away_team_id === team.id).length;
         const yellows = events.filter((event: any) => event.team_id === team.id && event.event_type === "amarilla").length;

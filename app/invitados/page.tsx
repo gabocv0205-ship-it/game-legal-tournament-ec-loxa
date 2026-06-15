@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function PortalInvitados() {
   const [tabla, setTabla] = useState<any[]>([]);
@@ -14,8 +15,8 @@ export default function PortalInvitados() {
         const tempTabla: any = {};
         partidos.forEach((p: any) => {
           if (!p.jugado) return;
-          if (!tempTabla[p.local]) tempTabla[p.local] = { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
-          if (!tempTabla[p.visitante]) tempTabla[p.visitante] = { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+          if (!tempTabla[p.local]) tempTabla[p.local] = { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0, shield: p.localShield || null };
+          if (!tempTabla[p.visitante]) tempTabla[p.visitante] = { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0, shield: p.visitanteShield || null };
           
           tempTabla[p.local].pj += 1; tempTabla[p.visitante].pj += 1;
           tempTabla[p.local].gf += p.gl; tempTabla[p.visitante].gf += p.gv;
@@ -167,7 +168,12 @@ export default function PortalInvitados() {
                       return (
                         <tr key={index}>
                           <td><span className={posClass}>{index + 1}</span></td>
-                          <td style={{ textAlign: 'left', fontSize: '16px', letterSpacing: '1px' }}>{fila[0]}</td>
+                          <td style={{ textAlign: 'left', fontSize: '16px', letterSpacing: '1px' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+                              {fila[1].shield ? <Image src={fila[1].shield} alt="" width={30} height={30} unoptimized style={{ width: '30px', height: '30px', objectFit: 'contain' }} /> : <span style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--dark3)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}><i className="fa fa-shield-halved"></i></span>}
+                              {fila[0]}
+                            </span>
+                          </td>
                           <td style={{ color: 'var(--gray)' }}>{fila[1].pj}</td>
                           <td>{fila[1].pg}</td>
                           <td>{fila[1].pe}</td>

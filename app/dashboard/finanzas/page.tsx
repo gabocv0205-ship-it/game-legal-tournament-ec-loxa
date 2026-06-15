@@ -17,6 +17,7 @@ export default function LibroMayorFinanzas() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [equipos, setEquipos] = useState<any[]>([]);
   const [historial, setHistorial] = useState<any[]>([]);
+  const [historialLibro, setHistorialLibro] = useState<any[]>([]);
   const [costos, setCostos] = useState({ inscripcion: 150, arbitraje: 20, amarilla: 2, roja: 5 });
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
@@ -57,6 +58,8 @@ export default function LibroMayorFinanzas() {
 
       // 2. Traer Equipos y sus Pagos
       const { data: teams } = await supabase.from("teams").select("*, payments(*)").eq("tournament_id", activeId);
+      const { data: ledger } = await supabase.from("financial_ledger").select("*").eq("tournament_id", activeId).order("created_at", { ascending: false });
+      setHistorialLibro(ledger || []);
       
       // 3. Traer Partidos Finalizados para el cálculo de arbitraje
       const { data: matches } = await supabase.from("matches").select("id, home_team_id, away_team_id, status").eq("tournament_id", activeId).eq("status", "finished");
@@ -72,19 +75,26 @@ export default function LibroMayorFinanzas() {
       // 5. MOTOR DE LIQUIDACIÓN: Calcular deuda real por equipo
       const calcEquipos = teams?.map(t => {
         // --- A) Calcular Pagos Realizados ---
-        const pagadoTotal = t.payments?.reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0;
+        const movimientos = (ledger || []).filter(entry => entry.team_id === t.id);
+        const tieneLibro = movimientos.length > 0;
+        const cargosNetos = (categorias: string[]) => movimientos
+          .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categorias.includes(entry.category))
+          .reduce((sum, entry) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount), 0);
+        const pagadoTotal = tieneLibro
+          ? movimientos.filter(entry => ["payment", "reversal"].includes(entry.entry_type)).reduce((sum, entry) => sum + (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount), 0)
+          : t.payments?.reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0;
 
         // --- B) Calcular Deuda Generada ---
-        const deudaInscripcion = c_insc;
+        const deudaInscripcion = tieneLibro ? cargosNetos(["inscripcion"]) : c_insc;
         
         // Partidos jugados por este equipo (como local o visitante)
         const partidosJugados = matches?.filter(m => m.home_team_id === t.id || m.away_team_id === t.id).length || 0;
-        const deudaArbitraje = partidosJugados * c_arb;
+        const deudaArbitraje = tieneLibro ? cargosNetos(["arbitraje"]) : partidosJugados * c_arb;
 
         // Multas por tarjetas generadas por este equipo
         const amarillas = matchEvents.filter(e => e.team_id === t.id && e.event_type === 'amarilla').length;
         const rojas = matchEvents.filter(e => e.team_id === t.id && e.event_type === 'roja').length;
-        const deudaMultas = (amarillas * c_ama) + (rojas * c_roja);
+        const deudaMultas = tieneLibro ? cargosNetos(["amarilla", "roja"]) : (amarillas * c_ama) + (rojas * c_roja);
 
         // --- C) Saldo Final ---
         const totalDeudaGenerada = deudaInscripcion + deudaArbitraje + deudaMultas;
@@ -232,6 +242,20 @@ export default function LibroMayorFinanzas() {
         {historial.filter(pago => (!filtroMetodo || pago.payment_method === filtroMetodo) && (!filtroFecha || String(pago.created_at).startsWith(filtroFecha))).map(pago => (
           <div key={pago.id} className="grid grid-cols-2 md:grid-cols-5 gap-2 p-4 border-b border-[#2E2E2E] text-xs">
             <span className="text-white font-bold">{pago.teams?.name}</span><span className="text-green-400">${Number(pago.amount).toFixed(2)}</span><span className="text-[#D4A017] uppercase">{pago.payment_method || 'No especificado'}</span><span className="text-gray-400">{pago.description || pago.notes || '-'}</span><span className="text-gray-500">{new Date(pago.created_at).toLocaleString('es-EC')}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden">
+        <h3 className="p-4 text-[#D4A017] font-black uppercase text-xs tracking-widest border-b border-[#2E2E2E]">Libro transaccional auditable</h3>
+        {historialLibro.length === 0 ? <p className="p-6 text-gray-500 text-sm">Se activará al ejecutar production_hardening.sql en Supabase.</p> : historialLibro.slice(0, 30).map(entry => (
+          <div key={entry.id} className="grid grid-cols-2 md:grid-cols-6 gap-2 p-4 border-b border-[#2E2E2E] text-xs">
+            <span className={`font-black uppercase ${entry.entry_type === "payment" ? "text-green-400" : entry.entry_type === "reversal" ? "text-red-400" : "text-[#D4A017]"}`}>{entry.entry_type}</span>
+            <span className="text-white uppercase">{entry.category}</span>
+            <span className="text-white font-mono">${Number(entry.amount).toFixed(2)}</span>
+            <span className="text-gray-400">{entry.description || "-"}</span>
+            <span className="text-gray-500">{entry.reference_type}</span>
+            <span className="text-gray-500">{new Date(entry.created_at).toLocaleString("es-EC")}</span>
           </div>
         ))}
       </div>

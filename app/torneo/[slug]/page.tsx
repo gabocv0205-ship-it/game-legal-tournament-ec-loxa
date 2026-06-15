@@ -12,6 +12,7 @@ export default function PortalTorneoDinamico() {
 
   const [torneoActual, setTorneoActual] = useState<any>(null);
   const [tabla, setTabla] = useState<any[]>([]);
+  const [equipos, setEquipos] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
   const [goleadores, setGoleadores] = useState<any[]>([]);
   const [visitas, setVisitas] = useState(0);
@@ -43,6 +44,7 @@ export default function PortalTorneoDinamico() {
         setTorneoActual(tourney);
 
         const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
+        setEquipos(teams || []);
         const { data: matches } = await supabase.from("matches")
           .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
           .eq("tournament_id", tourney.id)
@@ -55,7 +57,7 @@ export default function PortalTorneoDinamico() {
           stats[t.id] = { id: t.id, name: t.name, shield: t.shield_url, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
         });
 
-        matches?.filter(m => m.status === 'finished').forEach(m => {
+        matches?.filter(m => m.status === 'finished' && m.stage === 'Fase de Grupos').forEach(m => {
           const hId = m.home_team_id; const aId = m.away_team_id;
           const hG = m.home_goals || 0; const aG = m.away_goals || 0;
           if (stats[hId] && stats[aId]) {
@@ -159,6 +161,25 @@ export default function PortalTorneoDinamico() {
   // Bandera para detectar si el torneo fue purgado/archivado por el sistema automatizado
   const isArchived = torneoActual?.status === 'archived';
   const partidoDestacado = partidos.find(partido => partido.status !== 'finished' && partido.match_date) || partidos[0];
+  const finalizadosFinal = partidos.filter(partido => partido.status === "finished" && (partido.stage === "Final" || partido.stage === "Final (Vuelta)"));
+  const finalBase = finalizadosFinal[0];
+  const resultadoFinal = finalBase ? finalizadosFinal.reduce((result, match) => {
+    result.home += Number(match.home_team_id === finalBase.home_team_id ? match.home_goals : match.away_goals) || 0;
+    result.away += Number(match.home_team_id === finalBase.away_team_id ? match.home_goals : match.away_goals) || 0;
+    if (match.resolved_by_penalties) {
+      result.homePenalties = Number(match.home_team_id === finalBase.home_team_id ? match.home_penalties : match.away_penalties);
+      result.awayPenalties = Number(match.home_team_id === finalBase.away_team_id ? match.home_penalties : match.away_penalties);
+    }
+    return result;
+  }, { home: 0, away: 0, homePenalties: null as number | null, awayPenalties: null as number | null }) : null;
+  const finalTieneGanador = resultadoFinal
+    ? resultadoFinal.home !== resultadoFinal.away || (resultadoFinal.homePenalties !== null && resultadoFinal.homePenalties !== resultadoFinal.awayPenalties)
+    : false;
+  const campeonEsLocal = resultadoFinal
+    ? resultadoFinal.home > resultadoFinal.away || (resultadoFinal.home === resultadoFinal.away && Number(resultadoFinal.homePenalties) > Number(resultadoFinal.awayPenalties))
+    : false;
+  const campeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.home : finalBase.away) : null;
+  const subcampeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.away : finalBase.home) : null;
 
   return (
     <>
@@ -182,6 +203,12 @@ export default function PortalTorneoDinamico() {
         .team-shield { width: 76px; height: 76px; object-fit: contain; filter: drop-shadow(0 8px 18px rgba(0,0,0,.65)); transition: transform .3s ease; }
         .match-spotlight:hover .team-shield { transform: scale(1.08); }
         @keyframes spotlight-spin { to { transform: rotate(360deg); } }
+        .champion-stage { position: relative; overflow: hidden; background: radial-gradient(circle at center, rgba(212,160,23,.24), rgba(13,13,13,.97) 62%); border-top: 1px solid rgba(212,160,23,.35); border-bottom: 1px solid rgba(212,160,23,.35); }
+        .champion-stage::before, .champion-stage::after { content: ''; position: absolute; width: 260px; height: 260px; border-radius: 50%; background: rgba(212,160,23,.12); filter: blur(35px); animation: champion-pulse 3s ease-in-out infinite alternate; }
+        .champion-stage::before { left: -80px; top: -80px; }.champion-stage::after { right: -80px; bottom: -80px; animation-delay: 1s; }
+        .champion-shield { animation: champion-float 2.8s ease-in-out infinite; filter: drop-shadow(0 0 28px rgba(245,200,66,.55)); }
+        @keyframes champion-float { 50% { transform: translateY(-10px) scale(1.04); } }
+        @keyframes champion-pulse { to { transform: scale(1.25); opacity: .45; } }
         .text-gold { color: var(--gold); }
         .btn-primary { background: linear-gradient(135deg, var(--gold) 0%, #A07810 100%); color: var(--black); padding: 12px 28px; border-radius: 4px; font-weight: bold; text-transform: uppercase; display: inline-block; transition: 0.3s; border: none; cursor: none;}
         .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(212,160,23,0.4); }
@@ -273,6 +300,24 @@ export default function PortalTorneoDinamico() {
         </div>
       </section>
 
+      {campeon && resultadoFinal && (
+        <section className="champion-stage" style={{ padding: "70px 20px" }}>
+          <div className="reveal" style={{ position: "relative", zIndex: 1, maxWidth: "900px", margin: "0 auto", textAlign: "center" }}>
+            <p style={{ color: "var(--gold)", fontSize: "12px", fontWeight: 900, letterSpacing: "4px", textTransform: "uppercase" }}>Campeón oficial</p>
+            <div style={{ fontSize: "64px", margin: "14px 0", filter: "drop-shadow(0 0 20px rgba(212,160,23,.55))" }}>🏆</div>
+            {campeon.shield_url && <Image src={campeon.shield_url} alt={`Escudo de ${campeon.name}`} width={150} height={150} unoptimized className="champion-shield mx-auto object-contain" />}
+            <h2 style={{ color: "white", fontSize: "clamp(34px,7vw,72px)", fontWeight: 950, textTransform: "uppercase", letterSpacing: "3px", marginTop: "18px" }}>{campeon.name}</h2>
+            <p style={{ color: "var(--gold-light)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "2px", marginTop: "8px" }}>
+              Final {resultadoFinal.home}-{resultadoFinal.away}{resultadoFinal.homePenalties !== null ? ` · Penales ${resultadoFinal.homePenalties}-${resultadoFinal.awayPenalties}` : ""}
+            </p>
+            <div style={{ marginTop: "28px", display: "inline-flex", alignItems: "center", gap: "12px", color: "var(--gray)", background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", padding: "12px 20px", borderRadius: "999px" }}>
+              {subcampeon?.shield_url && <Image src={subcampeon.shield_url} alt="" width={28} height={28} unoptimized className="object-contain" />}
+              <span style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>Subcampeón · {subcampeon?.name}</span>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section style={{ padding: '80px 20px', background: 'var(--dark)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           
@@ -330,6 +375,7 @@ export default function PortalTorneoDinamico() {
               <>
                 <div className="tabs-container">
                   <button onClick={() => setActiveTab('posiciones')} className={`tab-btn ${activeTab === 'posiciones' ? 'active' : ''}`}>Posiciones</button>
+                  <button onClick={() => setActiveTab('equipos')} className={`tab-btn ${activeTab === 'equipos' ? 'active' : ''}`}>Equipos</button>
                   <button onClick={() => setActiveTab('partidos')} className={`tab-btn ${activeTab === 'partidos' ? 'active' : ''}`}>Partidos</button>
                   <button onClick={() => setActiveTab('goleadores')} className={`tab-btn ${activeTab === 'goleadores' ? 'active' : ''}`}>Goleadores</button>
                   <button onClick={() => setActiveTab('premios')} className={`tab-btn ${activeTab === 'premios' ? 'active' : ''}`}>Premios</button>
@@ -417,6 +463,18 @@ export default function PortalTorneoDinamico() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {activeTab === 'equipos' && (
+                    <div className="p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 animate-in fade-in duration-500">
+                      {equipos.map(equipo => (
+                        <div key={equipo.id} className="glass-card rounded-2xl p-5 text-center hover:border-[#D4A017]/50 transition-all">
+                          {equipo.shield_url ? <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={72} height={72} unoptimized className="w-20 h-20 mx-auto object-contain drop-shadow-xl" /> : <div className="w-20 h-20 mx-auto rounded-full bg-[#242424] flex items-center justify-center text-gray-600"><i className="fa fa-shield-halved text-2xl"></i></div>}
+                          <p className="text-white font-black uppercase text-sm mt-4">{equipo.name}</p>
+                          <p className="text-[#D4A017] text-[9px] font-bold uppercase tracking-widest mt-1">Grupo {equipo.group_name || "General"}</p>
+                        </div>
+                      ))}
                     </div>
                   )}
 

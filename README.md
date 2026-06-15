@@ -38,5 +38,9 @@ Abre [http://localhost:3000](http://localhost:3000).
 
 ```bash
 npm run lint
+npm test
 npm run build
 ```
+
+Antes de un lanzamiento publico, ejecuta `supabase/production_hardening.sql`
+despues de `supabase/saas_setup.sql` y sigue `PRELAUNCH-OPERATIONS.md`.

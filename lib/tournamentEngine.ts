@@ -234,11 +234,11 @@ export function createKnockoutFixtures(qualified: any[], tournamentId: string, s
 
 export function getStageWinners(matches: any[], teams: any[], stage: string) {
   const teamById = Object.fromEntries(teams.map((team) => [team.id, team]));
-  const ties: Record<string, { first: string; second: string; firstGoals: number; secondGoals: number; finished: number; total: number }> = {};
+  const ties: Record<string, { first: string; second: string; firstGoals: number; secondGoals: number; finished: number; total: number; penaltyWinner: string | null }> = {};
   matches.filter((match) => match.stage === stage || match.stage === `${stage} (Vuelta)`).forEach((match) => {
     const pair = [match.home_team_id, match.away_team_id].sort();
     const key = pair.join(":");
-    const tie = ties[key] ||= { first: pair[0], second: pair[1], firstGoals: 0, secondGoals: 0, finished: 0, total: 0 };
+    const tie = ties[key] ||= { first: pair[0], second: pair[1], firstGoals: 0, secondGoals: 0, finished: 0, total: 0, penaltyWinner: null };
     tie.total++;
     if (match.status !== "finished") return;
     tie.finished++;
@@ -249,9 +249,23 @@ export function getStageWinners(matches: any[], teams: any[], stage: string) {
       tie.firstGoals += Number(match.away_goals || 0);
       tie.secondGoals += Number(match.home_goals || 0);
     }
+    if (match.resolved_by_penalties && Number(match.home_penalties) !== Number(match.away_penalties)) {
+      tie.penaltyWinner = Number(match.home_penalties) > Number(match.away_penalties) ? match.home_team_id : match.away_team_id;
+    }
   });
   return Object.values(ties)
-    .filter((tie) => tie.finished === tie.total && tie.firstGoals !== tie.secondGoals)
-    .map((tie) => teamById[tie.firstGoals > tie.secondGoals ? tie.first : tie.second])
+    .filter((tie) => tie.finished === tie.total && (tie.firstGoals !== tie.secondGoals || tie.penaltyWinner))
+    .map((tie) => teamById[tie.firstGoals === tie.secondGoals ? tie.penaltyWinner! : tie.firstGoals > tie.secondGoals ? tie.first : tie.second])
     .filter(Boolean);
+}
+
+export function calculateFinancialBalance(charges: any[], payments: any[]) {
+  const totalCharges = charges.reduce((sum, entry) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount || 0), 0);
+  const totalPayments = payments.reduce((sum, entry) => sum + (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0), 0);
+  return {
+    totalCharges,
+    totalPayments,
+    balance: Math.max(0, totalCharges - totalPayments),
+    status: totalCharges - totalPayments <= 0 ? "paid" : totalPayments > 0 ? "partial" : "overdue",
+  };
 }
