@@ -4,6 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { calculateStandings, normalizeTournamentConfig } from "@/lib/tournamentEngine";
 import html2canvas from "html2canvas";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function EstadisticasPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -32,9 +33,20 @@ export default function EstadisticasPage() {
         setLoading(false);
         return;
       }
+
+      const tournament = await getAccessibleTournament(supabase, activeId);
+      if (!tournament) {
+        clearActiveTournament();
+        setTorneoId(null);
+        setTabla([]);
+        setGoleadores([]);
+        setSanciones([]);
+        setLlaves([]);
+        setLoading(false);
+        return;
+      }
       
       setTorneoId(activeId);
-      const { data: tournament } = await supabase.from("tournaments").select("*").eq("id", activeId).single();
       const rules = normalizeTournamentConfig(tournament || {});
       setNombreTorneo(tournament?.name || "Torneo Oficial");
       setFondoPosterUrl(tournament?.match_poster_background_url || "");

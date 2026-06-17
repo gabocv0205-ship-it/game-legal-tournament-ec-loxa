@@ -11,6 +11,7 @@ export default function PortalPrincipal() {
   const [visitas, setVisitas] = useState(0);
   const [torneoDestacado, setTorneoDestacado] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sesionActiva, setSesionActiva] = useState(false);
 
   // Estados del Modal de Login
   const [showLogin, setShowLogin] = useState(false);
@@ -21,6 +22,8 @@ export default function PortalPrincipal() {
   useEffect(() => {
     async function inicializarPortal() {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSesionActiva(Boolean(session));
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
@@ -38,6 +41,10 @@ export default function PortalPrincipal() {
       }
     }
     inicializarPortal();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSesionActiva(Boolean(session));
+    });
 
     const dot = document.getElementById('cursorDot');
     const ring = document.getElementById('cursorRing');
@@ -63,7 +70,10 @@ export default function PortalPrincipal() {
     }, { threshold: 0.1 });
     reveals.forEach(el => observer.observe(el));
 
-    return () => { document.removeEventListener('mousemove', moveCursor); };
+    return () => {
+      document.removeEventListener('mousemove', moveCursor);
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -159,9 +169,15 @@ export default function PortalPrincipal() {
               El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
             <div style={{ display: 'flex', gap: '20px' }}>
-              <button onClick={() => setShowLogin(true)} className="btn-primary">
-                <i className="fa fa-shield-halved"></i> Acceso Administrador
-              </button>
+              {sesionActiva ? (
+                <button onClick={() => router.push("/dashboard")} className="btn-primary">
+                  <i className="fa fa-arrow-right"></i> Volver al Panel
+                </button>
+              ) : (
+                <button onClick={() => setShowLogin(true)} className="btn-primary">
+                  <i className="fa fa-shield-halved"></i> Acceso Administrador
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -210,16 +226,24 @@ export default function PortalPrincipal() {
         <div style={{ maxWidth: '1200px', margin: '0 auto', overflow: 'hidden' }}>
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
           <div className="sponsors-track reveal">
-            <div className="sponsor-logo">Banco Loja</div>
-            <div className="sponsor-logo">Torneos Calib</div>
-            <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
-            <div className="sponsor-logo">Consultorio Jurídico Virtual GAME LEGAL ec</div>
-            <div className="sponsor-logo">Dr. Alex Avila Aguirre</div>
-            <div className="sponsor-logo">Banco Loja</div>
-            <div className="sponsor-logo">Torneos Calib</div>
-            <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
-            <div className="sponsor-logo">Consultorio Jurídico Virtual GAME LEGAL ec</div>
-            <div className="sponsor-logo">Dr. Alex Avila Aguirre</div>
+            {[
+              "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
+              "Dr. Alex Ávila",
+              "Game-Legal Estudio Jurídico Virtual",
+              "Cafetería Coffee Time",
+              "Mister Copy",
+              "Botanitas Express",
+              "Torneos Calib",
+              "Multipagos San Sebastián",
+              "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
+              "Dr. Alex Ávila",
+              "Game-Legal Estudio Jurídico Virtual",
+              "Cafetería Coffee Time",
+              "Mister Copy",
+              "Botanitas Express",
+              "Torneos Calib",
+              "Multipagos San Sebastián",
+            ].map((sponsor, index) => <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>)}
           </div>
         </div>
       </section>

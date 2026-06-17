@@ -44,6 +44,9 @@ create policy tournament_members_admin_write on public.tournament_members for al
 using (public.can_manage_tournament(tournament_id, 'admin'))
 with check (public.can_manage_tournament(tournament_id, 'admin'));
 
+alter table public.tournaments
+  add column if not exists tournament_sponsors text[] default '{}';
+
 alter table public.tournaments enable row level security;
 alter table public.teams enable row level security;
 alter table public.players enable row level security;

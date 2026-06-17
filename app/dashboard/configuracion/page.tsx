@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function ConfiguracionPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export default function ConfiguracionPage() {
   const [bannerUrl, setBannerUrl] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
   const [fondoPartidosUrl, setFondoPartidosUrl] = useState("");
+  const [auspiciantes, setAuspiciantes] = useState("");
   const [bannerArchivo, setBannerArchivo] = useState<File | null>(null);
   const [posterArchivo, setPosterArchivo] = useState<File | null>(null);
   const [fondoPartidosArchivo, setFondoPartidosArchivo] = useState<File | null>(null);
@@ -58,7 +60,7 @@ export default function ConfiguracionPage() {
     let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
 
     if (activeId) {
-      const { data } = await supabase.from('tournaments').select('*').eq('id', activeId).single();
+      const data = await getAccessibleTournament(supabase, activeId);
       if (data) {
         setTorneoId(data.id);
         setNombre(data.name || "");
@@ -97,6 +99,10 @@ export default function ConfiguracionPage() {
         setBannerUrl(data.banner_url || "");
         setPosterUrl(data.poster_url || "");
         setFondoPartidosUrl(data.match_poster_background_url || "");
+        setAuspiciantes(Array.isArray(data.tournament_sponsors) ? data.tournament_sponsors.join("\n") : "");
+      } else {
+        clearActiveTournament();
+        setTorneoId(null);
       }
     }
   };
@@ -169,6 +175,7 @@ export default function ConfiguracionPage() {
         banner_url: nuevoBannerUrl || null,
         poster_url: nuevoPosterUrl || null,
         match_poster_background_url: nuevoFondoPartidosUrl || null,
+        tournament_sponsors: auspiciantes.split("\n").map(item => item.trim()).filter(Boolean),
         configuration_completed: true
       }).eq("id", torneoId);
 
@@ -270,6 +277,17 @@ export default function ConfiguracionPage() {
             <ImageUpload label="Póster promocional (vertical)" currentUrl={posterUrl} file={posterArchivo} onChange={setPosterArchivo} />
             <ImageUpload label="Fondo para pósteres de partidos (opcional)" currentUrl={fondoPartidosUrl} file={fondoPartidosArchivo} onChange={setFondoPartidosArchivo} />
           </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-emerald-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Auspiciantes del Torneo</h3>
+          <p className="text-gray-500 text-xs">Agrega un auspiciante por linea. Se mostraran en el portal publico del torneo.</p>
+          <textarea
+            value={auspiciantes}
+            onChange={e => setAuspiciantes(e.target.value)}
+            className="w-full min-h-32 p-3 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all"
+            placeholder={"Dra. Gina Calva - Notaria Primera Del Canton Loja\nCafeteria Coffee Time\nMister Copy"}
+          />
         </div>
 
         <div className="space-y-4">

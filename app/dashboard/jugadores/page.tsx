@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function JugadoresPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -35,15 +36,21 @@ export default function JugadoresPage() {
         setCargandoDatos(false);
         return;
       }
+
+      const tournament = await getAccessibleTournament(supabase, activeId, "id, is_auto_template_enabled, max_players_per_team");
+      if (!tournament) {
+        clearActiveTournament();
+        setTorneoId(null);
+        setJugadores([]);
+        setEquipos([]);
+        setCargandoDatos(false);
+        return;
+      }
       
       setTorneoId(activeId);
 
-      const { data: tournamentData } = await supabase.from("tournaments")
-        .select("is_auto_template_enabled, max_players_per_team")
-        .eq("id", activeId)
-        .single();
-      setPlantillaAutomatica(Boolean(tournamentData?.is_auto_template_enabled));
-      setMaxJugadoresEquipo(Number(tournamentData?.max_players_per_team || 25));
+      setPlantillaAutomatica(Boolean(tournament.is_auto_template_enabled));
+      setMaxJugadoresEquipo(Number(tournament.max_players_per_team || 25));
 
       // 2. Traer SOLO los equipos de este torneo
       const { data: teamsData } = await supabase.from("teams")

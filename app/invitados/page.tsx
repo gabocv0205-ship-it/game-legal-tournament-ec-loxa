@@ -197,15 +197,24 @@ export default function PortalInvitados() {
         <div style={{ maxWidth: '1200px', margin: '0 auto', overflow: 'hidden' }}>
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
           <div className="sponsors-track reveal">
-            <div className="sponsor-logo">Banco Loja</div>
-            <div className="sponsor-logo">Deportes XL</div>
-            <div className="sponsor-logo">Almacenes La Ganga</div>
-            <div className="sponsor-logo">Radio Ondas</div>
-            <div className="sponsor-logo">Constructora Sur</div>
-            {/* Duplicados para efecto infinito */}
-            <div className="sponsor-logo">Banco Loja</div>
-            <div className="sponsor-logo">Deportes XL</div>
-            <div className="sponsor-logo">Almacenes La Ganga</div>
+            {[
+              "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
+              "Dr. Alex Ávila",
+              "Game-Legal Estudio Jurídico Virtual",
+              "Cafetería Coffee Time",
+              "Mister Copy",
+              "Botanitas Express",
+              "Torneos Calib",
+              "Multipagos San Sebastián",
+              "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
+              "Dr. Alex Ávila",
+              "Game-Legal Estudio Jurídico Virtual",
+              "Cafetería Coffee Time",
+              "Mister Copy",
+              "Botanitas Express",
+              "Torneos Calib",
+              "Multipagos San Sebastián",
+            ].map((sponsor, index) => <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>)}
           </div>
         </div>
       </section>

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function EquiposPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -26,11 +27,15 @@ export default function EquiposPage() {
       let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
       
       if (!activeId) {
-        const { data: fallback } = await supabase.from('tournaments').select('id').limit(1).single();
-        if (fallback) activeId = fallback.id;
+        setCargandoDatos(false);
+        return;
       }
-      
-      if (!activeId) {
+
+      const tournament = await getAccessibleTournament(supabase, activeId, "id");
+      if (!tournament) {
+        clearActiveTournament();
+        setEquipos([]);
+        setTorneoId(null);
         setCargandoDatos(false);
         return;
       }

@@ -19,6 +19,7 @@ alter table public.tournaments
   add column if not exists banner_url text,
   add column if not exists poster_url text,
   add column if not exists match_poster_background_url text,
+  add column if not exists tournament_sponsors text[] default '{}',
   add column if not exists football_modality integer default 11,
   add column if not exists substitutes_count integer default 5,
   add column if not exists final_venue text,

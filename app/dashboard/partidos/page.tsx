@@ -7,6 +7,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
+
 export default function PartidosPage() {
   const [torneoSlug, setTorneoSlug] = useState<string>("");
   const [torneoNombre, setTorneoNombre] = useState<string>("Torneo Oficial");
@@ -100,9 +102,17 @@ export default function PartidosPage() {
   const cargarDatos = async () => {
     let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
     if (!activeId) return;
-    setTorneoId(activeId);
 
-    const { data: tourney } = await supabase.from('tournaments').select('*').eq('id', activeId).single();
+    const tourney = await getAccessibleTournament(supabase, activeId);
+    if (!tourney) {
+      clearActiveTournament();
+      setTorneoId(null);
+      setEquipos([]);
+      setPartidos([]);
+      return;
+    }
+
+    setTorneoId(activeId);
     if (tourney) {
       setCostoArbitraje(Number(tourney.referee_fee || 20));
       setTorneoNombre(tourney.name || "Torneo Oficial");

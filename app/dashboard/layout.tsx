@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useTournamentData } from "./useTournamentData";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -21,7 +22,8 @@ const Icons = {
   alert: "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
   eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z",
-  crown: "M2 4h20v2H2z M12 8l-3 5-5-3 1 8h14l1-8-5 3z"
+  crown: "M2 4h20v2H2z M12 8l-3 5-5-3 1 8h14l1-8-5 3z",
+  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9"
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -51,6 +53,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [router]);
 
   useEffect(() => {
+    if (loadingPerfil) return;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const cerrarPorInactividad = async () => {
+      await supabase.auth.signOut();
+      localStorage.removeItem("activeTournamentId");
+      localStorage.removeItem("activeTournamentName");
+      router.push("/");
+    };
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(cerrarPorInactividad, 2 * 60 * 60 * 1000);
+    };
+    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    events.forEach(event => window.addEventListener(event, resetTimer, { passive: true }));
+    resetTimer();
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, [loadingPerfil, router]);
+
+  const cerrarSesion = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem("activeTournamentId");
+    localStorage.removeItem("activeTournamentName");
+    router.push("/");
+  };
+
+  useEffect(() => {
     const isTournamentHub = pathname === "/dashboard/torneos";
     const isCorporateArea = pathname.startsWith("/superadmin");
     if (!isTournamentHub && !isCorporateArea) return;
@@ -66,8 +97,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const fetchTorneoNombre = async () => {
       const activeId = localStorage.getItem('activeTournamentId');
       if (activeId) {
-        const { data } = await supabase.from('tournaments').select('name').eq('id', activeId).single();
+        const data = await getAccessibleTournament(supabase, activeId, "id, name");
         if (data) setNombreTorneoActivo(data.name);
+        else {
+          clearActiveTournament();
+          setNombreTorneoActivo("Seleccione un torneo");
+        }
       } else {
         setNombreTorneoActivo("Seleccione un torneo");
       }
@@ -117,17 +152,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="game-light flex h-screen w-full bg-[#F7F4EC] overflow-hidden font-sans">
+    <div className="flex h-screen w-full bg-[#0a0a0a] overflow-hidden font-sans">
       
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white text-[#111827] flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#E6DFC8]`}>
-        <div className="p-6 border-b border-[#E6DFC8] flex items-center gap-3 relative overflow-hidden">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#141414] text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#2E2E2E]`}>
+        <div className="p-6 border-b border-[#2E2E2E] flex items-center gap-3 relative overflow-hidden">
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
-          <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.22)] bg-[#FFFBEB]">
+          <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C]">
             {perfilUsuario?.role === 'superadmin' ? '👑' : 'C'}
           </div>
           <div className="relative z-10">
-            <p className="font-black text-sm tracking-widest text-[#111827]">GAME-LEGAL</p>
+            <p className="font-black text-sm tracking-widest text-white">GAME-LEGAL</p>
             <p className="text-xs text-[#D4A017] font-bold uppercase tracking-widest">
               {perfilUsuario?.role === 'superadmin' ? 'SuperAdmin' : 'Pro Admin'}
             </p>
@@ -157,7 +192,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 p-4 space-y-2 mt-2 overflow-y-auto">
           {MENU.map(item => (
             <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all ${pathname === item.href ? "bg-[#D4A017] text-black shadow-[0_4px_20px_rgba(212,160,23,0.28)]" : "text-[#64748B] hover:bg-[#FFF7DB] hover:text-[#111827]"}`}>
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all ${pathname === item.href ? "bg-[#D4A017] text-black shadow-[0_4px_20px_rgba(212,160,23,0.4)]" : "text-[#8A8A8A] hover:bg-[#1C1C1C] hover:text-white"}`}>
               <Icon path={item.icon} size={18} /> {item.label}
             </Link>
           ))}
@@ -179,7 +214,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </nav>
 
-        <div className="p-4 border-t border-[#E6DFC8]">
+        <div className="p-4 border-t border-[#2E2E2E]">
           {perfilUsuario?.role === 'organizer' && (
             <a href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-sm text-white font-black uppercase tracking-wider transition-all mb-3 shadow-sm">
               Soporte WhatsApp
@@ -188,15 +223,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Link href="/dashboard/configuracion" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-4 py-3 border border-[#D4A017] rounded-lg text-sm font-bold transition-all mb-3 ${pathname === "/dashboard/configuracion" ? "bg-[#D4A017] text-black" : "text-[#D4A017] hover:bg-[#D4A017] hover:text-black"}`}>
             <Icon path={Icons.chart} size={16}/> Configurar Torneo
           </Link>
-          <Link href="/" target="_blank" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white hover:bg-[#FFF7DB] rounded-lg text-sm text-[#111827] font-bold transition-all border border-[#E6DFC8]">
+          <Link href="/" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#1C1C1C] hover:bg-[#242424] rounded-lg text-sm text-white font-bold transition-all border border-[#2E2E2E]">
              <Icon path={Icons.eye} size={16}/> Ver App Pública
           </Link>
+          <button onClick={cerrarSesion} className="w-full flex items-center justify-center gap-2 px-4 py-3 mt-3 bg-red-950/40 hover:bg-red-900/60 rounded-lg text-sm text-red-300 font-bold transition-all border border-red-900/60">
+            <Icon path={Icons.logout} size={16}/> Cerrar sesión
+          </button>
         </div>
       </aside>
 
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/80 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#F7F4EC] relative z-10 text-[#111827]">
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#0a0a0a] relative z-10 text-white">
         
         {perfilUsuario?.saas_status === 'pending_payment' && perfilUsuario?.role !== 'superadmin' && (
           <div className="bg-gradient-to-r from-red-900 via-red-600 to-red-900 text-white px-6 py-3 flex items-center justify-between shadow-[0_10px_30px_rgba(220,38,38,0.3)] sticky top-0 z-30">
@@ -208,12 +246,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
-        <header className="bg-white border-b border-[#E6DFC8] px-6 py-4 flex items-center gap-4 sticky top-0 z-20 shadow-sm">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 bg-[#FFF7DB] text-[#111827] rounded-xl hover:bg-[#FDE68A]"><Icon path={Icons.bars} size={20}/></button>
+        <header className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4 flex items-center gap-4 sticky top-0 z-20 shadow-sm">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 bg-[#1C1C1C] text-gray-300 rounded-xl hover:bg-[#2A2A2A]"><Icon path={Icons.bars} size={20}/></button>
           
           {/* NUEVO: Mostrar claramente el torneo que estamos administrando */}
           <div className="flex-1 flex flex-col">
-            <h1 className="font-black text-[#111827] text-lg truncate">
+            <h1 className="font-black text-white text-lg truncate">
                {perfilUsuario?.role === 'superadmin' ? 'Torre de Control Máxima' : 'Panel de Administración'}
             </h1>
             <p className="text-xs text-[#D4A017] uppercase tracking-widest font-bold flex items-center gap-2 mt-1">
@@ -224,7 +262,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-black text-[#111827] uppercase">{perfilUsuario?.full_name || 'Organizador'}</p>
+              <p className="text-xs font-black text-white uppercase">{perfilUsuario?.full_name || 'Organizador'}</p>
               <p className="text-[10px] text-green-500 tracking-widest uppercase font-bold">● Conectado</p>
             </div>
             <div className="w-10 h-10 bg-gradient-to-tr from-[#D4A017] to-yellow-300 rounded-full flex items-center justify-center text-black text-sm font-black shadow">GL</div>

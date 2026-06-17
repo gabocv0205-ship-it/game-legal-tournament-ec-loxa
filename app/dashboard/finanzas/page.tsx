@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -45,10 +46,20 @@ export default function LibroMayorFinanzas() {
     try {
       let activeId = typeof window !== 'undefined' ? localStorage.getItem('activeTournamentId') : null;
       if (!activeId) return setLoading(false);
+
+      const tourney = await getAccessibleTournament(supabase, activeId);
+      if (!tourney) {
+        clearActiveTournament();
+        setEquipos([]);
+        setHistorial([]);
+        setHistorialLibro([]);
+        setTorneoId(null);
+        return setLoading(false);
+      }
+
       setTorneoId(activeId);
 
       // 1. Traer Costos del Torneo
-      const { data: tourney } = await supabase.from("tournaments").select("*").eq("id", activeId).single();
       const c_insc = Number(tourney?.registration_fee || 150);
       const c_arb = Number(tourney?.referee_fee || 20);
       const c_ama = Number(tourney?.yellow_card_fee || 2);

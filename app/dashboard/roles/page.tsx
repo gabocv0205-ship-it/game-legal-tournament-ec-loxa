@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 const roleLabels: Record<string, string> = { admin: "Administrador", finance: "Tesorería", referee: "Árbitro / Vocal", viewer: "Solo lectura" };
 
@@ -20,9 +22,20 @@ export default function RolesPage() {
   }, [tournamentId]);
 
   useEffect(() => {
-    const activeId = localStorage.getItem("activeTournamentId");
-    setTournamentId(activeId);
-    load(activeId);
+    const verify = async () => {
+      const activeId = localStorage.getItem("activeTournamentId");
+      if (!activeId) return;
+      const tournament = await getAccessibleTournament(supabase, activeId, "id");
+      if (!tournament) {
+        clearActiveTournament();
+        setTournamentId(null);
+        setMembers([]);
+        return setMessage("No tienes acceso a ese torneo. Selecciona un torneo propio.");
+      }
+      setTournamentId(activeId);
+      load(activeId);
+    };
+    verify();
   }, [load]);
 
   const add = async (event: React.FormEvent) => {

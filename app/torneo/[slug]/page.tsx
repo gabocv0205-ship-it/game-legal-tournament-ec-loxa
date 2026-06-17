@@ -23,6 +23,7 @@ export default function PortalTorneoDinamico() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [sesionActiva, setSesionActiva] = useState(false);
 
   // Lógica de carga de datos INTACTA
   useEffect(() => {
@@ -30,6 +31,8 @@ export default function PortalTorneoDinamico() {
       try {
         if (!slug) return;
 
+        const { data: { session } } = await supabase.auth.getSession();
+        setSesionActiva(Boolean(session));
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
@@ -85,6 +88,10 @@ export default function PortalTorneoDinamico() {
     }
     inicializarPortal();
 
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSesionActiva(Boolean(session));
+    });
+
     // Cursor dinámico y animaciones INTACTAS
     const dot = document.getElementById('cursorDot');
     const ring = document.getElementById('cursorRing');
@@ -110,7 +117,10 @@ export default function PortalTorneoDinamico() {
     }, { threshold: 0.1 });
     reveals.forEach(el => observer.observe(el));
 
-    return () => { document.removeEventListener('mousemove', moveCursor); };
+    return () => {
+      document.removeEventListener('mousemove', moveCursor);
+      authListener.subscription.unsubscribe();
+    };
   }, [slug]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -168,6 +178,18 @@ export default function PortalTorneoDinamico() {
     : false;
   const campeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.home : finalBase.away) : null;
   const subcampeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.away : finalBase.home) : null;
+  const auspiciantesTorneo = Array.isArray(torneoActual?.tournament_sponsors) && torneoActual.tournament_sponsors.length
+    ? torneoActual.tournament_sponsors
+    : [
+      "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
+      "Dr. Alex Ávila",
+      "Game-Legal Estudio Jurídico Virtual",
+      "Cafetería Coffee Time",
+      "Mister Copy",
+      "Botanitas Express",
+      "Torneos Calib",
+      "Multipagos San Sebastián",
+    ];
 
   return (
     <>
@@ -262,9 +284,15 @@ export default function PortalTorneoDinamico() {
               <Link href="/" className="btn-secondary">
                 <i className="fa fa-arrow-left"></i> Volver al Directorio
               </Link>
-              <button onClick={() => setShowLogin(true)} className="btn-primary">
-                <i className="fa fa-shield-halved"></i> Acceso Administrador
-              </button>
+              {sesionActiva ? (
+                <button onClick={() => router.push("/dashboard")} className="btn-primary">
+                  <i className="fa fa-arrow-right"></i> Volver al Panel
+                </button>
+              ) : (
+                <button onClick={() => setShowLogin(true)} className="btn-primary">
+                  <i className="fa fa-shield-halved"></i> Acceso Administrador
+                </button>
+              )}
             </div>
           </div>
           {partidoDestacado && (
@@ -597,16 +625,9 @@ export default function PortalTorneoDinamico() {
         <div style={{ maxWidth: '1200px', margin: '0 auto', overflow: 'hidden' }}>
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
           <div className="sponsors-track reveal">
-            <div className="sponsor-logo">Banco Loja</div>
-            <div className="sponsor-logo">Torneos Calib</div>
-            <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
-            <div className="sponsor-logo">Consultorio Jurídico Virtual GAME LEGAL ec</div>
-            <div className="sponsor-logo">Dr. Alex Avila Aguirre</div>
-            <div className="sponsor-logo">Banco Loja</div>
-            <div className="sponsor-logo">Torneos Calib</div>
-            <div className="sponsor-logo">Notaría Primera del Cantón Loja</div>
-            <div className="sponsor-logo">Consultorio Jurídico Virtual GAME LEGAL ec</div>
-            <div className="sponsor-logo">Dr. Alex Avila Aguirre</div>
+            {[...auspiciantesTorneo, ...auspiciantesTorneo].map((sponsor, index) => (
+              <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>
+            ))}
           </div>
         </div>
       </section>

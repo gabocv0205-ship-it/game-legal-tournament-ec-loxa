@@ -4,6 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeCanvas } from "qrcode.react";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function SorteoPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
@@ -30,16 +31,20 @@ export default function SorteoPage() {
     if (!activeId) return setMensaje("Selecciona primero un torneo desde Mis Torneos.");
     setLoading(true);
     setMensaje("");
-    const [tournamentResult, teamsResult] = await Promise.all([
-      supabase.from("tournaments").select("id, name, slug, group_count, match_poster_background_url").eq("id", activeId).maybeSingle(),
+    const tournament = await getAccessibleTournament(supabase, activeId, "id, name, slug, group_count, match_poster_background_url");
+    if (!tournament) {
+      clearActiveTournament();
+      setEquipos([]);
+      setLoading(false);
+      return setMensaje("No tienes acceso a ese torneo. Selecciona un torneo propio desde Mis Torneos.");
+    }
+    const [teamsResult] = await Promise.all([
       supabase.from("teams").select("id, name, shield_url, group_name, tournament_id").eq("tournament_id", activeId).order("name"),
     ]);
-    if (tournamentResult.data) {
-      setNombreTorneo(tournamentResult.data.name || "Torneo Oficial");
-      setTorneoSlug(tournamentResult.data.slug || "");
-      setNumGrupos(Math.max(2, Number(tournamentResult.data.group_count || 4)));
-      setFondoPosterUrl(tournamentResult.data.match_poster_background_url || "");
-    }
+    setNombreTorneo(tournament.name || "Torneo Oficial");
+    setTorneoSlug(tournament.slug || "");
+    setNumGrupos(Math.max(2, Number(tournament.group_count || 4)));
+    setFondoPosterUrl(tournament.match_poster_background_url || "");
     if (teamsResult.error) {
       setEquipos([]);
       setMensaje(`No se pudieron cargar los equipos: ${teamsResult.error.message}`);

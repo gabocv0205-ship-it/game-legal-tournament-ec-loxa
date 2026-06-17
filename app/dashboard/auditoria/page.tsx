@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function AuditoriaPage() {
   const [entries, setEntries] = useState<any[]>([]);
@@ -11,6 +12,12 @@ export default function AuditoriaPage() {
     const load = async () => {
       const tournamentId = localStorage.getItem("activeTournamentId");
       if (!tournamentId) return setMessage("Selecciona primero un torneo.");
+      const tournament = await getAccessibleTournament(supabase, tournamentId, "id");
+      if (!tournament) {
+        clearActiveTournament();
+        setEntries([]);
+        return setMessage("No tienes acceso a ese torneo. Selecciona un torneo propio.");
+      }
       const { data, error } = await supabase.from("audit_log").select("*").eq("tournament_id", tournamentId).order("created_at", { ascending: false }).limit(200);
       if (error) return setMessage("Ejecuta production_hardening.sql para activar la auditoría.");
       setEntries(data || []);

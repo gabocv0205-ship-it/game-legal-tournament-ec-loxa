@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { getSuspendedPlayerIdsForMatch, normalizeTournamentConfig } from "@/lib/tournamentEngine";
+import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export function useTournamentData() {
   const [data, setData] = useState({
@@ -26,19 +27,19 @@ export function useTournamentData() {
         return;
       }
 
-      const [tournamentRes, playersRes, teamsRes, matchesRes, ledgerRes] = await Promise.all([
-        supabase.from("tournaments").select("*").eq("id", activeId).single(),
+      const tournament = await getAccessibleTournament(supabase, activeId);
+      if (!tournament) {
+        clearActiveTournament();
+        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
+        return;
+      }
+
+      const [playersRes, teamsRes, matchesRes, ledgerRes] = await Promise.all([
         supabase.from("players").select("*, teams(name, shield_url)").eq("tournament_id", activeId),
         supabase.from("teams").select("*, payments(amount)").eq("tournament_id", activeId),
         supabase.from("matches").select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)").eq("tournament_id", activeId),
         supabase.from("financial_ledger").select("team_id, entry_type, amount").eq("tournament_id", activeId),
       ]);
-      if (tournamentRes.error || !tournamentRes.data) {
-        localStorage.removeItem("activeTournamentId");
-        localStorage.removeItem("activeTournamentName");
-        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
-        return;
-      }
 
       const players = playersRes.data || [];
       const teams = teamsRes.data || [];
@@ -49,7 +50,6 @@ export function useTournamentData() {
         ? await supabase.from("match_events").select("match_id, player_id, team_id, event_type").in("match_id", matchIds)
         : { data: [] as any[] };
       const events = eventsRes.data || [];
-      const tournament = tournamentRes.data;
       const rules = normalizeTournamentConfig(tournament || {});
       const upcoming = matches
         .filter((match: any) => match.status !== "finished" && match.match_date)
