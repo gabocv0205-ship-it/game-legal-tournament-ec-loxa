@@ -41,8 +41,13 @@ export default function GestorTorneos() {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       setPerfil(profile);
 
-      // Cargar Torneos y aplicar filtro de Soft Delete
-      const { data: tourneys } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
+      // Cargar torneos dentro del alcance del usuario actual.
+      // El superadmin ve todo; cada cliente solo ve sus propios torneos.
+      const query = supabase.from('tournaments').select('*').order('created_at', { ascending: false });
+      const { data: tourneys, error: torneosError } = profile?.role === 'superadmin'
+        ? await query
+        : await query.eq('user_id', session.user.id);
+      if (torneosError) throw torneosError;
       
       // Filtrar torneos que no estén marcados como eliminados lógicamente
       const torneosActivos = (tourneys || []).filter((t: any) => t.status !== 'deleted');

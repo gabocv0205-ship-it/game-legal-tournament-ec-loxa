@@ -2,17 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* CSS de emergencia para asegurar el fondo general */
+/* Base clara corporativa de GAME-LEGAL */
 body {
-  background-color: #0a0a0a;
-  color: #ffffff;
+  background-color: #f7f4ec;
+  color: #111827;
 }
 
-/* Fuerza el modo oscuro en los calendarios nativos del navegador */
+/* Fuerza modo claro en los calendarios nativos del navegador */
 input[type="date"],
 input[type="datetime-local"],
 input[type="time"] {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /* Solución Definitiva: Fuerza a que TODAS las casillas tengan el diseño Dark de GAME-LEGAL */
@@ -22,7 +22,15 @@ input[type="datetime-local"],
 input[type="date"], 
 select, 
 textarea {
-  background-color: #1c1c1c !important;
-  color: #ffffff !important;
-  border: 1px solid #2e2e2e !important;
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #d8cfb5 !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #d4a017 !important;
+  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.16);
 }

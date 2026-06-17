@@ -46,6 +46,7 @@ with check (public.can_manage_tournament(tournament_id, 'admin'));
 
 alter table public.tournaments enable row level security;
 alter table public.teams enable row level security;
+alter table public.players enable row level security;
 alter table public.matches enable row level security;
 alter table public.match_events enable row level security;
 alter table public.payments enable row level security;
@@ -55,7 +56,7 @@ alter table public.payments enable row level security;
 do $$
 declare v_table text; v_policy record;
 begin
-  foreach v_table in array array['tournaments','teams','matches','match_events','payments'] loop
+  foreach v_table in array array['tournaments','teams','players','matches','match_events','payments'] loop
     for v_policy in
       select policyname from pg_policies where schemaname = 'public' and tablename = v_table
     loop
@@ -65,35 +66,55 @@ begin
 end $$;
 
 drop policy if exists tournaments_public_read on public.tournaments;
-create policy tournaments_public_read on public.tournaments for select to anon, authenticated
+create policy tournaments_public_read on public.tournaments for select to anon
 using (status is distinct from 'deleted');
+drop policy if exists tournaments_tenant_read on public.tournaments;
+create policy tournaments_tenant_read on public.tournaments for select to authenticated
+using (public.can_manage_tournament(id, 'read'));
 drop policy if exists tournaments_manager_write on public.tournaments;
 create policy tournaments_manager_write on public.tournaments for all to authenticated
 using (public.can_manage_tournament(id, 'admin'))
 with check (user_id = auth.uid() or public.can_manage_tournament(id, 'admin'));
 
 drop policy if exists teams_public_read on public.teams;
-create policy teams_public_read on public.teams for select to anon, authenticated
+create policy teams_public_read on public.teams for select to anon
 using (exists (select 1 from public.tournaments t where t.id = tournament_id and t.status is distinct from 'deleted'));
+drop policy if exists teams_tenant_read on public.teams;
+create policy teams_tenant_read on public.teams for select to authenticated
+using (public.can_manage_tournament(tournament_id, 'read'));
 drop policy if exists teams_manager_write on public.teams;
 create policy teams_manager_write on public.teams for all to authenticated
 using (public.can_manage_tournament(tournament_id, 'admin'))
 with check (public.can_manage_tournament(tournament_id, 'admin'));
 
+drop policy if exists players_manager_select on public.players;
+drop policy if exists players_tenant_read on public.players;
+create policy players_tenant_read on public.players for select to authenticated
+using (public.can_manage_tournament(tournament_id, 'read'));
+revoke select on public.players from anon;
+grant select on public.players to authenticated;
+alter view if exists public.public_players set (security_invoker = true);
+
 drop policy if exists matches_public_read on public.matches;
-create policy matches_public_read on public.matches for select to anon, authenticated
+create policy matches_public_read on public.matches for select to anon
 using (exists (select 1 from public.tournaments t where t.id = tournament_id and t.status is distinct from 'deleted'));
+drop policy if exists matches_tenant_read on public.matches;
+create policy matches_tenant_read on public.matches for select to authenticated
+using (public.can_manage_tournament(tournament_id, 'read'));
 drop policy if exists matches_manager_write on public.matches;
 create policy matches_manager_write on public.matches for all to authenticated
 using (public.can_manage_tournament(tournament_id, 'matches'))
 with check (public.can_manage_tournament(tournament_id, 'matches'));
 
 drop policy if exists match_events_public_read on public.match_events;
-create policy match_events_public_read on public.match_events for select to anon, authenticated
+create policy match_events_public_read on public.match_events for select to anon
 using (exists (
   select 1 from public.matches m join public.tournaments t on t.id = m.tournament_id
   where m.id = match_id and t.status is distinct from 'deleted'
 ));
+drop policy if exists match_events_tenant_read on public.match_events;
+create policy match_events_tenant_read on public.match_events for select to authenticated
+using (exists (select 1 from public.matches m where m.id = match_id and public.can_manage_tournament(m.tournament_id, 'read')));
 drop policy if exists match_events_manager_write on public.match_events;
 create policy match_events_manager_write on public.match_events for all to authenticated
 using (exists (select 1 from public.matches m where m.id = match_id and public.can_manage_tournament(m.tournament_id, 'matches')))

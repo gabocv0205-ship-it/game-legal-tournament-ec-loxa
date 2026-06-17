@@ -27,15 +27,16 @@ select
 -- Debe devolver cero filas. Detecta politicas heredadas no contempladas.
 with expected(tablename, policyname) as (
   values
-    ('tournaments','tournaments_public_read'), ('tournaments','tournaments_manager_write'),
-    ('teams','teams_public_read'), ('teams','teams_manager_write'),
-    ('matches','matches_public_read'), ('matches','matches_manager_write'),
-    ('match_events','match_events_public_read'), ('match_events','match_events_manager_write'),
+    ('tournaments','tournaments_public_read'), ('tournaments','tournaments_tenant_read'), ('tournaments','tournaments_manager_write'),
+    ('teams','teams_public_read'), ('teams','teams_tenant_read'), ('teams','teams_manager_write'),
+    ('players','players_tenant_read'),
+    ('matches','matches_public_read'), ('matches','matches_tenant_read'), ('matches','matches_manager_write'),
+    ('match_events','match_events_public_read'), ('match_events','match_events_tenant_read'), ('match_events','match_events_manager_write'),
     ('payments','payments_finance_read'), ('payments','payments_finance_write')
 )
 select p.tablename, p.policyname as politica_inesperada
 from pg_policies p
 left join expected e on e.tablename = p.tablename and e.policyname = p.policyname
 where p.schemaname = 'public'
-  and p.tablename in ('tournaments','teams','matches','match_events','payments')
+  and p.tablename in ('tournaments','teams','players','matches','match_events','payments')
   and e.policyname is null;

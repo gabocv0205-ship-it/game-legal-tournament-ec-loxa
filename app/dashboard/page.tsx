@@ -31,7 +31,14 @@ export default function DashboardInicio() {
       setTorneoActivoId(storedId);
       
       // Traemos todos los torneos ordenados (las políticas RLS filtrarán solos los que te pertenecen)
-      const { data } = await supabase.from('tournaments').select('id, name').order('created_at', { ascending: false });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+
+      const query = supabase.from('tournaments').select('id, name').order('created_at', { ascending: false });
+      const { data } = profile?.role === 'superadmin'
+        ? await query
+        : await query.eq('user_id', session.user.id);
       if (data) setMisTorneos(data);
     };
     fetchTorneos();
