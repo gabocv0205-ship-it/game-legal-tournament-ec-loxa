@@ -157,7 +157,8 @@ export default function PortalTorneoDinamico() {
   }
 
   // Bandera para detectar si el torneo fue purgado/archivado por el sistema automatizado
-  const isArchived = torneoActual?.status === 'archived';
+  const isFinalized = ["finished", "archived", "deleted"].includes(String(torneoActual?.status || "active"));
+  const isArchived = isFinalized;
   const partidoDestacado = partidos.find(partido => partido.status !== 'finished' && partido.match_date) || partidos[0];
   const finalizadosFinal = partidos.filter(partido => partido.status === "finished" && (partido.stage === "Final" || partido.stage === "Final (Vuelta)"));
   const finalBase = finalizadosFinal[0];
@@ -178,6 +179,7 @@ export default function PortalTorneoDinamico() {
     : false;
   const campeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.home : finalBase.away) : null;
   const subcampeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.away : finalBase.home) : null;
+  const campeonHistorico = campeon || (torneoActual?.champion_name ? { name: torneoActual.champion_name, shield_url: null } : null);
   const auspiciantesTorneo = Array.isArray(torneoActual?.tournament_sponsors) && torneoActual.tournament_sponsors.length
     ? torneoActual.tournament_sponsors
     : [
@@ -190,6 +192,50 @@ export default function PortalTorneoDinamico() {
       "Torneos Calib",
       "Multipagos San Sebastián",
     ];
+
+  if (isFinalized) {
+    return (
+      <>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+        <style dangerouslySetInnerHTML={{__html: `
+          :root { --gold: #D4A017; --gold-light: #F5C842; --black: #0D0D0D; --white: #FFFFFF; }
+          body { background: var(--black); color: var(--white); overflow-x: hidden; font-family: system-ui, sans-serif; }
+          .btn-secondary { background: transparent; color: var(--gold); border: 1px solid var(--gold); padding: 12px 28px; border-radius: 4px; font-weight: bold; text-transform: uppercase; display: inline-block; transition: 0.3s; text-decoration: none; }
+          .champion-stage { min-height: 100vh; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 70px 20px; background: radial-gradient(circle at center, rgba(212,160,23,.24), rgba(13,13,13,.97) 62%); }
+          .champion-stage::before, .champion-stage::after { content: ''; position: absolute; width: 260px; height: 260px; border-radius: 50%; background: rgba(212,160,23,.12); filter: blur(35px); animation: champion-pulse 3s ease-in-out infinite alternate; }
+          .champion-stage::before { left: -80px; top: -80px; }.champion-stage::after { right: -80px; bottom: -80px; animation-delay: 1s; }
+          .champion-shield { animation: champion-float 2.8s ease-in-out infinite; filter: drop-shadow(0 0 28px rgba(245,200,66,.55)); }
+          @keyframes champion-float { 50% { transform: translateY(-10px) scale(1.04); } }
+          @keyframes champion-pulse { to { transform: scale(1.25); opacity: .45; } }
+        `}} />
+        <section className="champion-stage">
+          <div style={{ position: "relative", zIndex: 1, maxWidth: "900px", margin: "0 auto", textAlign: "center" }}>
+            {campeonHistorico ? (
+              <>
+                <p style={{ color: "var(--gold)", fontSize: "12px", fontWeight: 900, letterSpacing: "4px", textTransform: "uppercase" }}>Campeon oficial</p>
+                <div style={{ fontSize: "64px", margin: "14px 0", filter: "drop-shadow(0 0 20px rgba(212,160,23,.55))" }}>🏆</div>
+                {campeonHistorico.shield_url && <Image src={campeonHistorico.shield_url} alt={`Escudo de ${campeonHistorico.name}`} width={150} height={150} unoptimized className="champion-shield mx-auto object-contain" />}
+                <h1 style={{ color: "white", fontSize: "clamp(34px,7vw,72px)", fontWeight: 950, textTransform: "uppercase", letterSpacing: "3px", marginTop: "18px" }}>{campeonHistorico.name}</h1>
+                {resultadoFinal && (
+                  <p style={{ color: "var(--gold-light)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "2px", marginTop: "8px" }}>
+                    Final {resultadoFinal.home}-{resultadoFinal.away}{resultadoFinal.homePenalties !== null ? ` · Penales ${resultadoFinal.homePenalties}-${resultadoFinal.awayPenalties}` : ""}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p style={{ color: "var(--gold)", fontSize: "12px", fontWeight: 900, letterSpacing: "4px", textTransform: "uppercase" }}>Torneo finalizado</p>
+                <h1 style={{ color: "white", fontSize: "clamp(32px,6vw,64px)", fontWeight: 950, textTransform: "uppercase", letterSpacing: "3px", marginTop: "18px" }}>No disponible publicamente</h1>
+              </>
+            )}
+            <div style={{ marginTop: "34px" }}>
+              <Link href="/" className="btn-secondary"><i className="fa fa-arrow-left"></i> Volver al Directorio</Link>
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
 
   return (
     <>

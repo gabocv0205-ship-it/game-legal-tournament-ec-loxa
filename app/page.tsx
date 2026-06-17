@@ -31,8 +31,9 @@ export default function PortalPrincipal() {
         const { data: tourneys } = await supabase.from("tournaments").select("*").order("created_at", { ascending: false });
         
         if (tourneys && tourneys.length > 0) {
-          setTorneosActivos(tourneys);
-          setTorneoDestacado(tourneys[0]); 
+          const visibles = tourneys.filter((torneo: any) => !["finished", "archived", "deleted"].includes(String(torneo.status || "active")));
+          setTorneosActivos(visibles);
+          setTorneoDestacado(visibles[0] || null);
         }
       } catch (err) {
         console.error("Error cargando portal principal:", err);
