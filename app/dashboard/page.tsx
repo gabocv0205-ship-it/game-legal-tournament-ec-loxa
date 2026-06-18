@@ -107,9 +107,9 @@ export default function DashboardInicio() {
       <div className="pt-8 border-t border-[#2E2E2E]">
         <h3 className="text-center text-xs font-bold text-gray-500 uppercase tracking-[0.2em] mb-6">Patrocinadores Oficiales del Torneo</h3>
         <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
-          <div className="flex items-center gap-2 text-xl font-black tracking-tighter text-white"><span className="text-[#D4A017]">⚡</span> ASTRO CLUB</div>
+          <div className="flex items-center gap-2 text-xl font-black tracking-tighter text-white"><span className="text-[#D4A017]">⚡</span> ☕ Cafetería Coffee Time</div>
           <div className="flex items-center gap-2 text-xl font-black tracking-widest text-white"><span className="text-blue-500">⚕️</span> FARMACIAS SUR</div>
-          <div className="flex items-center gap-2 text-xl font-black text-white italic">PUERTA DEL SOL</div>
+          <div className="flex items-center gap-2 text-xl font-black text-white italic">LA CASA DEL PERNO</div>
           <div className="flex items-center gap-2 text-xl font-black text-white">⚖️ GAME-LEGAL STUDIO</div>
         </div>
       </div>
