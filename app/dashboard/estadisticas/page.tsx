@@ -181,9 +181,24 @@ export default function EstadisticasPage() {
   const descargarPosiciones = async () => {
     if (!posterPosicionesRef.current) return;
     setExportando(true);
+    const poster = posterPosicionesRef.current;
+    const previousStyle = {
+      width: poster.style.width,
+      minWidth: poster.style.minWidth,
+    };
     try {
-      const ancho = posterPosicionesRef.current.scrollWidth;
-      const canvas = await html2canvas(posterPosicionesRef.current, { backgroundColor: "#06132f", scale: 2, useCORS: true, width: ancho, windowWidth: ancho });
+      poster.style.width = "1080px";
+      poster.style.minWidth = "1080px";
+      await Promise.all(Array.from(poster.querySelectorAll("img")).map(image => {
+        if (image.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          image.onload = resolve;
+          image.onerror = resolve;
+        });
+      }));
+      const ancho = poster.scrollWidth;
+      const alto = poster.scrollHeight;
+      const canvas = await html2canvas(poster, { backgroundColor: "#06132f", scale: 2, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
       const socialCanvas = document.createElement("canvas");
       socialCanvas.width = 1080; socialCanvas.height = 1350;
       const context = socialCanvas.getContext("2d");
@@ -199,6 +214,8 @@ export default function EstadisticasPage() {
     } catch {
       alert("No se pudo generar el póster de posiciones.");
     } finally {
+      poster.style.width = previousStyle.width;
+      poster.style.minWidth = previousStyle.minWidth;
       setExportando(false);
     }
   };
@@ -250,23 +267,32 @@ export default function EstadisticasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
-              {tabla.map((s, index) => (
-                <tr key={s.id} className={`hover:bg-[#141414] transition-colors border-l-4 ${s.classificationStatus === 'qualified' ? 'border-l-green-500' : s.classificationStatus === 'repechage' ? 'border-l-yellow-500' : 'border-l-gray-600'}`}>
-                  <td className="px-4 py-3 font-black text-gray-500">{index + 1}</td>
-                  <td className="px-4 py-3 text-left font-bold flex items-center gap-3">
-                    {s.shield ? <Image src={s.shield} alt={`Escudo de ${s.name}`} width={24} height={24} unoptimized className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
-                    <span className="uppercase tracking-wide">{s.name}</span>
-                  </td>
-                  <td className="px-3 py-3 font-bold">{s.pj}</td>
-                  <td className="px-3 py-3 text-green-400">{s.pg}</td>
-                  <td className="px-3 py-3 text-yellow-400">{s.pe}</td>
-                  <td className="px-3 py-3 text-red-400">{s.pp}</td>
-                  <td className="px-3 py-3 text-gray-300">{s.gf}</td>
-                  <td className="px-3 py-3 text-gray-300">{s.gc}</td>
-                  <td className="px-3 py-3 font-bold text-white">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
-                  <td className="px-3 py-3 font-bold text-blue-300">{s.fairPlay}</td>
-                  <td className="px-4 py-3 font-black text-lg text-[#D4A017] bg-[#D4A017]/5">{s.pts}</td>
-                </tr>
+              {Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+                <React.Fragment key={grupo}>
+                  <tr className="bg-[#0f0f0f]">
+                    <td colSpan={11} className="px-4 py-3 text-left text-[#D4A017] font-black uppercase tracking-[0.25em] text-xs">
+                      Grupo {grupo}
+                    </td>
+                  </tr>
+                  {equipos.map((s, index) => (
+                    <tr key={s.id} className={`hover:bg-[#141414] transition-colors border-l-4 ${s.classificationStatus === 'qualified' ? 'border-l-green-500' : s.classificationStatus === 'repechage' ? 'border-l-yellow-500' : 'border-l-gray-600'}`}>
+                      <td className="px-4 py-3 font-black text-gray-500">{index + 1}</td>
+                      <td className="px-4 py-3 text-left font-bold flex items-center gap-3">
+                        {s.shield ? <Image src={s.shield} alt={`Escudo de ${s.name}`} width={24} height={24} unoptimized className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
+                        <span className="uppercase tracking-wide">{s.name}</span>
+                      </td>
+                      <td className="px-3 py-3 font-bold">{s.pj}</td>
+                      <td className="px-3 py-3 text-green-400">{s.pg}</td>
+                      <td className="px-3 py-3 text-yellow-400">{s.pe}</td>
+                      <td className="px-3 py-3 text-red-400">{s.pp}</td>
+                      <td className="px-3 py-3 text-gray-300">{s.gf}</td>
+                      <td className="px-3 py-3 text-gray-300">{s.gc}</td>
+                      <td className="px-3 py-3 font-bold text-white">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
+                      <td className="px-3 py-3 font-bold text-blue-300">{s.fairPlay}</td>
+                      <td className="px-4 py-3 font-black text-lg text-[#D4A017] bg-[#D4A017]/5">{s.pts}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
               ))}
             </tbody>
           </table>

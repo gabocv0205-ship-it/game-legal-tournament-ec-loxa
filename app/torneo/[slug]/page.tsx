@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link'; 
+import { calculateStandings, normalizeTournamentConfig } from '@/lib/tournamentEngine';
 
 export default function PortalTorneoDinamico() {
   const router = useRouter();
@@ -55,28 +56,9 @@ export default function PortalTorneoDinamico() {
         
         setPartidos(matches || []);
 
-        const stats: Record<string, any> = {};
-        teams?.forEach(t => {
-          stats[t.id] = { id: t.id, name: t.name, shield: t.shield_url, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
-        });
-
-        matches?.filter(m => m.status === 'finished' && m.stage === 'Fase de Grupos').forEach(m => {
-          const hId = m.home_team_id; const aId = m.away_team_id;
-          const hG = m.home_goals || 0; const aG = m.away_goals || 0;
-          if (stats[hId] && stats[aId]) {
-            stats[hId].pj++; stats[aId].pj++;
-            stats[hId].gf += hG; stats[aId].gf += aG;
-            stats[hId].gc += aG; stats[aId].gc += hG;
-            if (hG > aG) { stats[hId].pg++; stats[hId].pts += 3; stats[aId].pp++; }
-            else if (aG > hG) { stats[aId].pg++; stats[aId].pts += 3; stats[hId].pp++; }
-            else { stats[hId].pe++; stats[hId].pts += 1; stats[aId].pe++; stats[aId].pts += 1; }
-          }
-        });
-
-        const ordenada = Object.values(stats)
-          .map(s => ({ ...s, gd: s.gf - s.gc }))
-          .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-        setTabla(ordenada);
+        const groupMatches = (matches || []).filter(m => m.status === 'finished' && m.stage === 'Fase de Grupos');
+        const standings = calculateStandings(teams || [], groupMatches, [], normalizeTournamentConfig(tourney));
+        setTabla(Object.values(standings).flat());
 
         const scorersResponse = await fetch(`/api/public/tournaments/${encodeURIComponent(String(slug))}/scorers`, { cache: "no-store" });
         const scorersData = await scorersResponse.json();
@@ -180,6 +162,10 @@ export default function PortalTorneoDinamico() {
   const campeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.home : finalBase.away) : null;
   const subcampeon = finalBase && finalTieneGanador ? (campeonEsLocal ? finalBase.away : finalBase.home) : null;
   const campeonHistorico = campeon || (torneoActual?.champion_name ? { name: torneoActual.champion_name, shield_url: null } : null);
+  const posicionesPorGrupo = tabla.reduce<Record<string, any[]>>((groups, team) => {
+    (groups[team.group || "General"] ||= []).push(team);
+    return groups;
+  }, {});
   const auspiciantesTorneo = Array.isArray(torneoActual?.tournament_sponsors) && torneoActual.tournament_sponsors.length
     ? torneoActual.tournament_sponsors
     : [
@@ -469,12 +455,17 @@ export default function PortalTorneoDinamico() {
                             {tabla.length === 0 ? (
                               <tr><td colSpan={10} className="py-12 text-center text-gray-500 font-medium">Aún no existen registros en este grupo.</td></tr>
                             ) : (
-                              tabla.map((equipo, index) => {
-                                const numeroPosicion = String(index + 1).padStart(2, '0');
-                                const calificaDirecto = index < 4; // Top 4 barra verde
+                              Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+                                <React.Fragment key={grupo}>
+                                  <tr className="bg-[#101010]">
+                                    <td colSpan={10} className="py-3 px-6 text-[#D4A017] text-[11px] font-black uppercase tracking-[0.25em]">Grupo {grupo}</td>
+                                  </tr>
+                                  {equipos.map((equipo, index) => {
+                                    const numeroPosicion = String(index + 1).padStart(2, '0');
+                                    const calificaDirecto = equipo.classificationStatus === "qualified";
 
-                                return (
-                                  <tr key={equipo.id} className={`hover:bg-white/5 transition-colors duration-150 relative group ${calificaDirecto ? 'border-l-4 border-l-[#1B6B2F]' : ''}`}>
+                                    return (
+                                      <tr key={equipo.id} className={`hover:bg-white/5 transition-colors duration-150 relative group ${calificaDirecto ? 'border-l-4 border-l-[#1B6B2F]' : equipo.classificationStatus === "repechage" ? 'border-l-4 border-l-yellow-500' : ''}`}>
                                     <td className={`py-4 px-6 text-center font-mono text-base ${index === 0 ? 'text-[#D4A017]' : index === 1 ? 'text-gray-300' : index === 2 ? 'text-amber-600' : 'text-gray-500'}`}>
                                       {numeroPosicion}
                                     </td>
@@ -498,9 +489,11 @@ export default function PortalTorneoDinamico() {
                                     <td className="py-4 px-6 text-center text-lg font-black text-[#D4A017] font-mono bg-black/20">
                                       {equipo.pts}
                                     </td>
-                                  </tr>
-                                );
-                              })
+                                      </tr>
+                                    );
+                                  })}
+                                </React.Fragment>
+                              ))
                             )}
                           </tbody>
                         </table>

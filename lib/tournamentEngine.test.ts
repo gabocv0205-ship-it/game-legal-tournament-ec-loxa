@@ -17,6 +17,13 @@ const teams = [
   { id: "d", name: "D", group_name: "A" },
 ];
 
+const groupedTeams = [
+  { id: "a1", name: "A1", group_name: "A" },
+  { id: "a2", name: "A2", group_name: "A" },
+  { id: "b1", name: "B1", group_name: "B" },
+  { id: "b2", name: "B2", group_name: "B" },
+];
+
 describe("motor deportivo", () => {
   it("ordena posiciones y marca clasificados", () => {
     const groups = calculateStandings(teams, [
@@ -32,6 +39,29 @@ describe("motor deportivo", () => {
     const fixtures = createMatchdayFixtures(teams, [], "t1", 1, "Fase de Grupos");
     expect(fixtures).toHaveLength(2);
     expect(new Set(fixtures.map(match => [match.home_team_id, match.away_team_id].sort().join(":"))).size).toBe(2);
+  });
+
+  it("mantiene posiciones aisladas por grupo e ignora cruces inválidos entre grupos", () => {
+    const groups = calculateStandings(groupedTeams, [
+      { id: "m1", status: "finished", stage: "Fase de Grupos", home_team_id: "a1", away_team_id: "a2", home_goals: 2, away_goals: 0 },
+      { id: "m2", status: "finished", stage: "Fase de Grupos", home_team_id: "a1", away_team_id: "b1", home_goals: 9, away_goals: 0 },
+    ], [{ match_id: "m2", team_id: "a1", event_type: "amarilla" }], { qualifiers_per_group: 1 });
+    expect(Object.keys(groups).sort()).toEqual(["A", "B"]);
+    expect(groups.A.find(team => team.id === "a1").pts).toBe(3);
+    expect(groups.A.find(team => team.id === "a1").gf).toBe(2);
+    expect(groups.A.find(team => team.id === "a1").fairPlay).toBe(0);
+    expect(groups.B.find(team => team.id === "b1").pj).toBe(0);
+  });
+
+  it("genera fixtures solo dentro de cada grupo y soporta ida y vuelta", () => {
+    const fixtures = createMatchdayFixtures(groupedTeams, [], "t1", 1, "Fase de Grupos", { legs: 2 });
+    expect(fixtures).toHaveLength(4);
+    expect(fixtures.every(match => {
+      const home = groupedTeams.find(team => team.id === match.home_team_id);
+      const away = groupedTeams.find(team => team.id === match.away_team_id);
+      return home?.group_name === away?.group_name;
+    })).toBe(true);
+    expect(fixtures.filter(match => [match.home_team_id, match.away_team_id].sort().join(":") === "a1:a2")).toHaveLength(2);
   });
 
   it("distribuye horarios entre canchas", () => {

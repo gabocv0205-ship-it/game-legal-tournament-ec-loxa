@@ -106,8 +106,18 @@ export function sortStandings(a: any, b: any) {
 
 export function calculateStandings(teams: any[], matches: any[], events: any[] = [], config?: Partial<TournamentConfig>) {
   const rules = normalizeTournamentConfig(config);
+  const teamGroupById = Object.fromEntries(teams.map((team) => [team.id, team.group_name || "General"]));
+  const eligibleMatches = matches.filter((match) => {
+    if (match.status !== "finished") return false;
+    const homeGroup = teamGroupById[match.home_team_id];
+    const awayGroup = teamGroupById[match.away_team_id];
+    if (!homeGroup || !awayGroup) return false;
+    return homeGroup === awayGroup;
+  });
+  const eligibleMatchIds = new Set(eligibleMatches.map((match) => match.id).filter(Boolean));
   const fairPlayByTeam: Record<string, number> = {};
   events.forEach((event) => {
+    if (event.match_id && !eligibleMatchIds.has(event.match_id)) return;
     fairPlayByTeam[event.team_id] = (fairPlayByTeam[event.team_id] || 0) + (event.event_type === "roja" ? 3 : event.event_type === "amarilla" ? 1 : 0);
   });
 
@@ -120,7 +130,7 @@ export function calculateStandings(teams: any[], matches: any[], events: any[] =
     };
   });
 
-  matches.filter((match) => match.status === "finished").forEach((match) => {
+  eligibleMatches.forEach((match) => {
     const home = standings[match.home_team_id];
     const away = standings[match.away_team_id];
     if (!home || !away) return;
@@ -158,8 +168,11 @@ export function getQualifiedTeams(groups: Record<string, any[]>, includeRepechag
     .sort(sortStandings);
 }
 
-export function createMatchdayFixtures(teams: any[], existingMatches: any[], tournamentId: string, matchday: number, stage: string) {
-  const existingPairs = new Set(existingMatches.map((match) => [match.home_team_id, match.away_team_id].sort().join(":")));
+export function createMatchdayFixtures(teams: any[], existingMatches: any[], tournamentId: string, matchday: number, stage: string, options: { legs?: number } = {}) {
+  const legs = Math.max(1, Math.min(2, Number(options.legs || 1)));
+  const relevantMatches = existingMatches.filter((match) => match.stage === stage || (legs === 2 && match.stage === `${stage} (Vuelta)`));
+  const existingDirectedPairs = new Set(relevantMatches.map((match) => `${match.home_team_id}:${match.away_team_id}`));
+  const existingPairs = new Set(relevantMatches.map((match) => [match.home_team_id, match.away_team_id].sort().join(":")));
   const groups = teams.reduce<Record<string, any[]>>((acc, team) => {
     (acc[team.group_name || "General"] ||= []).push(team);
     return acc;
@@ -181,9 +194,21 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
       const away = round[round.length - 1 - index];
       if (home.id === "__bye__" || away.id === "__bye__") continue;
       const key = [home.id, away.id].sort().join(":");
-      if (!existingPairs.has(key)) {
+      const firstLegKey = `${home.id}:${away.id}`;
+      const secondLegKey = `${away.id}:${home.id}`;
+      if (legs === 1 && !existingPairs.has(key)) {
         fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
         existingPairs.add(key);
+        existingDirectedPairs.add(firstLegKey);
+      } else if (legs === 2) {
+        if (!existingDirectedPairs.has(firstLegKey)) {
+          fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
+          existingDirectedPairs.add(firstLegKey);
+        }
+        if (!existingDirectedPairs.has(secondLegKey)) {
+          fixtures.push({ tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + rounds, stage: `${stage} (Vuelta)` });
+          existingDirectedPairs.add(secondLegKey);
+        }
       }
     }
   });

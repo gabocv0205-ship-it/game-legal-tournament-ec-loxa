@@ -136,6 +136,13 @@ export default function PartidosPage() {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     if (!torneoId) return alert("No hay torneo activo.");
+    if (faseManual === "Fase de Grupos") {
+      const local = equipos.find(equipo => equipo.id === localId);
+      const visitante = equipos.find(equipo => equipo.id === visitanteId);
+      if ((local?.group_name || "General") !== (visitante?.group_name || "General")) {
+        return alert("En fase de grupos solo pueden enfrentarse equipos del mismo grupo.");
+      }
+    }
     const conflict = validateManualMatch({
       home_team_id: localId, away_team_id: visitanteId, match_date: fecha, court: canchaManual, stage: faseManual
     }, partidos, configuracion.match_duration_minutes);
@@ -156,12 +163,13 @@ export default function PartidosPage() {
     if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
     setLoading(true);
     try {
-      const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase);
+      if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
+      const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
       const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion });
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
-      alert(`Fecha ${autoJornada} generada sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
+      alert(`Fecha ${autoJornada} generada por grupos, sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
       cargarDatos();
     } catch (error: any) {
       alert(error.message);
