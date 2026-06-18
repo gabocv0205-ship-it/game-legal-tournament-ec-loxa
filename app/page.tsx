@@ -228,22 +228,22 @@ export default function PortalPrincipal() {
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
           <div className="sponsors-track reveal">
             {[
-              "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
-              "Dr. Alex Ávila",
-              "Game-Legal Estudio Jurídico Virtual",
-              "Cafetería Coffee Time",
-              "Mister Copy",
-              "Botanitas Express",
-              "Torneos Calib",
-              "Multipagos San Sebastián",
-              "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
-              "Dr. Alex Ávila",
-              "Game-Legal Estudio Jurídico Virtual",
-              "Cafetería Coffee Time",
-              "Mister Copy",
-              "Botanitas Express",
-              "Torneos Calib",
-              "Multipagos San Sebastián",
+              "⚖️ Dra. Gina Calva - Notaría Primera Del Cantón Loja",
+  "👨‍⚖️ Dr. Alex Ávila",
+  "📚 Game-Legal Estudio Jurídico Virtual",
+  "☕ Cafetería Coffee Time",
+  "🖨️ Mister Copy",
+  "🍿 Botanitas Express",
+  "🌴 Torneos Calib",
+  "💳 Multipagos San Sebastián",
+  "⚖️ Dra. Gina Calva - Notaría Primera Del Cantón Loja",
+  "👨‍⚖️ Dr. Alex Ávila",
+  "📚 Game-Legal Estudio Jurídico Virtual",
+  "☕ Cafetería Coffee Time",
+  "🖨️ Mister Copy",
+  "🍿 Botanitas Express",
+  "🌴 Torneos Calib",
+  "💳 Multipagos San Sebastián"
             ].map((sponsor, index) => <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>)}
           </div>
         </div>
