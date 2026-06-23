@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
+import { FinanceExportRow, exportFinanceCsv, exportFinancePdf, exportFinanceXlsx } from "@/lib/exportUtils";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -36,6 +37,9 @@ export default function LibroMayorFinanzas() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroMetodo, setFiltroMetodo] = useState("");
   const [filtroFecha, setFiltroFecha] = useState("");
+  const [exportDesde, setExportDesde] = useState("");
+  const [exportHasta, setExportHasta] = useState("");
+  const [historialExportaciones, setHistorialExportaciones] = useState<any[]>([]);
 
   useEffect(() => {
     cargarDatos();
@@ -71,6 +75,8 @@ export default function LibroMayorFinanzas() {
       const { data: teams } = await supabase.from("teams").select("*, payments(*)").eq("tournament_id", activeId);
       const { data: ledger } = await supabase.from("financial_ledger").select("*").eq("tournament_id", activeId).order("created_at", { ascending: false });
       setHistorialLibro(ledger || []);
+      const { data: exports } = await supabase.from("financial_exports").select("*").eq("tournament_id", activeId).order("created_at", { ascending: false }).limit(12);
+      setHistorialExportaciones(exports || []);
       
       // 3. Traer Partidos Finalizados para el cálculo de arbitraje
       const { data: matches } = await supabase.from("matches").select("id, home_team_id, away_team_id, status").eq("tournament_id", activeId).eq("status", "finished");
@@ -176,6 +182,75 @@ export default function LibroMayorFinanzas() {
     }
   };
 
+  const construirFilasExportacion = (): FinanceExportRow[] => {
+    const desde = exportDesde ? new Date(`${exportDesde}T00:00:00`) : null;
+    const hasta = exportHasta ? new Date(`${exportHasta}T23:59:59`) : null;
+    const nombreEquipo = (teamId: string) => equipos.find(eq => eq.id === teamId)?.name || "Sin equipo";
+    let saldo = 0;
+
+    const base = historialLibro.length > 0
+      ? historialLibro.map(entry => {
+          const amount = Number(entry.amount || 0);
+          const ingreso = entry.entry_type === "payment" ? amount : 0;
+          const egreso = entry.entry_type === "reversal" ? amount : ["charge", "adjustment"].includes(entry.entry_type) ? amount : 0;
+          saldo += ingreso - egreso;
+          return {
+            fecha: entry.created_at,
+            equipo: nombreEquipo(entry.team_id),
+            tipo: entry.entry_type || "movimiento",
+            categoria: entry.category || entry.entry_type,
+            metodo: entry.reference_type || "libro",
+            ingreso,
+            egreso,
+            saldo,
+            descripcion: entry.description || "",
+          };
+        })
+      : historial.map(pago => {
+          const amount = Number(pago.amount || 0);
+          saldo += amount;
+          return {
+            fecha: pago.created_at,
+            equipo: pago.teams?.name || "Sin equipo",
+            tipo: "payment",
+            categoria: pago.concept || "pago",
+            metodo: pago.payment_method || "",
+            ingreso: amount,
+            egreso: 0,
+            saldo,
+            descripcion: pago.description || pago.notes || "",
+          };
+        });
+
+    return base.filter(row => {
+      const fecha = new Date(row.fecha);
+      return (!desde || fecha >= desde) && (!hasta || fecha <= hasta);
+    });
+  };
+
+  const registrarExportacion = async (tipo: string, filas: FinanceExportRow[]) => {
+    if (!torneoId) return;
+    await supabase.from("financial_exports").insert([{
+      tournament_id: torneoId,
+      export_type: tipo,
+      date_from: exportDesde || null,
+      date_to: exportHasta || null,
+      row_count: filas.length,
+    }]);
+    const { data } = await supabase.from("financial_exports").select("*").eq("tournament_id", torneoId).order("created_at", { ascending: false }).limit(12);
+    setHistorialExportaciones(data || []);
+  };
+
+  const exportarFinanzas = async (tipo: "csv" | "xlsx" | "pdf") => {
+    const filas = construirFilasExportacion();
+    if (!filas.length) return alert("No existen movimientos para exportar con esos filtros.");
+    const filename = `finanzas-${torneoId}-${new Date().toISOString().slice(0, 10)}`;
+    if (tipo === "csv") exportFinanceCsv(filas, `${filename}.csv`);
+    if (tipo === "xlsx") exportFinanceXlsx(filas, `${filename}.xlsx`);
+    if (tipo === "pdf") exportFinancePdf(filas, `${filename}.pdf`, "Reporte financiero GAME LEGAL");
+    await registrarExportacion(tipo, filas);
+  };
+
   if (loading) return <div className="text-[#D4A017] text-center p-20 font-black animate-pulse">Auditando Liquidaciones...</div>;
   const equiposFiltrados = equipos.filter(equipo => !filtroEstado || (filtroEstado === "aldia" ? equipo.saldoPendiente === 0 : filtroEstado === "parcial" ? equipo.saldoPendiente > 0 && equipo.pagadoTotal > 0 : equipo.saldoPendiente > 0 && equipo.pagadoTotal === 0));
 
@@ -196,6 +271,32 @@ export default function LibroMayorFinanzas() {
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los estados</option><option value="aldia">Al día</option><option value="parcial">Pago parcial</option><option value="mora">En mora</option></select>
         <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los métodos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select>
         <input type="date" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg" style={{ colorScheme: 'dark' }} />
+      </div>
+
+      <div className="rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <input type="date" value={exportDesde} onChange={e => setExportDesde(e.target.value)} className="rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white" style={{ colorScheme: "dark" }} />
+          <input type="date" value={exportHasta} onChange={e => setExportHasta(e.target.value)} className="rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white" style={{ colorScheme: "dark" }} />
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => exportarFinanzas("csv")} className="rounded-lg bg-[#1C1C1C] px-4 py-3 text-xs font-black uppercase tracking-widest text-white border border-[#2E2E2E] hover:border-[#D4A017]">CSV</button>
+            <button onClick={() => exportarFinanzas("xlsx")} className="rounded-lg bg-[#1C1C1C] px-4 py-3 text-xs font-black uppercase tracking-widest text-white border border-[#2E2E2E] hover:border-[#D4A017]">Excel</button>
+            <button onClick={() => exportarFinanzas("pdf")} className="rounded-lg bg-[#D4A017] px-4 py-3 text-xs font-black uppercase tracking-widest text-black hover:bg-yellow-400">PDF</button>
+          </div>
+        </div>
+        {historialExportaciones.length > 0 && (
+          <div className="mt-4 border-t border-[#2E2E2E] pt-3">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#D4A017]">Historial de exportaciones</p>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              {historialExportaciones.slice(0, 6).map(item => (
+                <div key={item.id} className="rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-xs">
+                  <span className="font-black uppercase text-white">{item.export_type}</span>
+                  <span className="ml-2 text-gray-500">{item.row_count} filas</span>
+                  <p className="mt-1 text-gray-500">{new Date(item.created_at).toLocaleString("es-EC")}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-[#1C1C1C] rounded-2xl shadow-xl border border-[#2E2E2E] overflow-hidden">

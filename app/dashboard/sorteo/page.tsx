@@ -5,9 +5,12 @@ import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeCanvas } from "qrcode.react";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
+import AudioExperienceControls from "@/components/AudioExperienceControls";
+import { playAudioEffect } from "@/lib/audioExperience";
 
 export default function SorteoPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
+  const [torneoId, setTorneoId] = useState<string | null>(null);
   const [numGrupos, setNumGrupos] = useState<number>(4);
   const [nombreTorneo, setNombreTorneo] = useState("Torneo Oficial");
   const [torneoSlug, setTorneoSlug] = useState("");
@@ -15,11 +18,17 @@ export default function SorteoPage() {
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [modoPresentacion, setModoPresentacion] = useState(false);
+  const [sorteoEnVivo, setSorteoEnVivo] = useState(false);
+  const [equipoRevelado, setEquipoRevelado] = useState<any>(null);
+  const [grupoRevelado, setGrupoRevelado] = useState("");
+  const [historialSorteos, setHistorialSorteos] = useState<any[]>([]);
   
   // Referencia para capturar la imagen
   const capturaRef = useRef<HTMLDivElement>(null);
 
   const letrasGrupos = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const esperar = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   useEffect(() => {
     cargarEquipos();
@@ -38,9 +47,11 @@ export default function SorteoPage() {
       setLoading(false);
       return setMensaje("No tienes acceso a ese torneo. Selecciona un torneo propio desde Mis Torneos.");
     }
-    const [teamsResult] = await Promise.all([
+    const [teamsResult, drawLogsResult] = await Promise.all([
       supabase.from("teams").select("id, name, shield_url, group_name, tournament_id").eq("tournament_id", activeId).order("name"),
+      supabase.from("draw_history").select("*").eq("tournament_id", activeId).order("created_at", { ascending: false }).limit(8),
     ]);
+    setTorneoId(activeId);
     setNombreTorneo(tournament.name || "Torneo Oficial");
     setTorneoSlug(tournament.slug || "");
     setNumGrupos(Math.max(2, Number(tournament.group_count || 4)));
@@ -52,6 +63,7 @@ export default function SorteoPage() {
       setEquipos(teamsResult.data || []);
       if (!teamsResult.data?.length) setMensaje("Este torneo todavía no tiene equipos registrados.");
     }
+    setHistorialSorteos(drawLogsResult.data || []);
     setLoading(false);
   };
 
@@ -59,10 +71,27 @@ export default function SorteoPage() {
     if (!window.confirm(`¿Sortear automáticamente a los ${equipos.length} equipos en ${numGrupos} grupos?`)) return;
     setLoading(true);
 
+    setSorteoEnVivo(true);
+    setEquipoRevelado(null);
+    setGrupoRevelado("");
+    await playAudioEffect("draw_start");
+    await playAudioEffect("drum_roll");
+
     let equiposMezclados = [...equipos];
     for (let i = equiposMezclados.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [equiposMezclados[i], equiposMezclados[j]] = [equiposMezclados[j], equiposMezclados[i]];
+    }
+
+    for (let index = 0; index < Math.min(equiposMezclados.length, 8); index++) {
+      const equipo = equiposMezclados[index];
+      const grupoAsignado = letrasGrupos[index % numGrupos];
+      setEquipoRevelado(equipo);
+      setGrupoRevelado(`Grupo ${grupoAsignado}`);
+      await esperar(index === 0 ? 1200 : 520);
+      await playAudioEffect("team_pick");
+      await esperar(260);
+      await playAudioEffect("group_assign");
     }
 
     const actualizaciones = equiposMezclados.map((equipo, index) => {
@@ -74,10 +103,27 @@ export default function SorteoPage() {
       const resultados = await Promise.all(actualizaciones);
       const error = resultados.find(resultado => resultado.error)?.error;
       if (error) throw error;
+      if (torneoId) {
+        const resultPayload = equiposMezclados.map((equipo, index) => ({
+          team_id: equipo.id,
+          team_name: equipo.name,
+          group_name: letrasGrupos[index % numGrupos],
+        }));
+        await supabase.from("draw_history").insert([{
+          tournament_id: torneoId,
+          mode: "automatic",
+          title: `Sorteo automático ${new Date().toLocaleString("es-EC")}`,
+          seed: String(Date.now()),
+          result: resultPayload,
+          pots: { total_teams: equiposMezclados.length, group_count: numGrupos },
+        }]);
+      }
+      await playAudioEffect("confirm");
       await cargarEquipos();
     } catch (error: any) {
       alert(`Error al realizar el sorteo: ${error.message || "operación bloqueada"}`);
     } finally {
+      setSorteoEnVivo(false);
       setLoading(false);
     }
   };
@@ -193,6 +239,9 @@ export default function SorteoPage() {
           <button onClick={sorteoAutomatico} disabled={loading} className="bg-[#D4A017] text-black font-black uppercase text-xs px-4 py-2 rounded shadow-[0_0_15px_rgba(212,160,23,0.3)] hover:bg-yellow-500 transition-all">
             🎲 Sortear
           </button>
+          <button onClick={() => setModoPresentacion(true)} disabled={loading} className="bg-[#1C1C1C] text-[#E7C36B] border border-[#D4A017]/50 font-black uppercase text-xs px-4 py-2 rounded hover:bg-[#D4A017] hover:text-black transition-all">
+            PresentaciÃ³n
+          </button>
           <button onClick={limpiarSorteo} disabled={loading} className="bg-red-900/30 text-red-500 border border-red-900 font-black uppercase text-xs px-4 py-2 rounded hover:bg-red-900 hover:text-white transition-all">
             Limpiar
           </button>
@@ -202,7 +251,40 @@ export default function SorteoPage() {
           </button>
         </div>
       </div>
+      <AudioExperienceControls label="Audio del sorteo" />
       {mensaje && <div className="rounded-xl border border-amber-700/60 bg-amber-950/30 p-4 text-sm font-bold text-amber-200">{mensaje}</div>}
+      {historialSorteos.length > 0 && (
+        <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-4">
+          <p className="mb-3 text-xs font-black uppercase tracking-widest text-[#D4A017]">Historial de sorteos</p>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+            {historialSorteos.map(item => (
+              <div key={item.id} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-xs">
+                <p className="font-black uppercase text-white">{item.mode || "sorteo"}</p>
+                <p className="mt-1 text-gray-500">{new Date(item.created_at).toLocaleString("es-EC")}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className={`rounded-3xl border border-[#D4A017]/40 bg-gradient-to-br from-[#111827] via-[#050505] to-[#201504] p-6 shadow-2xl ${sorteoEnVivo ? "ring-2 ring-[#D4A017]/40" : ""}`}>
+        <div className="flex flex-col items-center justify-center gap-4 text-center">
+          <div className={`relative flex h-36 w-36 items-center justify-center rounded-full border-4 border-[#D4A017] bg-[radial-gradient(circle,#3b2d0b,#050505_65%)] shadow-[0_0_45px_rgba(212,160,23,.35)] ${sorteoEnVivo ? "animate-spin" : ""}`}>
+            <div className="absolute inset-5 rounded-full border border-white/10" />
+            <div className="absolute h-2 w-28 rounded-full bg-[#D4A017]/80 blur-[1px]" />
+            <span className="relative z-10 text-3xl font-black text-[#E7C36B]">GÂ·L</span>
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Modo Sorteo Mundial</p>
+            <h3 className="mt-2 text-2xl font-black uppercase tracking-widest text-white">
+              {equipoRevelado ? equipoRevelado.name : "Listo para revelar equipos"}
+            </h3>
+            <p className="mt-1 text-sm font-bold uppercase tracking-widest text-gray-400">
+              {grupoRevelado || "Activa el audio y presiona Sortear"}
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* EQUIPOS SIN ASIGNAR */}
       {equiposLibres.length > 0 && (
@@ -282,6 +364,51 @@ export default function SorteoPage() {
           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-2">Generado por GAME LEGAL</p>
         </div>
       </div>
+
+      {modoPresentacion && (
+        <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#030712] p-6 text-white">
+          <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-6">
+            <div className="flex items-center justify-between border-b border-[#D4A017]/40 pb-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4A017]">Modo presentaciÃ³n</p>
+                <h2 className="text-4xl font-black uppercase tracking-widest">{nombreTorneo}</h2>
+              </div>
+              <button onClick={() => setModoPresentacion(false)} className="rounded-xl border border-white/20 px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-200 hover:bg-white hover:text-black">Cerrar</button>
+            </div>
+            <AudioExperienceControls compact label="Audio de sala" />
+            <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-[#D4A017]/40 bg-gradient-to-b from-[#111827] to-black p-8 text-center">
+                <div className={`mb-8 flex h-60 w-60 items-center justify-center rounded-full border-4 border-[#D4A017] bg-[radial-gradient(circle,#3b2d0b,#050505_65%)] shadow-[0_0_80px_rgba(212,160,23,.4)] ${sorteoEnVivo ? "animate-spin" : ""}`}>
+                  <span className="text-5xl font-black text-[#E7C36B]">GÂ·L</span>
+                </div>
+                <button onClick={sorteoAutomatico} disabled={loading} className="w-full rounded-2xl bg-[#D4A017] px-6 py-4 text-sm font-black uppercase tracking-[0.25em] text-black hover:bg-yellow-400">
+                  Iniciar sorteo
+                </button>
+                <div className="mt-8">
+                  <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4A017]">RevelaciÃ³n</p>
+                  <h3 className="mt-3 text-3xl font-black uppercase tracking-widest">{equipoRevelado?.name || "En espera"}</h3>
+                  <p className="mt-2 text-xl font-black text-gray-300">{grupoRevelado || "Sin grupo asignado"}</p>
+                </div>
+              </div>
+              <div className="grid auto-rows-min gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(columnasPoster, 4)}, minmax(0, 1fr))` }}>
+                {equiposPorGrupo.map(grupo => (
+                  <div key={grupo.letra} className="rounded-3xl border border-[#D4A017]/45 bg-[#0B1220]/90 p-5 shadow-2xl">
+                    <h3 className="mb-4 text-center text-xl font-black uppercase tracking-[0.25em] text-[#E7C36B]">Grupo {grupo.letra}</h3>
+                    <div className="space-y-3">
+                      {grupo.equipos.length === 0 ? <p className="py-6 text-center text-sm text-gray-500">VacÃ­o</p> : grupo.equipos.map(equipo => (
+                        <div key={equipo.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-3">
+                          {equipo.shield_url ? <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={38} height={38} unoptimized className="h-10 w-10 object-contain" /> : <div className="h-10 w-10 rounded-full bg-white/10" />}
+                          <span className="text-base font-black uppercase tracking-wide">{equipo.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import { compressImage, previewImage } from "@/lib/imageClient";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -16,6 +18,12 @@ export default function MiPerfilPage() {
   const [perfil, setPerfil] = useState<any>(null);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [logoPreview, setLogoPreview] = useState("");
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
 
@@ -35,6 +43,8 @@ export default function MiPerfilPage() {
         setPerfil({ ...data, email: session.user.email });
         setNombre(data.full_name || "");
         setTelefono(data.phone || "");
+        setAvatarUrl(data.avatar_url || "");
+        setLogoUrl(data.logo_url || "");
       } else {
         
         setPerfil({ email: session.user.email, role: 'organizer' });
@@ -46,6 +56,58 @@ export default function MiPerfilPage() {
     }
   };
 
+  const seleccionarImagen = async (file: File | undefined, type: "avatar" | "logo") => {
+    if (!file) return;
+    try {
+      const preview = await previewImage(file);
+      if (type === "avatar") {
+        setAvatarFile(file);
+        setAvatarPreview(preview);
+      } else {
+        setLogoFile(file);
+        setLogoPreview(preview);
+      }
+    } catch (error: any) {
+      alert(error.message);
+    }
+  };
+
+  const subirImagenPerfil = async (file: File, type: "avatar" | "logo", userId: string) => {
+    const compressed = await compressImage(file, { maxWidth: type === "avatar" ? 512 : 720, quality: 0.74, prefix: type });
+    const path = `${userId}/${type}-${Date.now()}.webp`;
+    const { error } = await supabase.storage.from("profile-assets").upload(path, compressed, { contentType: "image/webp" });
+    if (error) throw error;
+    return supabase.storage.from("profile-assets").getPublicUrl(path).data.publicUrl;
+  };
+
+  const eliminarImagenPerfil = async (type: "avatar" | "logo") => {
+    const currentUrl = type === "avatar" ? avatarUrl : logoUrl;
+    if (!currentUrl || !window.confirm("¿Eliminar esta imagen del perfil?")) return;
+    setProcesando(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No hay sesión activa");
+      const path = currentUrl.split("/profile-assets/")[1];
+      if (path) await supabase.storage.from("profile-assets").remove([path]);
+      const { error } = await supabase.from("profiles").update(type === "avatar" ? { avatar_url: null } : { logo_url: null }).eq("id", session.user.id);
+      if (error) throw error;
+      if (type === "avatar") {
+        setAvatarUrl("");
+        setAvatarFile(null);
+        setAvatarPreview("");
+      } else {
+        setLogoUrl("");
+        setLogoFile(null);
+        setLogoPreview("");
+      }
+      window.dispatchEvent(new Event("profileChanged"));
+    } catch (error: any) {
+      alert("No se pudo eliminar la imagen: " + error.message);
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const guardarPerfil = async (e: React.FormEvent) => {
     e.preventDefault();
     setProcesando(true);
@@ -53,15 +115,21 @@ export default function MiPerfilPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No hay sesión activa");
 
+      const nextAvatarUrl = avatarFile ? await subirImagenPerfil(avatarFile, "avatar", session.user.id) : avatarUrl;
+      const nextLogoUrl = logoFile ? await subirImagenPerfil(logoFile, "logo", session.user.id) : logoUrl;
+
       const { error } = await supabase.from('profiles').update({
         full_name: nombre,
-        phone: telefono
+        phone: telefono,
+        avatar_url: nextAvatarUrl || null,
+        logo_url: nextLogoUrl || null
       }).eq('id', session.user.id);
 
       if (error) throw error;
       
       alert("¡Perfil actualizado con éxito! Los cambios se reflejarán en el sistema.");
       // Recargar la página para que el Layout (Header) actualice el nombre inmediatamente
+      window.dispatchEvent(new Event("profileChanged"));
       window.location.reload();
     } catch (error: any) {
       alert("Error al actualizar: " + error.message);
@@ -92,14 +160,27 @@ export default function MiPerfilPage() {
           
           <form onSubmit={guardarPerfil} className="space-y-6">
             <div className="flex items-center gap-6 mb-8">
-              <div className="w-24 h-24 rounded-full bg-[#1C1C1C] border-2 border-[#D4A017] flex items-center justify-center text-3xl font-black text-[#D4A017] shadow-[0_0_15px_rgba(212,160,23,0.2)]">
-                {nombre ? nombre.charAt(0).toUpperCase() : (perfil?.email?.charAt(0)?.toUpperCase() || 'U')}
+              <div className="w-24 h-24 rounded-full bg-[#1C1C1C] border-2 border-[#D4A017] flex items-center justify-center text-3xl font-black text-[#D4A017] shadow-[0_0_15px_rgba(212,160,23,0.2)] overflow-hidden">
+                {(avatarPreview || avatarUrl) ? <Image src={avatarPreview || avatarUrl} alt="Foto de perfil" width={96} height={96} unoptimized className="w-full h-full object-cover" /> : (nombre ? nombre.charAt(0).toUpperCase() : (perfil?.email?.charAt(0)?.toUpperCase() || 'U'))}
               </div>
-              <div>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Avatar del Sistema</p>
-                <button type="button" className="bg-[#1C1C1C] hover:bg-[#2E2E2E] text-white text-xs font-bold px-4 py-2 rounded-lg border border-[#2E2E2E] transition-all">
-                  Cambiar Imagen (Próximamente)
-                </button>
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Foto de perfil</p>
+                <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={e => seleccionarImagen(e.target.files?.[0], "avatar")} className="block w-full text-xs text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-[#D4A017]/10 file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#D4A017]" />
+                {(avatarPreview || avatarUrl) && <button type="button" onClick={() => eliminarImagenPerfil("avatar")} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Eliminar foto</button>}
+              </div>
+            </div>
+
+            <div className="mb-8 rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a] p-4">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Logo del cliente / empresa</label>
+              <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="h-24 w-40 rounded-xl border border-[#2E2E2E] bg-[#141414] flex items-center justify-center overflow-hidden">
+                  {(logoPreview || logoUrl) ? <Image src={logoPreview || logoUrl} alt="Logo del cliente" width={160} height={96} unoptimized className="h-full w-full object-contain p-2" /> : <span className="text-xs font-bold text-gray-600">Sin logo</span>}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={e => seleccionarImagen(e.target.files?.[0], "logo")} className="block w-full text-xs text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-[#D4A017]/10 file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#D4A017]" />
+                  <p className="text-[10px] text-gray-500">Formatos permitidos: JPG, JPEG, PNG, WEBP. La app comprime a WEBP automáticamente.</p>
+                  {(logoPreview || logoUrl) && <button type="button" onClick={() => eliminarImagenPerfil("logo")} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Eliminar logo</button>}
+                </div>
               </div>
             </div>
 

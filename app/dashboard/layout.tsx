@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useTournamentData } from "./useTournamentData";
@@ -50,6 +51,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setLoadingPerfil(false);
     }
     verificarIdentidad();
+    window.addEventListener("profileChanged", verificarIdentidad);
+    return () => window.removeEventListener("profileChanged", verificarIdentidad);
   }, [router]);
 
   useEffect(() => {
@@ -131,6 +134,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard/sorteo", label: "Fase de Grupos", icon: Icons.grid },
     { href: "/dashboard/partidos", label: "Partidos", icon: Icons.calendar },
     { href: "/dashboard/finanzas", label: "Finanzas", icon: Icons.dollar },
+    { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Icons.alert },
     { href: "/dashboard/estadisticas", label: "Estadísticas", icon: Icons.chart },
     { href: "/dashboard/roles", label: "Roles y Permisos", icon: Icons.user },
     { href: "/dashboard/auditoria", label: "Auditoría", icon: Icons.eye },
@@ -158,8 +162,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="p-6 border-b border-[#2E2E2E] flex items-center gap-3 relative overflow-hidden">
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
-          <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C]">
-            {perfilUsuario?.role === 'superadmin' ? '👑' : 'C'}
+          <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C] overflow-hidden">
+            {perfilUsuario?.logo_url ? <Image src={perfilUsuario.logo_url} alt="Logo" width={40} height={40} unoptimized className="w-full h-full object-contain p-1" /> : perfilUsuario?.role === 'superadmin' ? '👑' : 'C'}
           </div>
           <div className="relative z-10">
             <p className="font-black text-sm tracking-widest text-white">GAME-LEGAL</p>
@@ -265,7 +269,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-xs font-black text-white uppercase">{perfilUsuario?.full_name || 'Organizador'}</p>
               <p className="text-[10px] text-green-500 tracking-widest uppercase font-bold">● Conectado</p>
             </div>
-            <div className="w-10 h-10 bg-gradient-to-tr from-[#D4A017] to-yellow-300 rounded-full flex items-center justify-center text-black text-sm font-black shadow">GL</div>
+            <div className="w-10 h-10 bg-gradient-to-tr from-[#D4A017] to-yellow-300 rounded-full flex items-center justify-center text-black text-sm font-black shadow overflow-hidden">
+              {perfilUsuario?.avatar_url ? <Image src={perfilUsuario.avatar_url} alt="Perfil" width={40} height={40} unoptimized className="w-full h-full object-cover" /> : "GL"}
+            </div>
           </div>
         </header>
         <div className="flex-1 p-4 md:p-8 relative">

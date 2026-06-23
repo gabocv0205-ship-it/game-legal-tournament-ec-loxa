@@ -9,12 +9,17 @@ export default function EquiposPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [nombre, setNombre] = useState("");
   const [escudo, setEscudo] = useState<File | null>(null);
+  const [dirigenteNombre, setDirigenteNombre] = useState("");
+  const [dirigenteTelefono, setDirigenteTelefono] = useState("");
+  const [dirigenteCorreo, setDirigenteCorreo] = useState("");
+  const [dirigenteNotas, setDirigenteNotas] = useState("");
   const [loading, setLoading] = useState(false);
   const [cargandoDatos, setCargandoDatos] = useState(true);
   
   // Estados para Edición
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nombreEditado, setNombreEditado] = useState("");
+  const [dirigenteEditado, setDirigenteEditado] = useState({ name: "", phone: "", email: "", notes: "" });
 
   useEffect(() => {
     cargarEquipos();
@@ -88,6 +93,12 @@ export default function EquiposPage() {
   const guardarEquipo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!torneoId) return alert("Error: No hay un torneo activo seleccionado.");
+    if (!dirigenteNombre.trim()) return alert("Ingresa el nombre completo del dirigente.");
+    if (!dirigenteTelefono.trim()) return alert("Ingresa el celular del dirigente.");
+    const telefonoNormalizado = dirigenteTelefono.replace(/\D/g, "");
+    if (equipos.some(eq => String(eq.manager_phone || "").replace(/\D/g, "") === telefonoNormalizado)) {
+      return alert("Ya existe un equipo con ese celular de dirigente en este torneo.");
+    }
     
     setLoading(true);
     try {
@@ -104,13 +115,22 @@ export default function EquiposPage() {
       const { error } = await supabase.from("teams").insert([{ 
         name: nombre, 
         shield_url: escudoUrl, 
-        tournament_id: torneoId 
+        tournament_id: torneoId,
+        manager_name: dirigenteNombre.trim(),
+        manager_country_code: "+593",
+        manager_phone: dirigenteTelefono.trim(),
+        manager_email: dirigenteCorreo.trim() || null,
+        manager_notes: dirigenteNotas.trim() || null
       }]);
       
       if (error) throw error;
 
       setNombre(""); 
       setEscudo(null); 
+      setDirigenteNombre("");
+      setDirigenteTelefono("");
+      setDirigenteCorreo("");
+      setDirigenteNotas("");
       cargarEquipos();
     } catch (error: any) { 
       alert("Error: " + error.message); 
@@ -134,7 +154,20 @@ export default function EquiposPage() {
 
   const guardarEdicion = async (id: string) => {
     try {
-      await supabase.from("teams").update({ name: nombreEditado }).eq("id", id);
+      if (!dirigenteEditado.name.trim()) return alert("Ingresa el nombre completo del dirigente.");
+      if (!dirigenteEditado.phone.trim()) return alert("Ingresa el celular del dirigente.");
+      const telefonoNormalizado = dirigenteEditado.phone.replace(/\D/g, "");
+      if (equipos.some(eq => eq.id !== id && String(eq.manager_phone || "").replace(/\D/g, "") === telefonoNormalizado)) {
+        return alert("Ya existe otro equipo con ese celular de dirigente en este torneo.");
+      }
+      await supabase.from("teams").update({
+        name: nombreEditado,
+        manager_name: dirigenteEditado.name.trim(),
+        manager_country_code: "+593",
+        manager_phone: dirigenteEditado.phone.trim(),
+        manager_email: dirigenteEditado.email.trim() || null,
+        manager_notes: dirigenteEditado.notes.trim() || null
+      }).eq("id", id);
       setEditandoId(null);
       cargarEquipos();
     } catch (error) { alert("Error al actualizar."); }
@@ -159,6 +192,27 @@ export default function EquiposPage() {
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Escudo (Opcional - Autocompresión)</label>
               <input type="file" accept="image/*" onChange={e => setEscudo(e.target.files?.[0] || null)} className="w-full p-3 mt-1 text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#D4A017]/10 file:text-[#D4A017] hover:file:bg-[#D4A017]/20 transition-all cursor-pointer" />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a] p-4">
+            <p className="mb-3 text-xs font-black uppercase tracking-widest text-[#D4A017]">Datos del dirigente</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Nombre completo</label>
+                <input type="text" value={dirigenteNombre} onChange={e => setDirigenteNombre(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] border border-[#2E2E2E] text-white rounded-xl focus:outline-none focus:border-[#D4A017]" placeholder="Ej: Carlos Andrade" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Celular (+593)</label>
+                <input type="tel" value={dirigenteTelefono} onChange={e => setDirigenteTelefono(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] border border-[#2E2E2E] text-white rounded-xl focus:outline-none focus:border-[#D4A017]" placeholder="Ej: 0991234567" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Correo opcional</label>
+                <input type="email" value={dirigenteCorreo} onChange={e => setDirigenteCorreo(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] border border-[#2E2E2E] text-white rounded-xl focus:outline-none focus:border-[#D4A017]" placeholder="correo@dominio.com" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Observaciones</label>
+                <input type="text" value={dirigenteNotas} onChange={e => setDirigenteNotas(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] border border-[#2E2E2E] text-white rounded-xl focus:outline-none focus:border-[#D4A017]" placeholder="Notas internas" />
+              </div>
             </div>
           </div>
           <button type="submit" disabled={loading} className="w-full py-3 bg-[#D4A017] text-black font-black uppercase tracking-widest rounded-xl hover:bg-yellow-500 transition-all shadow-[0_0_15px_rgba(212,160,23,0.3)] mt-2">
@@ -187,6 +241,21 @@ export default function EquiposPage() {
                   )}
                 </div>
               </div>
+              {editandoId === eq.id ? (
+                <div className="grid grid-cols-1 gap-2 rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3">
+                  <input type="text" value={dirigenteEditado.name} onChange={e => setDirigenteEditado(prev => ({ ...prev, name: e.target.value }))} className="w-full p-2 text-xs rounded bg-[#141414] border border-[#2E2E2E] text-white outline-none focus:border-[#D4A017]" placeholder="Dirigente" />
+                  <input type="tel" value={dirigenteEditado.phone} onChange={e => setDirigenteEditado(prev => ({ ...prev, phone: e.target.value }))} className="w-full p-2 text-xs rounded bg-[#141414] border border-[#2E2E2E] text-white outline-none focus:border-[#D4A017]" placeholder="Celular" />
+                  <input type="email" value={dirigenteEditado.email} onChange={e => setDirigenteEditado(prev => ({ ...prev, email: e.target.value }))} className="w-full p-2 text-xs rounded bg-[#141414] border border-[#2E2E2E] text-white outline-none focus:border-[#D4A017]" placeholder="Correo opcional" />
+                  <input type="text" value={dirigenteEditado.notes} onChange={e => setDirigenteEditado(prev => ({ ...prev, notes: e.target.value }))} className="w-full p-2 text-xs rounded bg-[#141414] border border-[#2E2E2E] text-white outline-none focus:border-[#D4A017]" placeholder="Observaciones" />
+                </div>
+              ) : (
+                <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-3 text-xs">
+                  <p className="font-black uppercase tracking-widest text-[#D4A017]">Dirigente</p>
+                  <p className="mt-1 font-bold text-white">{eq.manager_name || "Sin registrar"}</p>
+                  <p className="text-gray-400">+593 {eq.manager_phone || "-"}</p>
+                  {eq.manager_email && <p className="text-gray-500">{eq.manager_email}</p>}
+                </div>
+              )}
               
               {/* Controles Editar/Eliminar */}
               <div className="flex justify-end gap-3 border-t border-[#2E2E2E] pt-3 mt-1">
@@ -197,7 +266,7 @@ export default function EquiposPage() {
                   </>
                 ) : (
                   <>
-                    <button onClick={() => { setEditandoId(eq.id); setNombreEditado(eq.name); }} className="text-[10px] uppercase tracking-wider font-bold text-[#D4A017] hover:text-yellow-300 transition-all">Editar</button>
+                    <button onClick={() => { setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="text-[10px] uppercase tracking-wider font-bold text-[#D4A017] hover:text-yellow-300 transition-all">Editar</button>
                     <button onClick={() => eliminarEquipo(eq.id, eq.shield_url)} className="text-[10px] uppercase tracking-wider font-bold text-red-500 hover:text-red-400 transition-all">Eliminar</button>
                   </>
                 )}
