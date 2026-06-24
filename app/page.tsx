@@ -120,9 +120,18 @@ export default function PortalPrincipal() {
         .topbar-marquee { overflow: hidden; white-space: nowrap; }
         .topbar-marquee span { display: inline-block; padding-left: 100%; animation: marquee 30s linear infinite; }
         @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
-        .hero { position: relative; min-height: 90vh; display: flex; align-items: center; padding: 4rem 2rem; overflow:hidden;}
-        .hero-bg { position: absolute; inset: 0; background: radial-gradient(circle at center, rgba(27,107,47,0.2) 0%, var(--black) 80%); z-index: -1; }
-        .hero-title { font-family: var(--font-display); font-size: clamp(40px, 8vw, 90px); line-height: 0.9; text-transform: uppercase; margin-bottom: 20px;}
+        .hero { position: relative; min-height: calc(100vh - 34px); display: flex; align-items: center; padding: clamp(56px, 8vw, 96px) clamp(18px, 5vw, 48px); overflow:hidden;}
+        .hero-bg { position: absolute; inset: 0; background: radial-gradient(circle at 75% 28%, rgba(212,160,23,0.16), transparent 28%), radial-gradient(circle at center, rgba(27,107,47,0.22) 0%, var(--black) 78%); z-index: -1; }
+        .hero-shell { z-index: 1; max-width: 1200px; margin: 0 auto; width: 100%; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(280px, .7fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+        .hero-copy { min-width: 0; }
+        .hero-title { font-family: var(--font-display); font-size: clamp(42px, 9vw, 98px); line-height: 0.88; text-transform: uppercase; margin-bottom: 20px; overflow-wrap: anywhere;}
+        .hero-summary { color: var(--gray); font-size: clamp(15px, 2vw, 18px); max-width: 600px; margin-bottom: 34px; line-height: 1.7; }
+        .hero-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+        .hero-panel { border: 1px solid rgba(212,160,23,.32); background: linear-gradient(145deg, rgba(28,28,28,.86), rgba(7,7,7,.92)); border-radius: 28px; padding: clamp(20px, 4vw, 34px); box-shadow: 0 28px 80px rgba(0,0,0,.45); min-width: 0; }
+        .hero-panel-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+        .hero-mini-card { min-height: 92px; border: 1px solid var(--dark3); border-radius: 18px; background: rgba(13,13,13,.72); padding: 16px; }
+        .hero-mini-card strong { display:block; font-size: clamp(22px, 4vw, 32px); color: var(--gold); line-height:1; }
+        .hero-mini-card span { display:block; color: var(--gray); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 8px; }
         .text-gold { color: var(--gold); }
         .btn-primary { background: linear-gradient(135deg, var(--gold) 0%, #A07810 100%); color: var(--black); padding: 12px 28px; border-radius: 4px; font-weight: bold; text-transform: uppercase; display: inline-block; transition: 0.3s; border: none; cursor: none;}
         .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(212,160,23,0.4); }
@@ -133,8 +142,12 @@ export default function PortalPrincipal() {
         .sponsors-track { display: flex; gap: 40px; animation: marquee 20s linear infinite; padding: 40px 0;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
 
-        .tournament-card { background: var(--dark2); border: 1px solid var(--dark3); border-radius: 8px; overflow: hidden; padding: 25px; transition: 0.3s; cursor: none; text-decoration: none; display: flex; flex-direction: column; justify-content: space-between;}
+        .section-wrap { padding: clamp(56px, 7vw, 88px) 20px; }
+        .section-inner { max-width: 1200px; margin: 0 auto; }
+        .tournament-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 20px; align-items: stretch; }
+        .tournament-card { min-height: 210px; background: linear-gradient(145deg, var(--dark2), #111); border: 1px solid var(--dark3); border-radius: 22px; overflow: hidden; padding: 24px; transition: 0.3s; cursor: none; text-decoration: none; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 18px 45px rgba(0,0,0,.22);}
         .tournament-card:hover { border-color: var(--gold); transform: translateY(-5px); box-shadow: 0 10px 30px rgba(212,160,23,0.1); }
+        .tournament-title { text-transform: uppercase; letter-spacing: 1.6px; color: var(--gold); font-size: clamp(15px, 2vw, 18px); margin: 0; line-height: 1.25; overflow-wrap: anywhere; }
 
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px); z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px;}
         .modal-content { background: var(--dark2); border: 1px solid rgba(212,160,23,0.5); border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 0 40px rgba(212,160,23,0.15); position: relative;}
@@ -142,6 +155,22 @@ export default function PortalPrincipal() {
         .modal-close:hover { color: var(--white); }
         .modal-input { width: 100%; background: var(--dark); border: 1px solid var(--dark3); color: var(--white); padding: 12px; border-radius: 8px; margin-top: 8px; margin-bottom: 8px; outline: none; transition: 0.3s;}
         .modal-input:focus { border-color: var(--gold); }
+        @media (max-width: 900px) {
+          body { cursor: auto; }
+          .cursor-dot, .cursor-ring { display:none; }
+          .hero-shell { grid-template-columns: 1fr; }
+          .hero { align-items:flex-start; min-height:auto; }
+          .hero-panel { order: -1; }
+        }
+        @media (max-width: 560px) {
+          .topbar { font-size: 11px; }
+          .hero { padding: 34px 16px 48px; }
+          .hero-panel-grid { grid-template-columns: 1fr; }
+          .btn-primary { width: 100%; text-align: center; }
+          .section-label { font-size: 12px; letter-spacing: 2px; }
+          .sponsors-track { gap: 16px; }
+          .sponsor-logo { padding: 12px 18px; font-size: 12px; }
+        }
       `}} />
 
       <div className="cursor-dot" id="cursorDot"></div>
@@ -155,8 +184,8 @@ export default function PortalPrincipal() {
 
       <section className="hero">
         <div className="hero-bg"></div>
-        <div style={{ zIndex: 1, maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-          <div className="reveal">
+        <div className="hero-shell">
+          <div className="hero-copy reveal">
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>
               <span style={{ display:'inline-block', width:'8px',height:'8px',background:'var(--green-light)',borderRadius:'50%',marginRight:'8px', animation: 'pulse 2s infinite'}}></span>
               {torneoDestacado?.name || 'EDICIÓN PRO 2026'}
@@ -166,10 +195,10 @@ export default function PortalPrincipal() {
               <span className="text-gold" style={{ display: 'block' }}>Que Forja</span>
               <span style={{ display: 'block', color: 'transparent', WebkitTextStroke: '2px white' }}>Campeones</span>
             </h1>
-            <p style={{ color: 'var(--gray)', fontSize: '18px', maxWidth: '550px', marginBottom: '40px', lineHeight: '1.6' }}>
+            <p className="hero-summary">
               El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
-            <div style={{ display: 'flex', gap: '20px' }}>
+            <div className="hero-actions">
               {sesionActiva ? (
                 <button onClick={() => router.push("/dashboard")} className="btn-primary">
                   <i className="fa fa-arrow-right"></i> Volver al Panel
@@ -181,11 +210,22 @@ export default function PortalPrincipal() {
               )}
             </div>
           </div>
+          <aside className="hero-panel reveal" style={{ transitionDelay: '0.12s' }}>
+            <div className="section-label">Centro publico</div>
+            <h2 style={{ fontSize: 'clamp(24px, 4vw, 42px)', lineHeight: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Gestion deportiva en vivo</h2>
+            <p style={{ color: 'var(--gray)', lineHeight: 1.7, fontSize: 14 }}>Consulta torneos, posiciones, goleadores, partidos y comunicados desde una experiencia limpia y preparada para cualquier pantalla.</p>
+            <div className="hero-panel-grid">
+              <div className="hero-mini-card"><strong>{torneosActivos.length}</strong><span>Torneos activos</span></div>
+              <div className="hero-mini-card"><strong>{visitas || 0}</strong><span>Visitas publicas</span></div>
+              <div className="hero-mini-card"><strong>24/7</strong><span>Consulta en linea</span></div>
+              <div className="hero-mini-card"><strong>GL</strong><span>Identidad oficial</span></div>
+            </div>
+          </aside>
         </div>
       </section>
 
-      <section style={{ padding: '80px 20px', background: 'var(--dark)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <section className="section-wrap" style={{ background: 'var(--dark)' }}>
+        <div className="section-inner">
           <div className="reveal">
             <div className="section-label">Directorio Oficial</div>
             <h2 style={{ fontSize: '40px', textTransform: 'uppercase', marginBottom: '10px' }}>Ligas <span className="text-gold">Activas</span></h2>
@@ -196,7 +236,7 @@ export default function PortalPrincipal() {
             {loading ? (
                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--gold)' }}>Cargando torneos...</div>
             ) : (
-               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+               <div className="tournament-grid">
                  {torneosActivos.length === 0 ? (
                    <p style={{ color: 'var(--gray)', padding: '20px' }}>Aún no hay torneos registrados en el sistema.</p>
                  ) : (
@@ -205,7 +245,7 @@ export default function PortalPrincipal() {
                        <div className="tournament-card">
                          <div>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                             <h3 style={{ textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--gold)', fontSize: '18px', margin: 0 }}><i className="fa fa-trophy"></i> {torneo.name}</h3>
+                             <h3 className="tournament-title"><i className="fa fa-trophy"></i> {torneo.name}</h3>
                              <span style={{ fontSize: '10px', background: 'var(--green)', color: 'white', padding: '3px 8px', borderRadius: '15px', fontWeight: 'bold', textTransform: 'uppercase' }}>En Curso</span>
                            </div>
                            <p style={{ color: 'var(--gray)', fontSize: '12px', marginTop: '10px' }}>Gestión Integral GAME-LEGAL</p>
