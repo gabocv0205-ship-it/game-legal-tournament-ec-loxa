@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link';
-import AudioExperienceControls from "@/components/AudioExperienceControls";
 
 export default function PortalPrincipal() {
   const router = useRouter();
@@ -147,9 +146,6 @@ export default function PortalPrincipal() {
 
       <div className="cursor-dot" id="cursorDot"></div>
       <div className="cursor-ring" id="cursorRing"></div>
-      <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 90000, width: 'min(360px, calc(100vw - 36px))' }}>
-        <AudioExperienceControls compact label="Audio de visitantes" />
-      </div>
 
       <div className="topbar">
         <div className="topbar-marquee">

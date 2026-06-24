@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeCanvas } from "qrcode.react";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
-import AudioExperienceControls from "@/components/AudioExperienceControls";
 import { playAudioEffect } from "@/lib/audioExperience";
 
 export default function SorteoPage() {
@@ -23,6 +22,7 @@ export default function SorteoPage() {
   const [equipoRevelado, setEquipoRevelado] = useState<any>(null);
   const [grupoRevelado, setGrupoRevelado] = useState("");
   const [historialSorteos, setHistorialSorteos] = useState<any[]>([]);
+  const [cabezasGrupo, setCabezasGrupo] = useState<string[]>([]);
   
   // Referencia para capturar la imagen
   const capturaRef = useRef<HTMLDivElement>(null);
@@ -69,6 +69,7 @@ export default function SorteoPage() {
 
   const sorteoAutomatico = async () => {
     if (!window.confirm(`¿Sortear automáticamente a los ${equipos.length} equipos en ${numGrupos} grupos?`)) return;
+    if (cabezasGrupo.length > numGrupos) return alert(`Solo puedes elegir hasta ${numGrupos} cabezas de grupo.`);
     setLoading(true);
 
     setSorteoEnVivo(true);
@@ -77,37 +78,51 @@ export default function SorteoPage() {
     await playAudioEffect("draw_start");
     await playAudioEffect("drum_roll");
 
-    let equiposMezclados = [...equipos];
+    const cabezasSeleccionados = cabezasGrupo
+      .map(id => equipos.find(equipo => equipo.id === id))
+      .filter(Boolean);
+    let equiposMezclados = equipos.filter(equipo => !cabezasGrupo.includes(equipo.id));
     for (let i = equiposMezclados.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [equiposMezclados[i], equiposMezclados[j]] = [equiposMezclados[j], equiposMezclados[i]];
     }
 
-    for (let index = 0; index < Math.min(equiposMezclados.length, 8); index++) {
-      const equipo = equiposMezclados[index];
-      const grupoAsignado = letrasGrupos[index % numGrupos];
-      setEquipoRevelado(equipo);
-      setGrupoRevelado(`Grupo ${grupoAsignado}`);
+    const asignaciones: { equipo: any; grupo: string; cabeza: boolean }[] = [];
+    cabezasSeleccionados.forEach((equipo, index) => {
+      asignaciones.push({ equipo, grupo: letrasGrupos[index], cabeza: true });
+    });
+    const conteoPorGrupo = letrasGrupos.slice(0, numGrupos).reduce<Record<string, number>>((acc, letra) => {
+      acc[letra] = asignaciones.filter(item => item.grupo === letra).length;
+      return acc;
+    }, {});
+    equiposMezclados.forEach(equipo => {
+      const grupoAsignado = letrasGrupos.slice(0, numGrupos).sort((a, b) => conteoPorGrupo[a] - conteoPorGrupo[b])[0];
+      conteoPorGrupo[grupoAsignado] += 1;
+      asignaciones.push({ equipo, grupo: grupoAsignado, cabeza: false });
+    });
+
+    for (let index = 0; index < Math.min(asignaciones.length, 8); index++) {
+      const asignacion = asignaciones[index];
+      setEquipoRevelado(asignacion.equipo);
+      setGrupoRevelado(`${asignacion.cabeza ? "Cabeza de grupo · " : ""}Grupo ${asignacion.grupo}`);
       await esperar(index === 0 ? 1200 : 520);
       await playAudioEffect("team_pick");
       await esperar(260);
       await playAudioEffect("group_assign");
     }
 
-    const actualizaciones = equiposMezclados.map((equipo, index) => {
-      const grupoAsignado = letrasGrupos[index % numGrupos];
-      return supabase.from("teams").update({ group_name: grupoAsignado }).eq("id", equipo.id);
-    });
+    const actualizaciones = asignaciones.map(asignacion => supabase.from("teams").update({ group_name: asignacion.grupo }).eq("id", asignacion.equipo.id));
 
     try {
       const resultados = await Promise.all(actualizaciones);
       const error = resultados.find(resultado => resultado.error)?.error;
       if (error) throw error;
       if (torneoId) {
-        const resultPayload = equiposMezclados.map((equipo, index) => ({
-          team_id: equipo.id,
-          team_name: equipo.name,
-          group_name: letrasGrupos[index % numGrupos],
+        const resultPayload = asignaciones.map(asignacion => ({
+          team_id: asignacion.equipo.id,
+          team_name: asignacion.equipo.name,
+          group_name: asignacion.grupo,
+          seeded: asignacion.cabeza,
         }));
         await supabase.from("draw_history").insert([{
           tournament_id: torneoId,
@@ -115,7 +130,7 @@ export default function SorteoPage() {
           title: `Sorteo automático ${new Date().toLocaleString("es-EC")}`,
           seed: String(Date.now()),
           result: resultPayload,
-          pots: { total_teams: equiposMezclados.length, group_count: numGrupos },
+          pots: { total_teams: equipos.length, group_count: numGrupos, seeded_team_ids: cabezasGrupo },
         }]);
       }
       await playAudioEffect("confirm");
@@ -155,6 +170,17 @@ export default function SorteoPage() {
   };
 
   // 📸 FUNCIÓN: Exportar a Imagen para Redes
+  const alternarCabezaGrupo = (equipoId: string) => {
+    setCabezasGrupo(prev => {
+      if (prev.includes(equipoId)) return prev.filter(id => id !== equipoId);
+      if (prev.length >= numGrupos) {
+        alert(`Solo puedes elegir ${numGrupos} cabeza(s), uno por grupo.`);
+        return prev;
+      }
+      return [...prev, equipoId];
+    });
+  };
+
   const descargarImagen = async () => {
     if (!capturaRef.current) return;
     setLoading(true);
@@ -251,7 +277,55 @@ export default function SorteoPage() {
           </button>
         </div>
       </div>
-      <AudioExperienceControls label="Audio del sorteo" />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-3xl border border-[#D4A017]/35 bg-[#141414] p-5 shadow-2xl">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Cabezas de grupo</p>
+              <h3 className="text-xl font-black uppercase tracking-widest text-white">Elige hasta {numGrupos}</h3>
+            </div>
+            <button onClick={() => setCabezasGrupo([])} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white">Limpiar cabezas</button>
+          </div>
+          <p className="mb-4 text-xs font-bold text-gray-500">Los equipos marcados serán ubicados primero, uno por grupo, antes de repartir aleatoriamente el resto.</p>
+          <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+            {equipos.map(equipo => {
+              const seleccionado = cabezasGrupo.includes(equipo.id);
+              return (
+                <button
+                  key={equipo.id}
+                  type="button"
+                  onClick={() => alternarCabezaGrupo(equipo.id)}
+                  className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-all ${seleccionado ? "border-[#D4A017] bg-[#D4A017]/15 shadow-[0_0_25px_rgba(212,160,23,.15)]" : "border-[#2E2E2E] bg-[#0a0a0a] hover:border-[#D4A017]/50"}`}
+                >
+                  {equipo.shield_url ? <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={34} height={34} unoptimized className="h-9 w-9 object-contain" /> : <div className="h-9 w-9 rounded-full bg-[#2E2E2E]" />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-black uppercase text-white">{equipo.name}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#D4A017]">{seleccionado ? "Cabeza seleccionado" : "Marcar como cabeza"}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-[#D4A017]/35 bg-gradient-to-br from-[#0B1220] via-[#050505] to-[#241806] p-5 shadow-2xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Bombillos mundialistas</p>
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            {letrasGrupos.slice(0, Math.min(numGrupos, 8)).map((letra, index) => {
+              const cabeza = cabezasGrupo[index] ? equipos.find(equipo => equipo.id === cabezasGrupo[index]) : null;
+              return (
+                <div key={letra} className="rounded-3xl border border-white/10 bg-black/35 p-4 text-center">
+                  <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full border-4 border-[#D4A017] bg-[radial-gradient(circle_at_35%_30%,#F5C842,#4B3411_45%,#080808_75%)] shadow-[0_0_35px_rgba(212,160,23,.3)]">
+                    <span className="text-2xl font-black text-black">{letra}</span>
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#E7C36B]">Grupo {letra}</p>
+                  <p className="mt-1 truncate text-xs font-bold text-gray-300">{cabeza?.name || "Cabeza por definir"}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
       {mensaje && <div className="rounded-xl border border-amber-700/60 bg-amber-950/30 p-4 text-sm font-bold text-amber-200">{mensaje}</div>}
       {historialSorteos.length > 0 && (
         <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-4">
@@ -280,7 +354,7 @@ export default function SorteoPage() {
               {equipoRevelado ? equipoRevelado.name : "Listo para revelar equipos"}
             </h3>
             <p className="mt-1 text-sm font-bold uppercase tracking-widest text-gray-400">
-              {grupoRevelado || "Activa el audio y presiona Sortear"}
+              {grupoRevelado || "Presiona Sortear para iniciar la revelación"}
             </p>
           </div>
         </div>
@@ -375,7 +449,6 @@ export default function SorteoPage() {
               </div>
               <button onClick={() => setModoPresentacion(false)} className="rounded-xl border border-white/20 px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-200 hover:bg-white hover:text-black">Cerrar</button>
             </div>
-            <AudioExperienceControls compact label="Audio de sala" />
             <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
               <div className="flex flex-col items-center justify-center rounded-3xl border border-[#D4A017]/40 bg-gradient-to-b from-[#111827] to-black p-8 text-center">
                 <div className={`mb-8 flex h-60 w-60 items-center justify-center rounded-full border-4 border-[#D4A017] bg-[radial-gradient(circle,#3b2d0b,#050505_65%)] shadow-[0_0_80px_rgba(212,160,23,.4)] ${sorteoEnVivo ? "animate-spin" : ""}`}>

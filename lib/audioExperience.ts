@@ -10,23 +10,20 @@ export type AudioEffect =
   | "notification";
 
 export type AudioPreferences = {
-  musicEnabled: boolean;
   effectsEnabled: boolean;
   volume: number;
 };
 
 const STORAGE_KEY = "gameLegalAudioPreferences";
 let audioContext: AudioContext | null = null;
-let ambientNodes: { oscillator: OscillatorNode; gain: GainNode }[] = [];
 
 export function getAudioPreferences(): AudioPreferences {
-  if (typeof window === "undefined") return { musicEnabled: false, effectsEnabled: true, volume: 0.35 };
+  if (typeof window === "undefined") return { effectsEnabled: true, volume: 0.35 };
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
-        musicEnabled: Boolean(parsed.musicEnabled),
         effectsEnabled: parsed.effectsEnabled !== false,
         volume: Math.min(1, Math.max(0, Number(parsed.volume ?? 0.35))),
       };
@@ -34,7 +31,7 @@ export function getAudioPreferences(): AudioPreferences {
   } catch {
     // Preferimos valores seguros si localStorage trae datos inválidos.
   }
-  return { musicEnabled: false, effectsEnabled: true, volume: 0.35 };
+  return { effectsEnabled: true, volume: 0.35 };
 }
 
 export function saveAudioPreferences(next: AudioPreferences) {
@@ -109,38 +106,4 @@ export async function playAudioEffect(effect: AudioEffect) {
     return;
   }
   tone(context, 880, 0.08, volume * 0.8, "sine");
-}
-
-export async function setAmbientMusic(enabled: boolean) {
-  const prefs = getAudioPreferences();
-  saveAudioPreferences({ ...prefs, musicEnabled: enabled });
-  stopAmbientMusic();
-  if (!enabled) return;
-  const context = await ensureRunning();
-  if (!context) return;
-  const masterVolume = Math.max(0.001, prefs.volume * 0.045);
-  const chords = [130.81, 196, 261.63];
-  ambientNodes = chords.map((frequency, index) => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = index === 1 ? "triangle" : "sine";
-    oscillator.frequency.setValueAtTime(frequency, context.currentTime);
-    gain.gain.setValueAtTime(masterVolume / (index + 1.8), context.currentTime);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    return { oscillator, gain };
-  });
-}
-
-export function stopAmbientMusic() {
-  ambientNodes.forEach(node => {
-    try {
-      node.gain.gain.exponentialRampToValueAtTime(0.0001, getContext()?.currentTime || 0.01);
-      node.oscillator.stop((getContext()?.currentTime || 0) + 0.05);
-    } catch {
-      // Ignorar nodos ya detenidos.
-    }
-  });
-  ambientNodes = [];
 }
