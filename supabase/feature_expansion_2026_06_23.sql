@@ -91,6 +91,23 @@ create table if not exists public.notification_logs (
   created_by uuid references public.profiles(id) on delete set null default auth.uid(),
   created_at timestamptz not null default now()
 );
+
+-- Compatibilidad con el modelo usado por la app.
+-- Versiones anteriores de esta migracion crearon phone/message, mientras que
+-- el frontend usa recipient_phone/message_body. Mantenemos ambos pares para
+-- evitar fallos por schema cache de PostgREST y no romper datos existentes.
+alter table public.notification_logs
+  add column if not exists recipient_phone text,
+  add column if not exists message_body text;
+
+update public.notification_logs
+set recipient_phone = phone
+where recipient_phone is null and phone is not null;
+
+update public.notification_logs
+set message_body = message
+where message_body is null and message is not null;
+
 create index if not exists notification_logs_tournament_created_idx
   on public.notification_logs (tournament_id, created_at desc);
 alter table public.notification_logs enable row level security;
@@ -133,3 +150,5 @@ using (
   bucket_id = 'profile-assets'
   and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+select pg_notify('pgrst', 'reload schema');

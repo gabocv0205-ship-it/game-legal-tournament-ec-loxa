@@ -63,6 +63,37 @@ export default function NotificacionesPage() {
     return `593${digits}`;
   };
 
+  const esErrorSchemaCache = (error: any) => {
+    const message = String(error?.message || "").toLowerCase();
+    return error?.code === "PGRST204" || message.includes("schema cache") || message.includes("could not find");
+  };
+
+  const guardarHistorial = async (logs: any[]) => {
+    const legacyLogs = logs.map(({ recipient_phone, message_body, ...log }) => ({
+      ...log,
+      phone: log.phone || recipient_phone,
+      message: log.message || message_body,
+    }));
+
+    const canonicalLogs = logs.map(({ phone, message, ...log }) => ({
+      ...log,
+      recipient_phone: log.recipient_phone || phone,
+      message_body: log.message_body || message,
+    }));
+
+    const attempts = [logs, legacyLogs, canonicalLogs];
+    let lastError: any = null;
+
+    for (const payload of attempts) {
+      const { error } = await supabase.from("notification_logs").insert(payload);
+      if (!error) return null;
+      lastError = error;
+      if (!esErrorSchemaCache(error)) return error;
+    }
+
+    return lastError;
+  };
+
   const enviar = async () => {
     if (!torneoId) return alert("Selecciona primero un torneo.");
     if (equiposSeleccionados.length === 0) return alert("Selecciona al menos un dirigente.");
@@ -74,15 +105,21 @@ export default function NotificacionesPage() {
       team_id: eq.id,
       recipient_name: eq.manager_name || eq.name,
       recipient_phone: normalizarTelefono(eq.manager_phone),
+      country_code: eq.manager_country_code || "+593",
+      phone: normalizarTelefono(eq.manager_phone),
       channel: "whatsapp",
       message_type: tipo,
       message_body: mensaje.trim(),
+      message: mensaje.trim(),
       status: "prepared",
       sent_at: new Date().toISOString(),
     }));
 
-    const { error } = await supabase.from("notification_logs").insert(logs);
-    if (error) return alert(`No se pudo guardar el historial: ${error.message}`);
+    const error = await guardarHistorial(logs);
+    if (error) {
+      console.error("Error al guardar historial de notificaciones:", error);
+      return alert(`No se pudo guardar el historial de WhatsApp. Detalle tecnico: ${error.message}`);
+    }
 
     const primero = logs[0];
     const url = `https://wa.me/${primero.recipient_phone}?text=${encodeURIComponent(mensaje.trim())}`;
@@ -138,7 +175,7 @@ export default function NotificacionesPage() {
         {historial.length === 0 ? <p className="p-6 text-sm text-gray-500">Aún no existen comunicaciones registradas.</p> : historial.map(item => (
           <div key={item.id} className="grid grid-cols-1 gap-2 border-b border-[#2E2E2E] p-4 text-xs md:grid-cols-5">
             <span className="font-bold text-white">{item.recipient_name}</span>
-            <span className="text-gray-400">{item.recipient_phone}</span>
+            <span className="text-gray-400">{item.recipient_phone || item.phone}</span>
             <span className="text-[#D4A017]">{item.message_type}</span>
             <span className="text-gray-400">{item.status}</span>
             <span className="text-gray-500">{new Date(item.created_at).toLocaleString("es-EC")}</span>
