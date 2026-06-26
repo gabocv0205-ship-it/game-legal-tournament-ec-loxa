@@ -17,6 +17,16 @@ alter table public.teams
   add column if not exists manager_notes text,
   add column if not exists manager_country_code text default '+593';
 
+alter table public.players
+  add column if not exists photo_url text;
+
+alter table public.matches
+  add column if not exists notes text;
+
+create or replace view public.public_players as
+  select id, tournament_id, team_id, full_name, photo_url
+  from public.players;
+
 create index if not exists teams_tournament_manager_phone_idx
   on public.teams (tournament_id, manager_phone);
 
@@ -120,6 +130,10 @@ with check (public.can_manage_tournament(tournament_id, 'admin') or public.can_m
 
 insert into storage.buckets (id, name, public)
 values ('profile-assets', 'profile-assets', true)
+on conflict (id) do update set public = true;
+
+insert into storage.buckets (id, name, public)
+values ('player-assets', 'player-assets', true)
 on conflict (id) do update set public = true;
 
 drop policy if exists profile_assets_public_read on storage.objects;

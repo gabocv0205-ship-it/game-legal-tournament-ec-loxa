@@ -15,6 +15,7 @@ export default function PartidosPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [costoArbitraje, setCostoArbitraje] = useState<number>(20);
   const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]);
+  const [auspiciantesTorneo, setAuspiciantesTorneo] = useState<string[]>([]);
   
   const [partidos, setPartidos] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
@@ -37,6 +38,7 @@ export default function PartidosPage() {
   const [jornadaManual, setJornadaManual] = useState<number>(1);
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
+  const [observacionesManual, setObservacionesManual] = useState("");
 
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
@@ -63,6 +65,7 @@ export default function PartidosPage() {
   const [eventoJugador, setEventoJugador] = useState("");
   const [eventoMinuto, setEventoMinuto] = useState("");
   const [editandoEventoId, setEditandoEventoId] = useState<string | null>(null);
+  const [observacionesPartido, setObservacionesPartido] = useState("");
 
   // ============================================================================
   // ESCUCHADOR DE RED (PLAN DE CONTINGENCIA OFFLINE MANTENIDO)
@@ -117,6 +120,7 @@ export default function PartidosPage() {
       setCostoArbitraje(Number(tourney.referee_fee || 20));
       setTorneoNombre(tourney.name || "Torneo Oficial");
       setTorneoSlug(tourney.slug);
+      setAuspiciantesTorneo(Array.isArray(tourney.tournament_sponsors) ? tourney.tournament_sponsors.filter(Boolean) : []);
       const rules = normalizeTournamentConfig(tourney);
       setConfiguracion(rules);
       setAutoDuracion(rules.match_duration_minutes);
@@ -151,10 +155,11 @@ export default function PartidosPage() {
     try {
       const { error } = await supabase.from("matches").insert([{
         tournament_id: torneoId, home_team_id: localId, away_team_id: visitanteId,
-        match_date: fecha, matchday: jornadaManual, court: canchaManual, stage: faseManual
+        match_date: fecha, matchday: jornadaManual, court: canchaManual, stage: faseManual,
+        notes: observacionesManual.trim() || null
       }]);
       if (error) throw error;
-      setLocalId(""); setVisitanteId(""); setFecha(""); cargarDatos();
+      setLocalId(""); setVisitanteId(""); setFecha(""); setObservacionesManual(""); cargarDatos();
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
@@ -374,6 +379,7 @@ export default function PartidosPage() {
 
   const abrirPartido = async (partido: any) => {
     setPartidoActivo(partido);
+    setObservacionesPartido(partido.notes || "");
     const convocatoria = await cargarConvocatoria(partido);
     setJugadores(convocatoria.habilitados);
     cargarEventos(partido.id);
@@ -472,6 +478,20 @@ export default function PartidosPage() {
     }
     await supabase.from("matches").update(update).eq("id", partidoActivo.id);
     setPartidoActivo(null); cargarDatos(); setLoading(false);
+  };
+
+  const guardarObservacionesPartido = async () => {
+    if (!partidoActivo) return;
+    setLoading(true);
+    const { error } = await supabase
+      .from("matches")
+      .update({ notes: observacionesPartido.trim() || null })
+      .eq("id", partidoActivo.id);
+    setLoading(false);
+    if (error) return alert("No se pudieron guardar las observaciones: " + error.message);
+    setPartidoActivo({ ...partidoActivo, notes: observacionesPartido.trim() || null });
+    setPartidos(prev => prev.map(partido => partido.id === partidoActivo.id ? { ...partido, notes: observacionesPartido.trim() || null } : partido));
+    alert("Observaciones actualizadas.");
   };
 
   const registrarPenales = async (partido: any) => {
@@ -729,6 +749,18 @@ export default function PartidosPage() {
           </div>
         </div>
 
+        <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="flex-1">
+              <label className="text-xs font-black uppercase tracking-widest text-[#D4A017]">Observaciones del encuentro</label>
+              <textarea value={observacionesPartido} onChange={e => setObservacionesPartido(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white outline-none focus:border-[#D4A017]" placeholder="Comentarios adicionales del partido..." />
+            </div>
+            <button onClick={guardarObservacionesPartido} disabled={loading} className="rounded-xl border border-[#D4A017]/50 px-4 py-3 text-xs font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">
+              Guardar observaciones
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {partidoActivo.status !== 'finished' && (
             <div className="lg:col-span-1 bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 h-fit">
@@ -819,6 +851,7 @@ export default function PartidosPage() {
             <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
             <div className="md:col-span-3"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+            <div className="md:col-span-4"><label className="text-xs font-bold text-gray-500 uppercase">Observaciones</label><textarea value={observacionesManual} onChange={e => setObservacionesManual(e.target.value)} rows={2} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Comentarios opcionales del encuentro..." /></div>
             <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar"}</button>
           </form>
         )}
@@ -973,6 +1006,7 @@ export default function PartidosPage() {
                 
                 <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0 relative z-20">
                   <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {p.court || "Cancha 1"}</p>
+                  {p.notes && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#D4A017]">Obs: {p.notes}</p>}
                   <span className="uppercase tracking-wide">{p.home?.name}</span>
                 </div>
                 <div className="flex flex-col items-center px-4 w-48 relative z-20">
@@ -1064,6 +1098,16 @@ export default function PartidosPage() {
           <div className="text-center mt-16 mb-4 bg-[#D4A017] py-3 rounded-xl mx-10 shadow-2xl">
             <h2 className="text-xl font-black text-black uppercase tracking-widest">Organización Deportiva Profesional</h2>
           </div>
+          {auspiciantesTorneo.length > 0 && (
+            <div className="mx-10 mt-6 rounded-xl border border-[#2E2E2E] bg-[#141414]/90 p-4">
+              <p className="mb-3 text-center text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Auspiciantes oficiales</p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {auspiciantesTorneo.map((sponsor, index) => (
+                  <span key={`${sponsor}-${index}`} className="rounded-full border border-[#D4A017]/30 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">{sponsor}</span>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="text-center mt-6">
              <p className="text-gray-500 text-xs tracking-[0.3em] uppercase">Powered by GAME-LEGAL PRO</p>
           </div>

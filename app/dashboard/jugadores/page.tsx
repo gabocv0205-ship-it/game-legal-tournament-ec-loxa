@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
+import { compressImage, previewImage } from "@/lib/imageClient";
 
 export default function JugadoresPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -16,6 +18,9 @@ export default function JugadoresPage() {
   const [filtroEquipo, setFiltroEquipo] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [jugadorPerfil, setJugadorPerfil] = useState<any>(null);
+  const [fotosPendientes, setFotosPendientes] = useState<Record<string, File>>({});
+  const [previewsFoto, setPreviewsFoto] = useState<Record<string, string>>({});
+  const [subiendoFotoId, setSubiendoFotoId] = useState<string | null>(null);
 
   const [nombre, setNombre] = useState("");
   const [cedula, setCedula] = useState("");
@@ -181,6 +186,51 @@ export default function JugadoresPage() {
     }
   };
 
+  const seleccionarFotoJugador = async (jugadorId: string, file?: File) => {
+    if (!file) return;
+    try {
+      if (file.size > 5 * 1024 * 1024) throw new Error("La foto no puede superar 5 MB antes de optimizarse.");
+      const preview = await previewImage(file);
+      setFotosPendientes(prev => ({ ...prev, [jugadorId]: file }));
+      setPreviewsFoto(prev => ({ ...prev, [jugadorId]: preview }));
+    } catch (error: any) {
+      alert(error.message);
+    }
+  };
+
+  const guardarFotoJugador = async (jugador: any) => {
+    const file = fotosPendientes[jugador.id];
+    if (!file) return alert("Selecciona primero una foto para este jugador.");
+    setSubiendoFotoId(jugador.id);
+    try {
+      const optimized = await compressImage(file, { maxWidth: 720, quality: 0.76, prefix: "jugador" });
+      const form = new FormData();
+      form.append("player_id", jugador.id);
+      form.append("file", optimized);
+      const response = await fetch("/api/players/photo", { method: "POST", credentials: "include", body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo subir la foto del jugador.");
+
+      setJugadores(prev => prev.map(item => item.id === jugador.id ? { ...item, photo_url: data.url } : item));
+      setJugadorPerfil((prev: any) => prev?.id === jugador.id ? { ...prev, photo_url: data.url } : prev);
+      setFotosPendientes(prev => {
+        const next = { ...prev };
+        delete next[jugador.id];
+        return next;
+      });
+      setPreviewsFoto(prev => {
+        const next = { ...prev };
+        delete next[jugador.id];
+        return next;
+      });
+      alert("Foto del jugador actualizada.");
+    } catch (error: any) {
+      alert("Error al subir foto: " + error.message);
+    } finally {
+      setSubiendoFotoId(null);
+    }
+  };
+
   const obtenerEstadisticasJugador = (jugador: any) => {
     const historial = eventos.filter((evento) => evento.player_id === jugador.id);
     const goles = historial.filter((evento) => evento.event_type === "gol").length;
@@ -319,6 +369,7 @@ export default function JugadoresPage() {
                   return (
                     <article key={jugador.id} className="rounded-2xl border border-[#2E2E2E] bg-[#111] p-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <PlayerAvatar jugador={jugador} preview={previewsFoto[jugador.id]} size={64} />
                         <div className="min-w-0 flex-1">
                           {enEdicion ? (
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -346,6 +397,26 @@ export default function JugadoresPage() {
                               <button onClick={() => eliminarJugador(jugador.id)} className="rounded-full bg-red-500/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 hover:bg-red-500/25">Eliminar</button>
                             </>
                           )}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Foto del jugador</p>
+                            <p className="mt-1 text-[10px] text-gray-500">JPG, PNG o WEBP. Maximo 5 MB; se optimiza automaticamente.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <label className="cursor-pointer rounded-full bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-300 hover:bg-white/10">
+                              Seleccionar
+                              <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={(e) => seleccionarFotoJugador(jugador.id, e.target.files?.[0])} className="hidden" />
+                            </label>
+                            {fotosPendientes[jugador.id] && (
+                              <button onClick={() => guardarFotoJugador(jugador)} disabled={subiendoFotoId === jugador.id} className="rounded-full bg-[#D4A017] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-black hover:bg-yellow-500">
+                                {subiendoFotoId === jugador.id ? "Subiendo..." : "Guardar foto"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -393,6 +464,20 @@ function MiniStat({ label, value, tone = "neutral" }: { label: string; value: nu
   );
 }
 
+function PlayerAvatar({ jugador, preview, size = 56 }: { jugador: any; preview?: string; size?: number }) {
+  const source = preview || jugador.photo_url;
+  const initials = String(jugador.full_name || "J").trim().charAt(0).toUpperCase();
+  return (
+    <div className="shrink-0 overflow-hidden rounded-2xl border border-[#D4A017]/35 bg-[#0a0a0a] flex items-center justify-center text-[#D4A017] font-black" style={{ width: size, height: size }}>
+      {source ? (
+        <Image src={source} alt={`Foto de ${jugador.full_name || "jugador"}`} width={size} height={size} unoptimized className="h-full w-full object-cover" />
+      ) : (
+        <span style={{ fontSize: Math.max(18, Math.round(size * 0.38)) }}>{initials}</span>
+      )}
+    </div>
+  );
+}
+
 function PlayerProfileModal({ jugador, stats, partidosEventos, onClose }: { jugador: any; stats: any; partidosEventos: Record<string, any>; onClose: () => void }) {
   const etiquetaEvento: Record<string, string> = {
     gol: "Gol",
@@ -412,10 +497,13 @@ function PlayerProfileModal({ jugador, stats, partidosEventos, onClose }: { juga
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
       <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-[#D4A017]/30 bg-[#111] shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#2E2E2E] bg-[#0a0a0a] p-5">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-[#D4A017]">Perfil del jugador</p>
-            <h3 className="mt-1 text-2xl font-black uppercase text-white">{jugador.full_name}</h3>
-            <p className="mt-1 text-sm text-gray-400">{jugador.teams?.name || "Sin equipo"} - Cedula {jugador.cedula}</p>
+          <div className="flex items-center gap-4">
+            <PlayerAvatar jugador={jugador} size={76} />
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-[#D4A017]">Perfil del jugador</p>
+              <h3 className="mt-1 text-2xl font-black uppercase text-white">{jugador.full_name}</h3>
+              <p className="mt-1 text-sm text-gray-400">{jugador.teams?.name || "Sin equipo"} - Cedula {jugador.cedula}</p>
+            </div>
           </div>
           <button onClick={onClose} className="rounded-full border border-[#2E2E2E] px-4 py-2 text-xs font-black uppercase text-gray-300 hover:border-[#D4A017] hover:text-[#D4A017]">Cerrar</button>
         </div>

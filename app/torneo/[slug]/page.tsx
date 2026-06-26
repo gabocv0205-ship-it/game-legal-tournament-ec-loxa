@@ -547,20 +547,23 @@ export default function PortalTorneoDinamico() {
                               </h4>
                               <div className="flex flex-col gap-3">
                                 {partidos.filter(p => p.matchday === fecha).map((match) => (
-                                  <div key={match.id} className="flex items-center justify-between bg-[#1C1C1C] p-4 rounded-xl border border-white/5 hover:border-[#D4A017]/30 transition-all">
-                                    <div className="flex-1 text-right">
-                                      <div className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 font-bold">{match.stage || 'Fase de Grupos'}</div>
-                                      <span className="font-black text-white text-sm md:text-base">{match.home?.name}</span>
-                                    </div>
-                                    <div className="px-4 md:px-6">
-                                      <div className="bg-[#0a0a0a] border border-[#242424] px-4 py-2 rounded-lg font-mono font-black text-lg md:text-2xl text-[#D4A017] shadow-inner text-center min-w-[80px]">
-                                        {match.status === "finished" ? `${match.home_goals} - ${match.away_goals}` : "VS"}
+                                  <div key={match.id} className="bg-[#1C1C1C] p-4 rounded-xl border border-white/5 hover:border-[#D4A017]/30 transition-all">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex-1 text-right">
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 font-bold">{match.stage || 'Fase de Grupos'}</div>
+                                        <span className="font-black text-white text-sm md:text-base">{match.home?.name}</span>
+                                      </div>
+                                      <div className="px-4 md:px-6">
+                                        <div className="bg-[#0a0a0a] border border-[#242424] px-4 py-2 rounded-lg font-mono font-black text-lg md:text-2xl text-[#D4A017] shadow-inner text-center min-w-[80px]">
+                                          {match.status === "finished" ? `${match.home_goals} - ${match.away_goals}` : "VS"}
+                                        </div>
+                                      </div>
+                                      <div className="flex-1 text-left">
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 font-bold opacity-0 hidden md:block">.</div>
+                                        <span className="font-black text-white text-sm md:text-base">{match.away?.name}</span>
                                       </div>
                                     </div>
-                                    <div className="flex-1 text-left">
-                                      <div className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 font-bold opacity-0 hidden md:block">.</div>
-                                      <span className="font-black text-white text-sm md:text-base">{match.away?.name}</span>
-                                    </div>
+                                    {match.notes && <p className="mt-3 border-t border-white/5 pt-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#D4A017]">Observaciones: {match.notes}</p>}
                                   </div>
                                 ))}
                               </div>

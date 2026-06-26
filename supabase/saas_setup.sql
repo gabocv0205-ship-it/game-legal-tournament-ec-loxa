@@ -34,6 +34,9 @@ alter table public.tournaments
 create index if not exists players_tournament_team_idx
   on public.players (tournament_id, team_id);
 
+alter table public.players
+  add column if not exists photo_url text;
+
 create index if not exists players_tournament_cedula_lookup_idx
   on public.players (tournament_id, lower(btrim(cedula)));
 
@@ -98,7 +101,8 @@ alter table public.payments
 alter table public.matches
   add column if not exists resolved_by_penalties boolean default false,
   add column if not exists home_penalties integer,
-  add column if not exists away_penalties integer;
+  add column if not exists away_penalties integer,
+  add column if not exists notes text;
 
 create index if not exists payments_tournament_team_created_idx
   on public.payments (tournament_id, team_id, created_at desc);
@@ -128,6 +132,10 @@ alter table public.admin_activity_log enable row level security;
 
 insert into storage.buckets (id, name, public)
 values ('identidad-torneos', 'identidad-torneos', true)
+on conflict (id) do update set public = true;
+
+insert into storage.buckets (id, name, public)
+values ('player-assets', 'player-assets', true)
 on conflict (id) do update set public = true;
 
 create or replace function public.can_manage_tournament_media(tournament_id_text text)
@@ -278,7 +286,7 @@ revoke select on public.players from anon;
 grant select on public.players to authenticated;
 
 create or replace view public.public_players as
-  select id, tournament_id, team_id, full_name
+  select id, tournament_id, team_id, full_name, photo_url
   from public.players;
 
 revoke all on public.public_players from public;
