@@ -62,23 +62,23 @@ export default function GestorTorneos() {
 
   const manejarCreacion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombreTorneo) return;
-    
+    if (!nombreTorneo.trim()) return;
+
     setProcesando(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+      if (!session?.user.id) throw new Error("No hay una sesion activa.");
+
       const baseSlug = nombreTorneo.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
       const randomID = Math.random().toString(36).substring(2, 7);
       const slugUnico = `${baseSlug}-${randomID}`;
 
-      const { data: created, error } = await supabase.from('tournaments').insert([{
-        name: nombreTorneo,
-        slug: slugUnico,
-        user_id: session?.user.id,
-        registration_fee: 150.00,
-        status: 'active' // Estado explícito al crear
-      }]).select('id, name').single();
+      const { data: createdRaw, error } = await supabase.rpc('create_owned_tournament', {
+        p_name: nombreTorneo.trim(),
+        p_slug: slugUnico,
+        p_registration_fee: 150.00,
+      }).single();
+      const created = createdRaw as { id: string; name: string } | null;
 
       if (error) throw error;
 
@@ -89,9 +89,8 @@ export default function GestorTorneos() {
       setMostrarModal(false);
       setNombreTorneo("");
       cargarDatos();
-      alert("Torneo creado. Completa su configuración inicial antes de continuar.");
+      alert("Torneo creado. Completa su configuracion inicial antes de continuar.");
       router.push('/dashboard/configuracion');
-
     } catch (error: any) {
       alert("Error al crear el torneo: " + error.message);
     } finally {
