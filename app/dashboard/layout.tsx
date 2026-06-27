@@ -175,7 +175,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="admin-premium-shell flex h-screen w-full overflow-hidden font-sans">
       
-      <aside className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-60 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}>
+      <aside className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-56 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}>
         <div className="p-4 border-b border-[#D4A017]/15 flex items-center gap-3 relative overflow-hidden">
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
@@ -213,7 +213,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 p-3 space-y-1 mt-1 overflow-y-auto">
           {MENU.filter(item => perfilUsuario?.role === "superadmin" || !["/dashboard/roles", "/dashboard/auditoria"].includes(item.href)).map(item => (
             <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-black tracking-wide transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_24px_rgba(212,160,23,0.28)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-black tracking-wide transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_24px_rgba(212,160,23,0.28)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
               <Icon path={item.icon} size={16} /> <span className="truncate">{item.label}</span>
             </Link>
           ))}

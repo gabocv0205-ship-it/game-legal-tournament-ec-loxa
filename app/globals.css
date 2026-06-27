@@ -54,20 +54,20 @@ textarea:focus {
 }
 
 :root[data-admin-theme="light"] {
-  --admin-bg: #f5f8f3;
+  --admin-bg: #eef8ef;
   --admin-bg-2: #ffffff;
-  --admin-surface: rgba(255, 255, 255, 0.92);
-  --admin-surface-2: rgba(247, 251, 246, 0.96);
-  --admin-elevated: rgba(255, 255, 255, 0.96);
-  --admin-text: #07140d;
-  --admin-muted: #4f6658;
-  --admin-border: rgba(9, 126, 63, 0.18);
-  --admin-strong-border: rgba(9, 126, 63, 0.28);
-  --admin-green: #087f3d;
-  --admin-gold: #a87905;
+  --admin-surface: rgba(255, 255, 255, 0.96);
+  --admin-surface-2: rgba(239, 249, 241, 0.98);
+  --admin-elevated: rgba(255, 255, 255, 0.98);
+  --admin-text: #06140c;
+  --admin-muted: #456350;
+  --admin-border: rgba(6, 128, 64, 0.22);
+  --admin-strong-border: rgba(6, 128, 64, 0.34);
+  --admin-green: #069447;
+  --admin-gold: #b88400;
   --admin-header: rgba(255, 255, 255, 0.86);
-  --admin-sidebar: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 248, 241, 0.98));
-  --admin-shadow: 0 24px 60px rgba(21, 72, 40, 0.14);
+  --admin-sidebar: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(229, 247, 234, 0.98));
+  --admin-shadow: 0 24px 60px rgba(6, 92, 45, 0.16);
 }
 
 .admin-premium-shell {
@@ -145,6 +145,7 @@ textarea:focus {
 }
 
 .admin-premium-shell .text-gray-400,
+.admin-premium-shell .text-gray-300,
 .admin-premium-shell .text-gray-500,
 .admin-premium-shell .text-gray-600,
 .admin-premium-shell .text-\[\#8A8A8A\],
@@ -205,17 +206,53 @@ textarea:focus {
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-slate-900"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#1a0a0a]"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#1a140a]"],
-:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#030712]"] {
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#030712]"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#06142d]"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#0B1220]"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#111827]"],
+:root[data-admin-theme="light"] .admin-premium-shell [class~="bg-black"] {
   background-color: var(--admin-surface) !important;
   color: var(--admin-text) !important;
   border-color: var(--admin-border) !important;
 }
 
+:root[data-admin-theme="light"] .admin-premium-shell [class*="from-[#0"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="from-[#1"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="from-[#2"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="via-[#0"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="via-[#1"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="via-[#2"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="to-[#0"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="to-[#1"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="to-[#2"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="to-black"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="from-black"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="via-black"] {
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(232, 248, 236, 0.96)) !important;
+  background-color: var(--admin-surface) !important;
+  color: var(--admin-text) !important;
+  border-color: var(--admin-border) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-cyan-950"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-red-900"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-green-900"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-yellow-900"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-blue-900"] {
+  background-color: rgba(239, 249, 241, 0.88) !important;
+}
+
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-white/5"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-white/10"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-white/15"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-black/35"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-black/30"] {
   background-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell [class*="border-white/10"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="border-white/20"] {
+  border-color: var(--admin-border) !important;
 }
 
 :root[data-admin-theme="light"] .admin-premium-shell table,
@@ -247,6 +284,22 @@ textarea:focus {
 
 :root[data-admin-theme="light"] .admin-premium-shell ::placeholder {
   color: #6b7c70 !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-card,
+:root[data-admin-theme="light"] .admin-premium-shell [class*="rounded-2xl"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="rounded-3xl"] {
+  box-shadow: 0 18px 45px rgba(6, 92, 45, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.admin-premium-shell a,
+.admin-premium-shell button,
+.admin-premium-shell input,
+.admin-premium-shell select,
+.admin-premium-shell textarea {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
 }
 
 :root {
