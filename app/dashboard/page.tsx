@@ -20,7 +20,7 @@ type Standing = {
 };
 
 const Panel = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`relative overflow-hidden rounded-3xl border border-[#2E2E2E] bg-[#141414]/95 shadow-[0_18px_50px_rgba(0,0,0,.28)] ${className}`}>
+  <div className={`admin-premium-card relative overflow-hidden rounded-3xl ${className}`}>
     <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#D4A017]/10 blur-3xl" />
     <div className="relative z-10">{children}</div>
   </div>
@@ -34,7 +34,7 @@ const MetricCard = ({ label, value, sub, tone = "gold" }: { label: string; value
     blue: "text-blue-300 border-blue-500/35 bg-blue-500/10",
   };
   return (
-    <div className="rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a] p-5">
+    <div className="rounded-2xl border border-[#D4A017]/15 bg-black/35 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
       <div className={`mb-4 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${colors[tone]}`}>{label}</div>
       <div className="text-3xl font-black text-white">{value}</div>
       <p className="mt-2 text-xs font-bold text-gray-500">{sub}</p>
@@ -155,7 +155,7 @@ export default function DashboardInicio() {
             <h1 className="break-words text-4xl font-black uppercase leading-none tracking-tight text-white md:text-6xl">{torneoActual?.name || tournamentName || "Torneo Oficial"}</h1>
             <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-gray-400">Vista ejecutiva del torneo: estado deportivo, alertas, proximos encuentros y avance general en un solo lugar.</p>
           </div>
-          <div className="rounded-2xl border border-[#D4A017]/30 bg-[#0a0a0a] p-4">
+        <div className="rounded-2xl border border-[#D4A017]/30 bg-black/35 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">Gestionando torneo</label>
             <select value={torneoActivoId || ""} onChange={event => cambiarTorneo(event.target.value)} className="w-full rounded-xl border border-[#2E2E2E] bg-[#141414] p-3 text-sm font-black text-white outline-none focus:border-[#D4A017]">
               <option value="" disabled>Seleccione un torneo...</option>
@@ -164,7 +164,7 @@ export default function DashboardInicio() {
             <div className="mt-4">
               <div className="mb-2 flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500"><span>Avance</span><span>{dashboard.progress}%</span></div>
               <div className="h-3 overflow-hidden rounded-full bg-[#1C1C1C]">
-                <div className="h-full rounded-full bg-gradient-to-r from-[#D4A017] to-yellow-300 transition-all" style={{ width: `${dashboard.progress}%` }} />
+                <div className="h-full rounded-full bg-gradient-to-r from-[#D4A017] via-yellow-300 to-green-400 transition-all" style={{ width: `${dashboard.progress}%` }} />
               </div>
             </div>
           </div>

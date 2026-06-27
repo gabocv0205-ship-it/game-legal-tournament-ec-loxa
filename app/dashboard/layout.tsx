@@ -156,10 +156,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen w-full bg-[#0a0a0a] overflow-hidden font-sans">
+    <div className="admin-premium-shell flex h-screen w-full overflow-hidden font-sans">
       
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#141414] text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#2E2E2E]`}>
-        <div className="p-6 border-b border-[#2E2E2E] flex items-center gap-3 relative overflow-hidden">
+      <aside className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-64 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}>
+        <div className="p-6 border-b border-[#D4A017]/15 flex items-center gap-3 relative overflow-hidden">
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
           <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C] overflow-hidden">
@@ -196,7 +196,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 p-4 space-y-2 mt-2 overflow-y-auto">
           {MENU.map(item => (
             <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all ${pathname === item.href ? "bg-[#D4A017] text-black shadow-[0_4px_20px_rgba(212,160,23,0.4)]" : "text-[#8A8A8A] hover:bg-[#1C1C1C] hover:text-white"}`}>
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_28px_rgba(212,160,23,0.34)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
               <Icon path={item.icon} size={18} /> {item.label}
             </Link>
           ))}
@@ -218,7 +218,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </nav>
 
-        <div className="p-4 border-t border-[#2E2E2E]">
+        <div className="p-4 border-t border-[#D4A017]/15">
           {perfilUsuario?.role === 'organizer' && (
             <a href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-sm text-white font-black uppercase tracking-wider transition-all mb-3 shadow-sm">
               Soporte WhatsApp
@@ -238,7 +238,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/80 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#0a0a0a] relative z-10 text-white">
+      <main className="admin-premium-content flex-1 flex flex-col h-screen overflow-y-auto relative z-10 text-white">
         
         {perfilUsuario?.saas_status === 'pending_payment' && perfilUsuario?.role !== 'superadmin' && (
           <div className="bg-gradient-to-r from-red-900 via-red-600 to-red-900 text-white px-6 py-3 flex items-center justify-between shadow-[0_10px_30px_rgba(220,38,38,0.3)] sticky top-0 z-30">
@@ -250,7 +250,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
-        <header className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4 flex items-center gap-4 sticky top-0 z-20 shadow-sm">
+        <header className="admin-premium-header border-b border-[#D4A017]/15 px-6 py-4 flex items-center gap-4 sticky top-0 z-20">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 bg-[#1C1C1C] text-gray-300 rounded-xl hover:bg-[#2A2A2A]"><Icon path={Icons.bars} size={20}/></button>
           
           {/* NUEVO: Mostrar claramente el torneo que estamos administrando */}

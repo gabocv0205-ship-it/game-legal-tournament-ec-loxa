@@ -192,9 +192,9 @@ export default function GestorTorneos() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-[#2E2E2E] pb-4 gap-4">
+      <div className="admin-premium-card rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h2 className="text-3xl font-black text-white uppercase tracking-wider">Mis Torneos</h2>
+          <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight">Mis Torneos</h2>
           <p className="text-gray-400 font-bold text-sm mt-1">
             {perfil?.role === 'superadmin' ? 'Visión global de todos los clientes' : `Límite de plan: ${torneos.length} / ${perfil?.max_tournaments || 1}`}
           </p>
@@ -225,8 +225,8 @@ export default function GestorTorneos() {
             const isActive = !isFinished && !isArchived;
 
             return (
-              <div key={t.id} className="bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 relative overflow-hidden group hover:border-[#D4A017] transition-all duration-300 flex flex-col h-full shadow-lg">
-                <div className="absolute -right-6 -top-6 w-32 h-32 bg-[#D4A017]/5 rounded-full blur-2xl group-hover:bg-[#D4A017]/20 transition-all"></div>
+              <div key={t.id} className="admin-premium-card rounded-3xl p-6 relative overflow-hidden group hover:border-[#D4A017]/60 transition-all duration-300 flex flex-col h-full">
+                <div className="absolute -right-6 -top-6 w-32 h-32 bg-[#D4A017]/10 rounded-full blur-2xl group-hover:bg-[#D4A017]/25 transition-all"></div>
                 
                 {/* Controles de Gestión Rápida Supriores */}
                 <div className="absolute top-4 right-4 flex gap-2 z-20">
@@ -272,7 +272,7 @@ export default function GestorTorneos() {
                 <div className="relative z-10 flex gap-3 mt-auto pt-4 border-t border-[#2E2E2E]">
                   <button 
                     onClick={() => administrarTorneo(t.id, t.name, Boolean(t.configuration_completed))}
-                    className="flex-1 bg-[#1C1C1C] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] hover:border-transparent py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    className="flex-1 bg-white/5 hover:bg-[#D4A017] hover:text-black text-white border border-[#D4A017]/15 hover:border-transparent py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                   >
                     <Icon path={Icons.settings} size={14} /> Gestionar
                   </button>
@@ -293,7 +293,7 @@ export default function GestorTorneos() {
       {/* MODAL DE CREACIÓN */}
       {mostrarModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#141414] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_40px_rgba(212,160,23,0.15)] overflow-hidden">
+          <div className="admin-premium-card w-full max-w-md rounded-3xl overflow-hidden">
             <div className="p-6 border-b border-[#2E2E2E] flex justify-between items-center">
               <h3 className="text-xl font-black text-white uppercase tracking-wider">Crear Nuevo Torneo</h3>
               <button onClick={() => setMostrarModal(false)} className="text-gray-500 hover:text-white">✖</button>
