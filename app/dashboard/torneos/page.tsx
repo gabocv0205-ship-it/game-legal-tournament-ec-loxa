@@ -16,6 +16,17 @@ const Icons = {
   trash: "M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
 };
 
+function crearSlugSeguro(nombre: string) {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "torneo";
+}
+
 export default function GestorTorneos() {
   const router = useRouter();
   const [torneos, setTorneos] = useState<any[]>([]);
@@ -69,18 +80,31 @@ export default function GestorTorneos() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user.id) throw new Error("No hay una sesion activa.");
 
-      const baseSlug = nombreTorneo.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      const baseSlug = crearSlugSeguro(nombreTorneo);
       const randomID = Math.random().toString(36).substring(2, 7);
       const slugUnico = `${baseSlug}-${randomID}`;
 
-      const { data: createdRaw, error } = await supabase.rpc('create_owned_tournament', {
-        p_name: nombreTorneo.trim(),
-        p_slug: slugUnico,
-        p_registration_fee: 150.00,
-      }).single();
-      const created = createdRaw as { id: string; name: string } | null;
+      const { data: inserted, error: insertError } = await supabase
+        .from("tournaments")
+        .insert([{
+          name: nombreTorneo.trim(),
+          slug: slugUnico,
+          user_id: session.user.id,
+          registration_fee: 150.00,
+          status: "active",
+          configuration_completed: false,
+        }])
+        .select("id, name")
+        .single();
 
-      if (error) throw error;
+      if (insertError) throw insertError;
+      const created = inserted as { id: string; name: string } | null;
+
+      if (created?.id) {
+        await supabase
+          .from("tournament_members")
+          .upsert({ tournament_id: created.id, user_id: session.user.id, role: "owner" }, { onConflict: "tournament_id,user_id" });
+      }
 
       if (created) {
         localStorage.setItem('activeTournamentId', created.id);
