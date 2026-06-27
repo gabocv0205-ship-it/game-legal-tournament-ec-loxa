@@ -40,7 +40,9 @@ export default function LoginPage() {
         .from('tournaments')
         .select('id, name, status')
         .eq('user_id', userId)
-        .not('status', 'in', '("deleted","archived","finished")');
+        .neq('status', 'deleted')
+        .neq('status', 'archived')
+        .neq('status', 'finished');
       const activos = torneos || [];
       if (profile?.role === 'superadmin' || activos.length !== 1) {
         localStorage.removeItem('activeTournamentId');

@@ -159,11 +159,16 @@ textarea:focus {
 .admin-premium-shell [class*="bg-[#141414]"],
 .admin-premium-shell [class*="bg-[#0a0a0a]"],
 .admin-premium-shell [class*="bg-[#1C1C1C]"],
+.admin-premium-shell [class*="bg-[#1c1c1c]"],
+.admin-premium-shell [class*="bg-[#111]"],
+.admin-premium-shell [class*="bg-[#2E2E2E]"],
+.admin-premium-shell [class*="bg-[#2e2e2e]"],
 .admin-premium-shell [class*="bg-[#242424]"] {
   background-color: var(--admin-surface) !important;
 }
 
 .admin-premium-shell [class*="border-[#2E2E2E]"],
+.admin-premium-shell [class*="border-[#2e2e2e]"],
 .admin-premium-shell [class*="border-[#242424]"] {
   border-color: var(--admin-border) !important;
 }
@@ -177,6 +182,11 @@ textarea:focus {
   color-scheme: light;
 }
 
+:root[data-admin-theme="light"] .admin-premium-shell input[type="checkbox"],
+:root[data-admin-theme="light"] .admin-premium-shell input[type="radio"] {
+  accent-color: var(--admin-green);
+}
+
 :root[data-admin-theme="light"] .admin-premium-shell .shadow-lg,
 :root[data-admin-theme="light"] .admin-premium-shell .shadow {
   box-shadow: 0 18px 45px rgba(21, 72, 40, 0.12) !important;
@@ -186,7 +196,7 @@ textarea:focus {
 :root[data-admin-theme="light"] .admin-premium-shell .bg-black\/40,
 :root[data-admin-theme="light"] .admin-premium-shell .bg-black\/30,
 :root[data-admin-theme="light"] .admin-premium-shell .bg-black\/20 {
-  background-color: rgba(255, 255, 255, 0.78) !important;
+  background-color: rgba(7, 20, 13, 0.36) !important;
 }
 
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-gray-800"],
@@ -194,10 +204,18 @@ textarea:focus {
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-slate-800"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-slate-900"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#1a0a0a]"],
-:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#1a140a]"] {
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#1a140a]"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#030712]"] {
   background-color: var(--admin-surface) !important;
   color: var(--admin-text) !important;
   border-color: var(--admin-border) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-white/5"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-white/10"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-black/35"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-black/30"] {
+  background-color: rgba(255, 255, 255, 0.72) !important;
 }
 
 :root[data-admin-theme="light"] .admin-premium-shell table,
@@ -210,6 +228,21 @@ textarea:focus {
 :root[data-admin-theme="light"] .admin-premium-shell th,
 :root[data-admin-theme="light"] .admin-premium-shell td {
   border-color: var(--admin-border) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell thead,
+:root[data-admin-theme="light"] .admin-premium-shell th {
+  background-color: rgba(230, 241, 232, 0.92) !important;
+  color: #244231 !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell button:not([class*="bg-[#D4A017]"]):not([class*="bg-gradient"]):not([class*="bg-red"]):not([class*="bg-green"]):not([class*="bg-blue"]) {
+  color: var(--admin-text);
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell [role="dialog"],
+:root[data-admin-theme="light"] .admin-premium-shell .admin-premium-card {
+  color: var(--admin-text);
 }
 
 :root[data-admin-theme="light"] .admin-premium-shell ::placeholder {

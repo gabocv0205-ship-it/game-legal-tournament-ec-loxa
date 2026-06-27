@@ -211,8 +211,11 @@ export default function GestorTorneos() {
       </div>
 
       {torneos.length === 0 ? (
-        <div className="text-center py-20 bg-[#141414] border border-[#2E2E2E] rounded-3xl">
-          <Icon path={Icons.trophy} size={48} className="mx-auto text-gray-600 mb-4" />
+        <div className="admin-premium-card relative overflow-hidden rounded-3xl border border-dashed border-[#D4A017]/35 px-6 py-16 text-center">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-green-500 via-[#D4A017] to-green-500" />
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#D4A017]/40 bg-[#D4A017]/10 text-[#D4A017]">
+            <Icon path={Icons.trophy} size={34} />
+          </div>
           <p className="text-gray-400 font-bold text-lg">Aún no tienes torneos creados.</p>
           <p className="text-gray-600 text-sm mt-2">Haz clic en &quot;Nuevo Torneo&quot; para empezar tu gestión.</p>
         </div>
