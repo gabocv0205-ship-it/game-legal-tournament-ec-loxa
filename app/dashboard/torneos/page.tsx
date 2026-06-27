@@ -84,26 +84,42 @@ export default function GestorTorneos() {
       const randomID = Math.random().toString(36).substring(2, 7);
       const slugUnico = `${baseSlug}-${randomID}`;
 
-      const { data: inserted, error: insertError } = await supabase
-        .from("tournaments")
-        .insert([{
-          name: nombreTorneo.trim(),
-          slug: slugUnico,
-          user_id: session.user.id,
-          registration_fee: 150.00,
-          status: "active",
-          configuration_completed: false,
-        }])
-        .select("id, name")
-        .single();
+      const { data: createdRaw, error: rpcError } = await supabase.rpc('create_owned_tournament', {
+        p_name: nombreTorneo.trim(),
+        p_slug: slugUnico,
+        p_registration_fee: 150.00,
+      }).single();
 
-      if (insertError) throw insertError;
-      const created = inserted as { id: string; name: string } | null;
+      let created = createdRaw as { id: string; name: string } | null;
 
-      if (created?.id) {
-        await supabase
-          .from("tournament_members")
-          .upsert({ tournament_id: created.id, user_id: session.user.id, role: "owner" }, { onConflict: "tournament_id,user_id" });
+      if (rpcError) {
+        const canFallbackToDirectInsert = String(rpcError.message || "").toLowerCase().includes("function")
+          || String(rpcError.message || "").toLowerCase().includes("schema cache")
+          || String(rpcError.code || "") === "PGRST202";
+
+        if (!canFallbackToDirectInsert) throw rpcError;
+
+        const { data: inserted, error: insertError } = await supabase
+          .from("tournaments")
+          .insert([{
+            name: nombreTorneo.trim(),
+            slug: slugUnico,
+            user_id: session.user.id,
+            registration_fee: 150.00,
+            status: "active",
+            configuration_completed: false,
+          }])
+          .select("id, name")
+          .single();
+
+        if (insertError) throw insertError;
+        created = inserted as { id: string; name: string } | null;
+
+        if (created?.id) {
+          await supabase
+            .from("tournament_members")
+            .upsert({ tournament_id: created.id, user_id: session.user.id, role: "owner" }, { onConflict: "tournament_id,user_id" });
+        }
       }
 
       if (created) {
