@@ -17,6 +17,7 @@ export type TournamentConfig = {
   yellow_cards_for_suspension: number;
   yellow_suspension_matches: number;
   red_suspension_matches: number;
+  max_players_per_team: number;
 };
 
 export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
@@ -38,6 +39,7 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   yellow_cards_for_suspension: 3,
   yellow_suspension_matches: 1,
   red_suspension_matches: 1,
+  max_players_per_team: 25,
 };
 
 export function normalizeTournamentConfig(source: any): TournamentConfig {
@@ -63,6 +65,7 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     yellow_cards_for_suspension: number("yellow_cards_for_suspension"),
     yellow_suspension_matches: number("yellow_suspension_matches"),
     red_suspension_matches: number("red_suspension_matches"),
+    max_players_per_team: number("max_players_per_team"),
   };
 }
 

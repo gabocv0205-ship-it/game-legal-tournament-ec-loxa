@@ -625,27 +625,51 @@ export default function PartidosPage() {
   const imprimirPlanilla = async (partido: any, esEstandar = false) => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return alert("Permite las ventanas emergentes para generar la planilla.");
-    const { suspendidos } = esEstandar ? { suspendidos: [] as any[] } : await cargarConvocatoria(partido);
+    const convocatoria = esEstandar ? { habilitados: [] as any[], suspendidos: [] as any[] } : await cargarConvocatoria(partido);
+    const { habilitados, suspendidos } = convocatoria;
     const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
     const fechaPartido = new Date(partido.match_date);
     const crearLineas = (cantidad: number) => Array.from({ length: cantidad }, () => "<span></span>").join("");
-    const crearCasillas = () => Array.from({ length: configuracion.football_modality + configuracion.substitutes_count }, (_, index) => `<tr><td>${index + 1}</td><td>${index < configuracion.football_modality ? "T" : "S"}</td><td></td><td></td><td></td><td></td></tr>`).join("");
+    const cupoConfigurado = Number(configuracion.football_modality || 0) + Number(configuracion.substitutes_count || 0);
+    const maximoPlantilla = Number(configuracion.max_players_per_team || cupoConfigurado);
+    const cupoPartido = Math.max(1, Math.min(cupoConfigurado || maximoPlantilla || 1, maximoPlantilla || cupoConfigurado || 1));
+    const crearCasillas = (teamId: string) => {
+      const jugadoresEquipo = habilitados.filter(player => player.team_id === teamId).slice(0, cupoPartido);
+      return Array.from({ length: cupoPartido }, (_, index) => {
+        const player = jugadoresEquipo[index];
+        return `<tr><td>${player ? escapeHtml(player.id) : ""}</td><td></td><td>${player ? escapeHtml(player.full_name) : ""}</td><td>${index < configuracion.football_modality ? "T" : "S"}</td><td></td><td></td><td></td><td><span class="subline">Sale / ingresa por</span></td></tr>`;
+      }).join("");
+    };
+    const crearObservacionesAutomaticas = () => {
+      const excedentes = [partido.home_team_id, partido.away_team_id].flatMap(teamId => {
+        const jugadoresEquipo = habilitados.filter(player => player.team_id === teamId);
+        return jugadoresEquipo.length > cupoPartido ? [`${jugadoresEquipo.length - cupoPartido} jugador(es) habilitado(s) exceden el cupo de planilla del equipo.`] : [];
+      });
+      return [
+        `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
+        `Regla disciplinaria: ${configuracion.yellow_cards_for_suspension} amarilla(s) generan suspension; roja directa suspende ${configuracion.red_suspension_matches} partido(s).`,
+        ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}`),
+        ...excedentes,
+      ];
+    };
     const crearEquipo = (teamId: string, teamName: string) => {
       const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
       const suspendidosTexto = suspendidosEquipo.length
         ? suspendidosEquipo.map(player => escapeHtml(player.full_name)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
       return `<div class="team"><h2>${escapeHtml(teamName)}</h2><div class="legend">T = Titular (${configuracion.football_modality}) · S = Suplente (${configuracion.substitutes_count})</div>
-        <table><colgroup><col class="number"><col class="role"><col class="identity"><col class="player-name"><col class="shirt"><col class="signature"></colgroup><tr><th>N°</th><th>Rol</th><th>Cédula</th><th>Nombres y apellidos</th><th>Dorsal</th><th>Firma</th></tr>${crearCasillas()}</table>
+        <table><colgroup><col class="player-id"><col class="shirt"><col class="player-name"><col class="role"><col class="goals"><col class="yellow"><col class="red"><col class="substitution"></colgroup><tr><th>ID jugador</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Sustitución</th></tr>${crearCasillas(teamId)}</table>
         <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
         <div class="team-footer"><div><b>Capitan:</b></div><div><b>Delegado:</b></div></div></div>`;
     };
+    const observacionesAutomaticas = crearObservacionesAutomaticas();
+    const observacionesManual = String(partido.notes || "").trim();
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
       @page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:100%;min-height:283mm;padding:5mm;border:2px solid #111827;display:flex;flex-direction:column;gap:5px}
       .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:3px solid #0f5132;padding-bottom:5px}.brand strong{display:block;font-size:18px;letter-spacing:1.8px;text-transform:uppercase}.brand span{font-size:8px;text-transform:uppercase;color:#4b5563;letter-spacing:.8px}.badge{justify-self:center;border:2px solid #0f5132;color:#0f5132;border-radius:999px;padding:5px 10px;font-size:10px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:20px;font-weight:900;color:#0f5132}
       h1{text-align:center;font-size:15px;text-transform:uppercase;margin:4px 0 0}.subtitle{text-align:center;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:4px;margin-top:3px;font-size:8px;background:#f3f4f6;border:1px solid #cbd5e1;padding:5px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:2px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc;margin-top:2px}.score-team{padding:5px;text-align:center;font-size:10px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:7px;padding:4px 7px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:14mm;height:10mm;border:2px solid #111827;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900}.score-box span{font-size:8px;font-weight:900;color:#4b5563}
-      .teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;width:100%;align-items:start}.team{min-width:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}h2{font-size:9px;text-align:center;text-transform:uppercase;background:#111827;color:#fff;padding:5px;margin:0}.legend{text-align:center;font-size:7px;padding:3px;background:#e5f3eb;color:#0f5132;border-left:1px solid #9ca3af;border-right:1px solid #9ca3af}table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:6.2px;page-break-inside:avoid;break-inside:avoid}col.number{width:6%}col.role{width:7%}col.identity{width:19%}col.player-name{width:38%}col.shirt{width:10%}col.signature{width:20%}th,td{border:1px solid #9ca3af;padding:1.5px;height:13px;overflow:hidden}th{background:#f1f5f9;text-transform:uppercase;line-height:1.1}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:4px;font-size:7px;margin-top:3px;min-height:20px;page-break-inside:avoid;break-inside:avoid}.team-footer{display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:7px;margin-top:3px}.team-footer div{border:1px solid #9ca3af;min-height:15px;padding:3px}.observations{display:none}
-      .review-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:2px}.ruled-box{border:1px solid #111827;padding:5px;min-height:36px;font-size:8px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:3px}.lines span{display:block;height:9px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:5px;font-size:8px}.pending strong{display:block;text-transform:uppercase;margin-bottom:3px;color:#0f5132}.pending-row{display:grid;grid-template-columns:4mm 1fr;gap:4px;align-items:center;height:12px}.check{width:3.2mm;height:3.2mm;border:1px solid #111827;background:#fff}.pending-line{border-bottom:1px solid #9ca3af;height:9px}.signatures{display:grid;grid-template-columns:repeat(4,1fr);gap:8mm;margin-top:auto;padding-top:15px;page-break-inside:avoid;break-inside:avoid}.signatures div{border-top:1px solid #111827;text-align:center;padding-top:3px;font-size:7px;text-transform:uppercase;font-weight:700}
+      .teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;width:100%;align-items:start}.team{min-width:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}h2{font-size:9px;text-align:center;text-transform:uppercase;background:#111827;color:#fff;padding:5px;margin:0}.legend{text-align:center;font-size:7px;padding:3px;background:#e5f3eb;color:#0f5132;border-left:1px solid #9ca3af;border-right:1px solid #9ca3af}table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:5.7px;page-break-inside:avoid;break-inside:avoid}col.player-id{width:15%}col.shirt{width:7%}col.player-name{width:31%}col.role{width:7%}col.goals{width:7%}col.yellow{width:6%}col.red{width:6%}col.substitution{width:21%}th,td{border:1px solid #9ca3af;padding:1.3px;height:12px;overflow:hidden}th{background:#f1f5f9;text-transform:uppercase;line-height:1.1}.subline{color:#6b7280;font-size:5.2px}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:4px;font-size:7px;margin-top:3px;min-height:20px;page-break-inside:avoid;break-inside:avoid}.team-footer{display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:7px;margin-top:3px}.team-footer div{border:1px solid #9ca3af;min-height:15px;padding:3px}.observations{display:none}
+      .review-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:2px}.ruled-box{border:1px solid #111827;padding:5px;min-height:36px;font-size:8px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:3px}.auto-list{margin:0 0 4px 0;padding-left:12px}.auto-list li{margin-bottom:2px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:3px;margin-bottom:3px}.lines span{display:block;height:9px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:5px;font-size:8px}.pending strong{display:block;text-transform:uppercase;margin-bottom:3px;color:#0f5132}.pending-row{display:grid;grid-template-columns:4mm 1fr;gap:4px;align-items:center;height:12px}.check{width:3.2mm;height:3.2mm;border:1px solid #111827;background:#fff}.pending-line{border-bottom:1px solid #9ca3af;height:9px}.signatures{display:grid;grid-template-columns:repeat(4,1fr);gap:8mm;margin-top:auto;padding-top:15px;page-break-inside:avoid;break-inside:avoid}.signatures div{border-top:1px solid #111827;text-align:center;padding-top:3px;font-size:7px;text-transform:uppercase;font-weight:700}
       @media print{html,body{width:210mm;min-height:297mm}.sheet{width:100%;min-height:283mm;margin:0;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.teams,.review-grid,.signatures{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
       <div class="brand"><div><strong>GAME-LEGAL PRO</strong><span>Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
@@ -654,12 +678,9 @@ export default function PartidosPage() {
       <div class="score-band"><div class="score-team">${escapeHtml(partido.home?.name)}</div><div class="score-box"><div class="score-cell"></div><span>MARCADOR</span><div class="score-cell"></div></div><div class="score-team">${escapeHtml(partido.away?.name)}</div></div>
       <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
       <div class="review-grid">
-        <div class="ruled-box"><strong>Observaciones generales del partido</strong><div class="lines">${crearLineas(4)}</div></div>
-        <div class="pending"><strong>Pendientes del partido</strong>
-          <div class="pending-row"><span class="check"></span><span class="pending-line">Tarjetas amarillas pendientes</span></div>
-          <div class="pending-row"><span class="check"></span><span class="pending-line">Pago de inscripcion pendiente</span></div>
-          <div class="pending-row"><span class="check"></span><span class="pending-line">Sanciones o compromisos administrativos</span></div>
-          <div class="pending-row"><span class="check"></span><span class="pending-line">Otra novedad posterior al encuentro</span></div>
+        <div class="ruled-box"><strong>Observaciones del sistema y adicionales</strong><ul class="auto-list">${observacionesAutomaticas.map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<div class="manual-note"><b>Observacion manual:</b> ${escapeHtml(observacionesManual)}</div>` : ""}<div class="lines">${crearLineas(3)}</div></div>
+        <div class="pending"><strong>Observaciones adicionales del usuario</strong>
+          <div class="lines">${crearLineas(6)}</div>
         </div>
       </div>
       <div class="signatures"><div>DT local</div><div>DT visitante</div><div>Arbitro</div><div>Vocal</div></div>
