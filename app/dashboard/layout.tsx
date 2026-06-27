@@ -24,7 +24,9 @@ const Icons = {
   eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z",
   crown: "M2 4h20v2H2z M12 8l-3 5-5-3 1 8h14l1-8-5 3z",
-  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9"
+  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9",
+  sun: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z",
+  moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { stats, disciplinaryAlerts, tournamentId, refetch } = useTournamentData();
+  const [adminTheme, setAdminTheme] = useState<"dark" | "light">("dark");
   
   // ==========================================
   // CEREBRO SAAS (Control de Perfil y Deudas)
@@ -41,6 +44,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   // NUEVO: Estado para saber qué torneo estamos administrando visualmente
   const [nombreTorneoActivo, setNombreTorneoActivo] = useState<string>("Cargando...");
+
+  useEffect(() => {
+    const storedTheme = localStorage.getItem("gamelegal-admin-theme");
+    const nextTheme = storedTheme === "light" ? "light" : "dark";
+    setAdminTheme(nextTheme);
+    document.documentElement.dataset.adminTheme = nextTheme;
+  }, []);
+
+  const cambiarTemaAdmin = () => {
+    const nextTheme = adminTheme === "dark" ? "light" : "dark";
+    setAdminTheme(nextTheme);
+    localStorage.setItem("gamelegal-admin-theme", nextTheme);
+    document.documentElement.dataset.adminTheme = nextTheme;
+  };
 
   useEffect(() => {
     async function verificarIdentidad() {
@@ -265,6 +282,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={cambiarTemaAdmin}
+              className="admin-theme-toggle"
+              aria-label="Cambiar entre modo dia y noche"
+              title="Cambiar modo visual"
+            >
+              <Icon path={adminTheme === "dark" ? Icons.sun : Icons.moon} size={16} />
+              <span className="hidden md:inline">{adminTheme === "dark" ? "Modo dia" : "Modo noche"}</span>
+            </button>
             <div className="text-right hidden sm:block">
               <p className="text-xs font-black text-white uppercase">{perfilUsuario?.full_name || 'Organizador'}</p>
               <p className="text-[10px] text-green-500 tracking-widest uppercase font-bold">● Conectado</p>
