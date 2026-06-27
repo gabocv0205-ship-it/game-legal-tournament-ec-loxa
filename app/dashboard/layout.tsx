@@ -175,22 +175,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="admin-premium-shell flex h-screen w-full overflow-hidden font-sans">
       
-      <aside className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-64 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}>
-        <div className="p-6 border-b border-[#D4A017]/15 flex items-center gap-3 relative overflow-hidden">
+      <aside className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-60 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}>
+        <div className="p-4 border-b border-[#D4A017]/15 flex items-center gap-3 relative overflow-hidden">
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
-          <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C] overflow-hidden">
+          <div className="w-9 h-9 border border-[#D4A017] rounded-2xl flex items-center justify-center text-[#D4A017] font-black text-lg shadow-[0_0_15px_rgba(212,160,23,0.22)] bg-[#1C1C1C] overflow-hidden">
             {perfilUsuario?.logo_url ? <Image src={perfilUsuario.logo_url} alt="Logo" width={40} height={40} unoptimized className="w-full h-full object-contain p-1" /> : perfilUsuario?.role === 'superadmin' ? '👑' : 'C'}
           </div>
           <div className="relative z-10">
-            <p className="font-black text-sm tracking-widest text-white">GAME-LEGAL</p>
+            <p className="font-black text-xs tracking-widest text-white">GAME-LEGAL</p>
             <p className="text-xs text-[#D4A017] font-bold uppercase tracking-widest">
               {perfilUsuario?.role === 'superadmin' ? 'SuperAdmin' : 'Pro Admin'}
             </p>
           </div>
         </div>
         
-        <div className="px-4 pt-4 space-y-2">
+        <div className="px-3 pt-3 space-y-2">
           {tournamentId && !pathname.startsWith('/superadmin') && stats.suspended > 0 && (
             <div className="bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-3 py-2 rounded-lg text-xs font-bold">
               <div className="flex items-center gap-2"><Icon path={Icons.alert} size={14} /> <span>Fecha {stats.nextMatchday}: {stats.suspended} suspendido(s)</span></div>
@@ -210,11 +210,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </div>
 
-        <nav className="flex-1 p-4 space-y-2 mt-2 overflow-y-auto">
-          {MENU.map(item => (
+        <nav className="flex-1 p-3 space-y-1 mt-1 overflow-y-auto">
+          {MENU.filter(item => perfilUsuario?.role === "superadmin" || !["/dashboard/roles", "/dashboard/auditoria"].includes(item.href)).map(item => (
             <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_28px_rgba(212,160,23,0.34)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
-              <Icon path={item.icon} size={18} /> {item.label}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-black tracking-wide transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_24px_rgba(212,160,23,0.28)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
+              <Icon path={item.icon} size={16} /> <span className="truncate">{item.label}</span>
             </Link>
           ))}
           
@@ -235,19 +235,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </nav>
 
-        <div className="p-4 border-t border-[#D4A017]/15">
+        <div className="p-3 border-t border-[#D4A017]/15 space-y-2">
           {perfilUsuario?.role === 'organizer' && (
-            <a href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-sm text-white font-black uppercase tracking-wider transition-all mb-3 shadow-sm">
+            <a href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 hover:bg-green-500 rounded-xl text-xs text-white font-black uppercase tracking-wider transition-all shadow-sm">
               Soporte WhatsApp
             </a>
           )}
-          <Link href="/dashboard/configuracion" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-4 py-3 border border-[#D4A017] rounded-lg text-sm font-bold transition-all mb-3 ${pathname === "/dashboard/configuracion" ? "bg-[#D4A017] text-black" : "text-[#D4A017] hover:bg-[#D4A017] hover:text-black"}`}>
+          <Link href="/dashboard/configuracion" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-[#D4A017] rounded-xl text-xs font-black uppercase tracking-wider transition-all ${pathname === "/dashboard/configuracion" ? "bg-[#D4A017] text-black" : "text-[#D4A017] hover:bg-[#D4A017] hover:text-black"}`}>
             <Icon path={Icons.chart} size={16}/> Configurar Torneo
           </Link>
-          <Link href="/" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#1C1C1C] hover:bg-[#242424] rounded-lg text-sm text-white font-bold transition-all border border-[#2E2E2E]">
+          <Link href="/dashboard/perfil" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-[#2E2E2E] ${pathname === "/dashboard/perfil" ? "bg-[#D4A017] text-black" : "bg-[#1C1C1C] text-white hover:bg-[#242424]"}`}>
+            <Icon path={Icons.user} size={16}/> Perfil
+          </Link>
+          <Link href="/" className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#1C1C1C] hover:bg-[#242424] rounded-xl text-xs text-white font-black uppercase tracking-wider transition-all border border-[#2E2E2E]">
              <Icon path={Icons.eye} size={16}/> Ver App Pública
           </Link>
-          <button onClick={cerrarSesion} className="w-full flex items-center justify-center gap-2 px-4 py-3 mt-3 bg-red-950/40 hover:bg-red-900/60 rounded-lg text-sm text-red-300 font-bold transition-all border border-red-900/60">
+          <button onClick={cerrarSesion} className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-red-950/40 hover:bg-red-900/60 rounded-xl text-xs text-red-300 font-black uppercase tracking-wider transition-all border border-red-900/60">
             <Icon path={Icons.logout} size={16}/> Cerrar sesión
           </button>
         </div>

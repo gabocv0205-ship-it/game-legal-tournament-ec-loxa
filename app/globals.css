@@ -189,6 +189,33 @@ textarea:focus {
   background-color: rgba(255, 255, 255, 0.78) !important;
 }
 
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-gray-800"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-gray-900"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-slate-800"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-slate-900"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#1a0a0a]"],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="bg-[#1a140a]"] {
+  background-color: var(--admin-surface) !important;
+  color: var(--admin-text) !important;
+  border-color: var(--admin-border) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell table,
+:root[data-admin-theme="light"] .admin-premium-shell thead,
+:root[data-admin-theme="light"] .admin-premium-shell tbody,
+:root[data-admin-theme="light"] .admin-premium-shell tr {
+  color: var(--admin-text);
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell th,
+:root[data-admin-theme="light"] .admin-premium-shell td {
+  border-color: var(--admin-border) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell ::placeholder {
+  color: #6b7c70 !important;
+}
+
 :root {
   --premium-bg: #050807;
   --premium-bg-soft: #0e1511;
