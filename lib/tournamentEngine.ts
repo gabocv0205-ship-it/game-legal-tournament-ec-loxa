@@ -17,6 +17,7 @@ export type TournamentConfig = {
   yellow_cards_for_suspension: number;
   yellow_suspension_matches: number;
   red_suspension_matches: number;
+  max_players_per_team: number;
 };
 
 export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
@@ -38,6 +39,7 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   yellow_cards_for_suspension: 3,
   yellow_suspension_matches: 1,
   red_suspension_matches: 1,
+  max_players_per_team: 25,
 };
 
 export function normalizeTournamentConfig(source: any): TournamentConfig {
@@ -63,6 +65,7 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     yellow_cards_for_suspension: number("yellow_cards_for_suspension"),
     yellow_suspension_matches: number("yellow_suspension_matches"),
     red_suspension_matches: number("red_suspension_matches"),
+    max_players_per_team: number("max_players_per_team"),
   };
 }
 
@@ -216,7 +219,7 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
 }
 
 export function scheduleFixtures(fixtures: any[], day: string, startTime: string, config: TournamentConfig) {
-  const start = new Date(`${day}T${startTime}:00`);
+  const start = new Date(`${day}T${startTime}:00-05:00`);
   return fixtures.map((fixture, index) => {
     const slot = Math.floor(index / config.court_count);
     const interval = config.match_duration_minutes + config.break_between_matches_minutes;
@@ -238,7 +241,7 @@ export function validateManualMatch(candidate: any, matches: any[], durationMinu
     const existingEnd = existingStart + durationMinutes * 60000;
     const overlaps = start < existingEnd && end > existingStart;
     if (!overlaps) continue;
-    if (match.court === candidate.court) return `${candidate.court} ya está ocupada en ese horario.`;
+    if (match.court === candidate.court) return "Ya existe un partido programado en esta fecha, hora y cancha. Seleccione otro horario. La cancha ya esta ocupada.";
     if ([candidate.home_team_id, candidate.away_team_id].includes(match.home_team_id) || [candidate.home_team_id, candidate.away_team_id].includes(match.away_team_id)) {
       return "Uno de los equipos ya tiene un partido en ese horario.";
     }

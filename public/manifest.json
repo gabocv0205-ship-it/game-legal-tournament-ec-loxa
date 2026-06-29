@@ -1,0 +1,20 @@
+{
+  "name": "Game Legal Tournament",
+  "short_name": "Game Legal",
+  "description": "Plataforma profesional para torneos deportivos.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050807",
+  "theme_color": "#050807",
+  "categories": ["sports", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

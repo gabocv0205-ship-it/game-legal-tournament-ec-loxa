@@ -131,6 +131,13 @@ create policy payments_finance_write on public.payments for all to authenticated
 using (public.can_manage_tournament(tournament_id, 'finance'))
 with check (public.can_manage_tournament(tournament_id, 'finance'));
 
+alter table public.payments
+  add column if not exists concept text,
+  add column if not exists notes text,
+  add column if not exists payment_method text default 'efectivo',
+  add column if not exists description text,
+  add column if not exists match_id uuid references public.matches(id) on delete set null;
+
 -- Los pagos confirmados son inmutables. Para corregirlos se elimina el pago
 -- original, lo cual genera automaticamente un reverso auditable, y se registra
 -- el movimiento correcto.
@@ -223,6 +230,106 @@ end;
 $$;
 drop trigger if exists sync_payment_ledger on public.payments;
 create trigger sync_payment_ledger after insert or delete on public.payments for each row execute function public.sync_payment_to_ledger();
+
+create or replace function public.register_team_discount(
+  p_tournament_id uuid,
+  p_team_id uuid,
+  p_amount numeric,
+  p_category text default 'descuento_inscripcion',
+  p_reason text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_payment_id text;
+  v_charges numeric := 0;
+  v_regular_payments numeric := 0;
+  v_discounts numeric := 0;
+  v_balance numeric := 0;
+  v_registration_fee numeric := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuario no autenticado';
+  end if;
+  if not public.can_manage_tournament(p_tournament_id, 'finance') then
+    raise exception 'No tienes permiso financiero para este torneo';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'El descuento debe tener un monto mayor a cero';
+  end if;
+  if not exists (select 1 from public.teams where id = p_team_id and tournament_id = p_tournament_id) then
+    raise exception 'El equipo no pertenece al torneo seleccionado';
+  end if;
+
+  select coalesce(registration_fee, 0) into v_registration_fee
+  from public.tournaments
+  where id = p_tournament_id;
+
+  select coalesce(sum(case when entry_type = 'adjustment' then -amount else amount end), 0)
+  into v_charges
+  from public.financial_ledger
+  where tournament_id = p_tournament_id
+    and team_id = p_team_id
+    and entry_type in ('charge', 'adjustment')
+    and category not ilike 'descuento%';
+
+  if v_charges = 0 and coalesce(p_category, '') ilike '%inscripcion%' then
+    v_charges := v_registration_fee;
+  end if;
+
+  select coalesce(sum(case when entry_type = 'reversal' then -amount else amount end), 0)
+  into v_regular_payments
+  from public.financial_ledger
+  where tournament_id = p_tournament_id
+    and team_id = p_team_id
+    and entry_type in ('payment', 'reversal')
+    and category not ilike 'descuento%';
+
+  select coalesce(sum(case when entry_type = 'reversal' then -amount else amount end), 0)
+  into v_discounts
+  from public.financial_ledger
+  where tournament_id = p_tournament_id
+    and team_id = p_team_id
+    and entry_type in ('payment', 'reversal', 'adjustment')
+    and category ilike 'descuento%';
+
+  v_balance := greatest(0, v_charges - v_regular_payments - v_discounts);
+  if p_amount > v_balance then
+    raise exception 'El descuento no puede ser mayor al saldo pendiente';
+  end if;
+
+  insert into public.payments (tournament_id, team_id, amount, concept, payment_method, notes)
+  values (
+    p_tournament_id,
+    p_team_id,
+    p_amount,
+    coalesce(nullif(trim(p_category), ''), 'descuento_inscripcion'),
+    'descuento',
+    coalesce(nullif(trim(p_reason), ''), 'Ajuste contable de descuento aplicado')
+  )
+  returning id::text into v_payment_id;
+
+  insert into public.financial_ledger (tournament_id, team_id, entry_type, category, amount, reference_type, reference_id, description)
+  values (
+    p_tournament_id,
+    p_team_id,
+    'payment',
+    coalesce(nullif(trim(p_category), ''), 'descuento_inscripcion'),
+    p_amount,
+    'payments',
+    v_payment_id,
+    coalesce(nullif(trim(p_reason), ''), 'Ajuste contable de descuento aplicado')
+  )
+  on conflict do nothing;
+
+  return v_payment_id;
+end;
+$$;
+revoke all on function public.register_team_discount(uuid, uuid, numeric, text, text) from public, anon;
+grant execute on function public.register_team_discount(uuid, uuid, numeric, text, text) to authenticated;
 
 create or replace function public.sync_team_registration_charge()
 returns trigger language plpgsql security definer set search_path = public as $$

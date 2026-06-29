@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -30,6 +30,28 @@ export default function LoginPage() {
       setLoading(false);
     } else {
       // ESTE ES EL SALTO QUE FUNCIONÓ ANTES
+      const userId = data.session?.user?.id;
+      if (!userId) {
+        window.location.href = '/dashboard/torneos';
+        return;
+      }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+      const { data: torneos } = await supabase
+        .from('tournaments')
+        .select('id, name, status')
+        .eq('user_id', userId)
+        .neq('status', 'deleted')
+        .neq('status', 'archived')
+        .neq('status', 'finished');
+      const activos = torneos || [];
+      if (profile?.role === 'superadmin' || activos.length !== 1) {
+        localStorage.removeItem('activeTournamentId');
+        localStorage.removeItem('activeTournamentName');
+        window.location.href = '/dashboard/torneos';
+        return;
+      }
+      localStorage.setItem('activeTournamentId', activos[0].id);
+      localStorage.setItem('activeTournamentName', activos[0].name || 'Torneo Oficial');
       window.location.href = '/dashboard';
     }
   };

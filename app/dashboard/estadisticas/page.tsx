@@ -18,6 +18,7 @@ export default function EstadisticasPage() {
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
   const posterPosicionesRef = useRef<HTMLDivElement>(null);
+  const posterGoleadoresRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     cargarEstadisticas();
@@ -220,6 +221,30 @@ export default function EstadisticasPage() {
     }
   };
 
+  const descargarGoleadores = async () => {
+    if (!posterGoleadoresRef.current) return;
+    setExportando(true);
+    const poster = posterGoleadoresRef.current;
+    try {
+      await Promise.all(Array.from(poster.querySelectorAll("img")).map(image => {
+        if (image.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          image.onload = resolve;
+          image.onerror = resolve;
+        });
+      }));
+      const canvas = await html2canvas(poster, { backgroundColor: "#07122d", scale: 2, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `Goleadores-${nombreTorneo}-${anioTorneo}.png`;
+      link.click();
+    } catch {
+      alert("No se pudo generar el poster de goleadores.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       
@@ -296,6 +321,34 @@ export default function EstadisticasPage() {
               ))}
             </tbody>
           </table>
+          <div ref={posterGoleadoresRef} className="fixed -left-[9999px] top-0 w-[1080px] h-[1350px] overflow-hidden bg-[#07122d] p-16" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(160deg, rgba(2,8,23,.9), rgba(10,54,37,.82), rgba(2,8,23,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 15%, rgba(49,233,129,.28), transparent 30%), linear-gradient(160deg, #020817, #063b2a 50%, #020817)" }}>
+            <div className="absolute inset-10 border border-[#D4A017]/30 rounded-[28px]" />
+            <div className="relative z-10 text-center">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-[#D4A017] bg-black/40 text-4xl font-black text-[#D4A017]">GL</div>
+              <p className="mt-8 text-[18px] font-black uppercase tracking-[0.45em] text-[#D4A017]">Tabla de goleadores</p>
+              <h3 className="mt-4 text-5xl font-black uppercase tracking-widest text-white">{nombreTorneo}</h3>
+              <p className="mt-3 text-xl font-black uppercase tracking-[0.3em] text-emerald-200">{anioTorneo}</p>
+            </div>
+            <div className="relative z-10 mt-14 space-y-4">
+              {(goleadores.length ? goleadores : [{ id: "empty", name: "Sin goles registrados", team: "Esperando resultados", goles: 0 }]).slice(0, 10).map((g, index) => (
+                <div key={g.id} className={`grid grid-cols-[72px_1fr_120px] items-center gap-5 rounded-3xl border px-6 py-5 ${index === 0 ? "border-[#D4A017] bg-[#D4A017]/18 shadow-[0_0_45px_rgba(212,160,23,.25)]" : "border-white/12 bg-white/8"}`}>
+                  <div className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black ${index === 0 ? "bg-[#D4A017] text-black" : "bg-white/10 text-white"}`}>{index + 1}</div>
+                  <div className="min-w-0">
+                    <p className="truncate text-2xl font-black uppercase tracking-wide text-white">{g.name}</p>
+                    <p className="mt-1 truncate text-sm font-black uppercase tracking-[0.22em] text-[#D4A017]">{g.team}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-5xl font-black text-white">{g.goles}</p>
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-emerald-200">goles</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="absolute bottom-12 left-16 right-16 flex items-center justify-between border-t border-[#D4A017]/30 pt-6 text-[12px] font-black uppercase tracking-[0.35em] text-[#D4A017]">
+              <span>Game Legal Tournament</span>
+              <span>Ranking oficial</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -364,10 +417,13 @@ export default function EstadisticasPage() {
         
         {/* TABLA DE GOLEADORES */}
         <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-xl h-fit">
-          <div className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4">
+          <div className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4 flex flex-wrap items-center justify-between gap-3">
              <h3 className="text-white font-black uppercase tracking-widest text-sm flex items-center gap-2">
                <span>⚽</span> Máximos Artilleros
              </h3>
+             <button onClick={descargarGoleadores} disabled={exportando || goleadores.length === 0} className="px-4 py-2 rounded-lg bg-[#D4A017] text-black text-[10px] font-black uppercase tracking-widest hover:bg-yellow-400 disabled:opacity-50">
+               {exportando ? "Generando..." : "Descargar poster"}
+             </button>
           </div>
           <table className="w-full text-left text-sm text-white">
             <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[10px] tracking-widest">

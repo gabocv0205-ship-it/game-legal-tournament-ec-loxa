@@ -80,8 +80,9 @@ export default function LibroMayorFinanzas() {
       setHistorialExportaciones(exports || []);
       
       // 3. Traer Partidos Finalizados para el cálculo de arbitraje
-      const { data: matches } = await supabase.from("matches").select("id, home_team_id, away_team_id, status").eq("tournament_id", activeId).eq("status", "finished");
-      const matchIds = matches?.map(m => m.id) || [];
+      const { data: allMatches } = await supabase.from("matches").select("id, home_team_id, away_team_id, status").eq("tournament_id", activeId);
+      const matches = (allMatches || []).filter(match => match.status === "finished");
+      const matchIds = matches.map(m => m.id) || [];
 
       // 4. Traer Eventos (Tarjetas) de los partidos finalizados
       let matchEvents: any[] = [];
@@ -94,19 +95,44 @@ export default function LibroMayorFinanzas() {
       const calcEquipos = teams?.map(t => {
         // --- A) Calcular Pagos Realizados ---
         const movimientos = (ledger || []).filter(entry => entry.team_id === t.id);
+        const pagosEquipo = t.payments || [];
         const tieneLibro = movimientos.length > 0;
+        const normalizar = (value: any) => String(value || "").toLowerCase().trim();
+        const esDescuento = (entry: any) =>
+          normalizar(entry.category || entry.concept).includes("descuento") ||
+          normalizar(entry.payment_method).includes("descuento") ||
+          normalizar(entry.reference_type).includes("descuento");
+        const montoFirmado = (entry: any) => (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0);
         const cargosNetos = (categorias: string[]) => movimientos
           .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categorias.includes(entry.category))
           .reduce((sum, entry) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount), 0);
-        const pagadoTotal = tieneLibro
-          ? movimientos.filter(entry => ["payment", "reversal"].includes(entry.entry_type)).reduce((sum, entry) => sum + (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount), 0)
-          : t.payments?.reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0;
+        const ledgerPaymentReferenceIds = new Set(
+          movimientos
+            .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && entry.reference_type === "payments")
+            .map(entry => normalizar(String(entry.reference_id || "").replace(":deleted", "")))
+        );
+        const pagosLibro = movimientos
+          .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && !esDescuento(entry))
+          .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+        const pagosSinLibro = pagosEquipo
+          .filter((p: any) => !esDescuento(p) && !ledgerPaymentReferenceIds.has(normalizar(p.id)))
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const descuentosLibro = movimientos
+          .filter(entry => ["payment", "reversal", "adjustment"].includes(entry.entry_type) && esDescuento(entry))
+          .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+        const descuentosSinLibro = pagosEquipo
+          .filter((p: any) => esDescuento(p) && !ledgerPaymentReferenceIds.has(normalizar(p.id)))
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const pagadoTotal = Math.max(0, pagosLibro + pagosSinLibro);
+        const descuentoTotal = Math.max(0, descuentosLibro + descuentosSinLibro);
+        const descuentoLegacy = Math.max(0, descuentosSinLibro);
 
         // --- B) Calcular Deuda Generada ---
         const deudaInscripcion = tieneLibro ? cargosNetos(["inscripcion"]) : c_insc;
         
         // Partidos jugados por este equipo (como local o visitante)
         const partidosJugados = matches?.filter(m => m.home_team_id === t.id || m.away_team_id === t.id).length || 0;
+        const partidosProgramados = (allMatches || []).filter(m => m.status !== "finished" && (m.home_team_id === t.id || m.away_team_id === t.id)).length;
         const deudaArbitraje = tieneLibro ? cargosNetos(["arbitraje"]) : partidosJugados * c_arb;
 
         // Multas por tarjetas generadas por este equipo
@@ -116,13 +142,13 @@ export default function LibroMayorFinanzas() {
 
         // --- C) Saldo Final ---
         const totalDeudaGenerada = deudaInscripcion + deudaArbitraje + deudaMultas;
-        const saldoPendiente = totalDeudaGenerada - pagadoTotal;
+        const saldoPendiente = totalDeudaGenerada - pagadoTotal - descuentoLegacy;
 
         return { 
           ...t, 
-          partidosJugados, amarillas, rojas,
+          partidosJugados, partidosProgramados, amarillas, rojas,
           deudaInscripcion, deudaArbitraje, deudaMultas,
-          totalDeudaGenerada, pagadoTotal,
+          totalDeudaGenerada, pagadoTotal, descuentoTotal,
           saldoPendiente: saldoPendiente > 0 ? saldoPendiente : 0 
         };
       }) || [];
@@ -146,7 +172,7 @@ export default function LibroMayorFinanzas() {
     setTipoMovimiento(tipo);
     setConcepto("inscripcion");
     setMontoPago(tipo === "descuento" ? "" : (equipo.saldoPendiente > 0 ? equipo.saldoPendiente.toString() : ""));
-    setDescripcion("");
+    setDescripcion(tipo === "descuento" ? "Descuento aplicado al concepto seleccionado." : "");
     setMetodoPago("efectivo");
     setMostrarModal(true);
   };
@@ -189,7 +215,7 @@ export default function LibroMayorFinanzas() {
 
       if (error) throw error;
       setMostrarModal(false);
-      cargarDatos(); // Recalcular todo
+      cargarDatos();
     } catch (error: any) {
       alert(`No se pudo registrar el ${tipoMovimiento}: ${error?.message || "error desconocido"}`);
     } finally {
@@ -206,13 +232,14 @@ export default function LibroMayorFinanzas() {
     const base = historialLibro.length > 0
       ? historialLibro.map(entry => {
           const amount = Number(entry.amount || 0);
-          const ingreso = entry.entry_type === "payment" ? amount : 0;
-          const egreso = entry.entry_type === "reversal" ? amount : ["charge", "adjustment"].includes(entry.entry_type) ? amount : 0;
+          const esDescuento = String(entry.category || "").startsWith("descuento") || entry.reference_type === "descuento";
+          const ingreso = entry.entry_type === "payment" && !esDescuento ? amount : 0;
+          const egreso = entry.entry_type === "reversal" ? amount : ["charge", "adjustment"].includes(entry.entry_type) || esDescuento ? amount : 0;
           saldo += ingreso - egreso;
           return {
             fecha: entry.created_at,
             equipo: nombreEquipo(entry.team_id),
-            tipo: entry.entry_type || "movimiento",
+            tipo: esDescuento ? "discount" : entry.entry_type || "movimiento",
             categoria: entry.category || entry.entry_type,
             metodo: entry.reference_type || "libro",
             ingreso,
@@ -223,15 +250,16 @@ export default function LibroMayorFinanzas() {
         })
       : historial.map(pago => {
           const amount = Number(pago.amount || 0);
-          saldo += amount;
+          const esDescuento = String(pago.concept || "").startsWith("descuento") || pago.payment_method === "descuento";
+          saldo += esDescuento ? -amount : amount;
           return {
             fecha: pago.created_at,
             equipo: pago.teams?.name || "Sin equipo",
-            tipo: "payment",
+            tipo: esDescuento ? "discount" : "payment",
             categoria: pago.concept || "pago",
             metodo: pago.payment_method || "",
-            ingreso: amount,
-            egreso: 0,
+            ingreso: esDescuento ? 0 : amount,
+            egreso: esDescuento ? amount : 0,
             saldo,
             descripcion: pago.description || pago.notes || "",
           };
@@ -284,7 +312,7 @@ export default function LibroMayorFinanzas() {
       {/* TABLA DE LIQUIDACIÓN POR EQUIPO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl">
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los estados</option><option value="aldia">Al día</option><option value="parcial">Pago parcial</option><option value="mora">En mora</option></select>
-        <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los métodos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select>
+        <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los métodos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="descuento">Descuento / compensacion</option><option value="otro">Otro</option></select>
         <input type="date" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg" style={{ colorScheme: 'dark' }} />
       </div>
 
@@ -325,6 +353,7 @@ export default function LibroMayorFinanzas() {
                 <th className="p-4 text-center">Multas (Tarjetas)</th>
                 <th className="p-4 text-center bg-red-900/10">Deuda Generada</th>
                 <th className="p-4 text-center bg-green-900/10">Total Pagado</th>
+                <th className="p-4 text-center bg-emerald-900/10">Descuentos</th>
                 <th className="p-4 text-center font-black">Saldo Pendiente</th>
                 <th className="p-4 text-right">Acción</th>
               </tr>
@@ -338,13 +367,14 @@ export default function LibroMayorFinanzas() {
                   </td>
                   <td className="p-4 text-center text-gray-300 font-mono">${eq.deudaInscripcion.toFixed(2)}</td>
                   <td className="p-4 text-center text-gray-300 font-mono">
-                    ${eq.deudaArbitraje.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.partidosJugados} PJ)</span>
+                    ${eq.deudaArbitraje.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.partidosJugados} jugados / {eq.partidosProgramados} prog.)</span>
                   </td>
                   <td className="p-4 text-center text-gray-300 font-mono">
                     ${eq.deudaMultas.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.amarillas}A / {eq.rojas}R)</span>
                   </td>
                   <td className="p-4 text-center text-red-400 font-mono bg-red-900/10">${eq.totalDeudaGenerada.toFixed(2)}</td>
                   <td className="p-4 text-center text-green-400 font-mono bg-green-900/10">${eq.pagadoTotal.toFixed(2)}</td>
+                  <td className="p-4 text-center text-emerald-300 font-mono bg-emerald-900/10">${Number(eq.descuentoTotal || 0).toFixed(2)}</td>
                   <td className="p-4 text-center">
                     {eq.saldoPendiente > 0 ? (
                       <span className={`${eq.pagadoTotal > 0 ? 'bg-yellow-600' : 'bg-red-600'} text-white px-3 py-1 rounded font-black font-mono`}>${eq.saldoPendiente.toFixed(2)} · {eq.pagadoTotal > 0 ? 'Parcial' : 'En mora'}</span>
@@ -354,11 +384,11 @@ export default function LibroMayorFinanzas() {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex justify-end gap-2">
+                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="bg-emerald-950 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-700 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                        Descuento
+                      </button>
                       <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
                         Abonar
-                      </button>
-                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="bg-[#0a0a0a] hover:border-[#D4A017] text-[#D4A017] border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
-                        Descuento
                       </button>
                     </div>
                   </td>
@@ -399,9 +429,10 @@ export default function LibroMayorFinanzas() {
               <div><h3 className="text-xl font-black text-white uppercase">{equipoSeleccionado?.name}</h3><p className="text-xs text-gray-500">Detalle financiero bajo demanda</p></div>
               <button onClick={() => setMostrarDetalle(false)} className="text-gray-400 hover:text-white text-xl">×</button>
             </div>
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <Summary label="Total" value={equipoSeleccionado?.totalDeudaGenerada} color="text-white" />
               <Summary label="Cancelado" value={equipoSeleccionado?.pagadoTotal} color="text-green-400" />
+              <Summary label="Descuento" value={equipoSeleccionado?.descuentoTotal} color="text-emerald-300" />
               <Summary label="Pendiente" value={equipoSeleccionado?.saldoPendiente} color="text-red-400" />
             </div>
             <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2">
@@ -419,10 +450,10 @@ export default function LibroMayorFinanzas() {
         </div>
       )}
 
-      {/* MODAL CONTABLE (Igual que el anterior pero adaptado) */}
+      {/* MODAL CONTABLE */}
       {mostrarModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden gl-finance-modal">
+        <div className="finance-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="finance-modal-panel gl-finance-modal bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden">
             <div className="p-6 border-b border-[#2E2E2E]">
               <h3 className="text-xl font-black text-white uppercase">{tipoMovimiento === "descuento" ? "Registrar Descuento" : "Registrar Ingreso"}</h3>
               <p className="text-[#D4A017] font-bold text-sm">A cuenta de: {equipoSeleccionado?.name}</p>
@@ -461,10 +492,12 @@ export default function LibroMayorFinanzas() {
                 <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl" />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Monto ($)</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{tipoMovimiento === "descuento" ? "Valor del descuento ($)" : "Monto ($)"}</label>
                 <input type="number" step="0.01" min="0.01" value={montoPago} onChange={(e) => setMontoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl outline-none" required />
                 <p className="text-[10px] text-gray-500 mt-2 text-right">
-                  {tipoMovimiento === "descuento" ? "El descuento se resta del concepto seleccionado." : `Saldo maximo a cobrar: $${Number(equipoSeleccionado?.saldoPendiente || 0).toFixed(2)}`}
+                  {tipoMovimiento === "descuento"
+                    ? "El descuento se resta del concepto seleccionado."
+                    : `Saldo maximo a cobrar: ${Number(equipoSeleccionado?.saldoPendiente || 0).toFixed(2)}`}
                 </p>
               </div>
               <div className="flex gap-3 pt-4">

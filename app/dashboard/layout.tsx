@@ -24,7 +24,9 @@ const Icons = {
   eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z",
   crown: "M2 4h20v2H2z M12 8l-3 5-5-3 1 8h14l1-8-5 3z",
-  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9"
+  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9",
+  sun: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z",
+  moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { stats, disciplinaryAlerts, tournamentId, refetch } = useTournamentData();
+  const [adminTheme, setAdminTheme] = useState<"dark" | "light">("dark");
   
   // ==========================================
   // CEREBRO SAAS (Control de Perfil y Deudas)
@@ -41,6 +44,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   // NUEVO: Estado para saber qué torneo estamos administrando visualmente
   const [nombreTorneoActivo, setNombreTorneoActivo] = useState<string>("Cargando...");
+
+  useEffect(() => {
+    const storedTheme = localStorage.getItem("gamelegal-admin-theme");
+    const nextTheme = storedTheme === "light" ? "light" : "dark";
+    setAdminTheme(nextTheme);
+    document.documentElement.dataset.adminTheme = nextTheme;
+  }, []);
+
+  const cambiarTemaAdmin = () => {
+    const nextTheme = adminTheme === "dark" ? "light" : "dark";
+    setAdminTheme(nextTheme);
+    localStorage.setItem("gamelegal-admin-theme", nextTheme);
+    document.documentElement.dataset.adminTheme = nextTheme;
+  };
 
   useEffect(() => {
     async function verificarIdentidad() {
@@ -126,15 +143,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const MENU = [
-    { href: "/dashboard/perfil", label: "Mi Perfil", icon: Icons.user },
+    { href: "/dashboard/perfil", label: "Perfil", icon: Icons.user },
     { href: "/dashboard/torneos", label: "Mis Torneos", icon: Icons.crown },
     { href: "/dashboard", label: "Inicio", icon: Icons.home },
     { href: "/dashboard/equipos", label: "Equipos", icon: Icons.shield },
     { href: "/dashboard/jugadores", label: "Jugadores", icon: Icons.users },
-    { href: "/dashboard/sorteo", label: "Fase de Grupos", icon: Icons.grid },
+    { href: "/dashboard/sorteo", label: "Grupos", icon: Icons.grid },
     { href: "/dashboard/partidos", label: "Partidos", icon: Icons.calendar },
     { href: "/dashboard/finanzas", label: "Finanzas", icon: Icons.dollar },
-    { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Icons.alert },
+    { href: "/dashboard/notificaciones", label: "Avisos", icon: Icons.alert },
     { href: "/dashboard/estadisticas", label: "Estadísticas", icon: Icons.chart },
     { href: "/dashboard/roles", label: "Roles y Permisos", icon: Icons.user },
     { href: "/dashboard/auditoria", label: "Auditoría", icon: Icons.eye },
@@ -156,48 +173,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen w-full bg-[#0a0a0a] overflow-hidden font-sans">
+    <div className="admin-premium-shell flex h-screen w-full overflow-hidden font-sans">
       
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#141414] text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#2E2E2E]`}>
-        <div className="p-6 border-b border-[#2E2E2E] flex items-center gap-3 relative overflow-hidden">
+      <aside className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-56 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}>
+        <div className="p-3 border-b border-[#D4A017]/15 flex items-center gap-2.5 relative overflow-hidden">
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
-          <div className="w-10 h-10 border-2 border-[#D4A017] rounded-full flex items-center justify-center text-[#D4A017] font-black text-xl shadow-[0_0_15px_rgba(212,160,23,0.3)] bg-[#1C1C1C] overflow-hidden">
+          <div className="w-9 h-9 border border-[#D4A017] rounded-2xl flex items-center justify-center text-[#D4A017] font-black text-lg shadow-[0_0_15px_rgba(212,160,23,0.22)] bg-[#1C1C1C] overflow-hidden">
             {perfilUsuario?.logo_url ? <Image src={perfilUsuario.logo_url} alt="Logo" width={40} height={40} unoptimized className="w-full h-full object-contain p-1" /> : perfilUsuario?.role === 'superadmin' ? '👑' : 'C'}
           </div>
           <div className="relative z-10">
-            <p className="font-black text-sm tracking-widest text-white">GAME-LEGAL</p>
+            <p className="font-black text-xs tracking-widest text-white">GAME-LEGAL</p>
             <p className="text-xs text-[#D4A017] font-bold uppercase tracking-widest">
               {perfilUsuario?.role === 'superadmin' ? 'SuperAdmin' : 'Pro Admin'}
             </p>
           </div>
         </div>
         
-        <div className="px-4 pt-4 space-y-2">
+        <div className="px-2.5 pt-2 space-y-1.5">
           {tournamentId && !pathname.startsWith('/superadmin') && stats.suspended > 0 && (
-            <div className="bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-3 py-2 rounded-lg text-xs font-bold">
+            <div className="bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
               <div className="flex items-center gap-2"><Icon path={Icons.alert} size={14} /> <span>Fecha {stats.nextMatchday}: {stats.suspended} suspendido(s)</span></div>
-              <p className="text-[9px] mt-1 text-yellow-100">{disciplinaryAlerts.suspended.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
+              <p className="line-clamp-2 text-[8px] mt-1 text-yellow-100">{disciplinaryAlerts.suspended.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
             </div>
           )}
           {tournamentId && !pathname.startsWith('/superadmin') && disciplinaryAlerts.eligibleAgain.length > 0 && (
-            <div className="bg-green-900/30 border border-green-500/50 text-green-400 px-3 py-2 rounded-lg text-xs font-bold">
+            <div className="bg-green-900/30 border border-green-500/50 text-green-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
               <div>Fecha {stats.nextMatchday}: ya puede(n) jugar</div>
-              <p className="text-[9px] mt-1 text-green-200">{disciplinaryAlerts.eligibleAgain.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
+              <p className="line-clamp-2 text-[8px] mt-1 text-green-200">{disciplinaryAlerts.eligibleAgain.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
             </div>
           )}
           {tournamentId && !pathname.startsWith('/superadmin') && stats.debts > 0 && (
-            <div className="flex items-center gap-2 bg-red-900/40 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-xs font-bold">
+            <div className="flex items-center gap-2 bg-red-900/40 border border-red-500/50 text-red-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
               <Icon path={Icons.alert} size={14} /> <span>{stats.debts} equipo(s) con deudas</span>
             </div>
           )}
         </div>
 
-        <nav className="flex-1 p-4 space-y-2 mt-2 overflow-y-auto">
-          {MENU.map(item => (
+        <nav className="flex-1 p-2.5 space-y-0.5 mt-1 overflow-y-auto lg:overflow-visible">
+          {MENU.filter(item => perfilUsuario?.role === "superadmin" || !["/dashboard/roles", "/dashboard/auditoria"].includes(item.href)).map(item => (
             <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all ${pathname === item.href ? "bg-[#D4A017] text-black shadow-[0_4px_20px_rgba(212,160,23,0.4)]" : "text-[#8A8A8A] hover:bg-[#1C1C1C] hover:text-white"}`}>
-              <Icon path={item.icon} size={18} /> {item.label}
+              className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-black tracking-wide transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_24px_rgba(212,160,23,0.28)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
+              <Icon path={item.icon} size={15} /> <span className="truncate">{item.label}</span>
             </Link>
           ))}
           
@@ -218,19 +235,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </nav>
 
-        <div className="p-4 border-t border-[#2E2E2E]">
+        <div className="p-2.5 border-t border-[#D4A017]/15 space-y-1.5">
           {perfilUsuario?.role === 'organizer' && (
-            <a href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-sm text-white font-black uppercase tracking-wider transition-all mb-3 shadow-sm">
+            <a href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-2.5 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-[10px] text-white font-black uppercase tracking-wider transition-all shadow-sm">
               Soporte WhatsApp
             </a>
           )}
-          <Link href="/dashboard/configuracion" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-4 py-3 border border-[#D4A017] rounded-lg text-sm font-bold transition-all mb-3 ${pathname === "/dashboard/configuracion" ? "bg-[#D4A017] text-black" : "text-[#D4A017] hover:bg-[#D4A017] hover:text-black"}`}>
+          <Link href="/dashboard/configuracion" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-2.5 py-2 border border-[#D4A017] rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${pathname === "/dashboard/configuracion" ? "bg-[#D4A017] text-black" : "text-[#D4A017] hover:bg-[#D4A017] hover:text-black"}`}>
             <Icon path={Icons.chart} size={16}/> Configurar Torneo
           </Link>
-          <Link href="/" className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#1C1C1C] hover:bg-[#242424] rounded-lg text-sm text-white font-bold transition-all border border-[#2E2E2E]">
+          <Link href="/" className="w-full flex items-center justify-center gap-2 px-2.5 py-2 bg-[#1C1C1C] hover:bg-[#242424] rounded-lg text-[10px] text-white font-black uppercase tracking-wider transition-all border border-[#2E2E2E]">
              <Icon path={Icons.eye} size={16}/> Ver App Pública
           </Link>
-          <button onClick={cerrarSesion} className="w-full flex items-center justify-center gap-2 px-4 py-3 mt-3 bg-red-950/40 hover:bg-red-900/60 rounded-lg text-sm text-red-300 font-bold transition-all border border-red-900/60">
+          <button onClick={cerrarSesion} className="w-full flex items-center justify-center gap-2 px-2.5 py-2 bg-red-950/40 hover:bg-red-900/60 rounded-lg text-[10px] text-red-300 font-black uppercase tracking-wider transition-all border border-red-900/60">
             <Icon path={Icons.logout} size={16}/> Cerrar sesión
           </button>
         </div>
@@ -238,7 +255,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/80 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#0a0a0a] relative z-10 text-white">
+      <main className="admin-premium-content flex-1 flex flex-col h-screen overflow-y-auto relative z-10 text-white">
         
         {perfilUsuario?.saas_status === 'pending_payment' && perfilUsuario?.role !== 'superadmin' && (
           <div className="bg-gradient-to-r from-red-900 via-red-600 to-red-900 text-white px-6 py-3 flex items-center justify-between shadow-[0_10px_30px_rgba(220,38,38,0.3)] sticky top-0 z-30">
@@ -250,7 +267,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
-        <header className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4 flex items-center gap-4 sticky top-0 z-20 shadow-sm">
+        <header className="admin-premium-header border-b border-[#D4A017]/15 px-6 py-4 flex items-center gap-4 sticky top-0 z-20">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 bg-[#1C1C1C] text-gray-300 rounded-xl hover:bg-[#2A2A2A]"><Icon path={Icons.bars} size={20}/></button>
           
           {/* NUEVO: Mostrar claramente el torneo que estamos administrando */}
@@ -265,6 +282,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={cambiarTemaAdmin}
+              className="admin-theme-toggle"
+              aria-label="Cambiar entre modo dia y noche"
+              title="Cambiar modo visual"
+            >
+              <Icon path={adminTheme === "dark" ? Icons.sun : Icons.moon} size={16} />
+              <span className="hidden md:inline">{adminTheme === "dark" ? "Modo dia" : "Modo noche"}</span>
+            </button>
             <div className="text-right hidden sm:block">
               <p className="text-xs font-black text-white uppercase">{perfilUsuario?.full_name || 'Organizador'}</p>
               <p className="text-[10px] text-green-500 tracking-widest uppercase font-bold">● Conectado</p>

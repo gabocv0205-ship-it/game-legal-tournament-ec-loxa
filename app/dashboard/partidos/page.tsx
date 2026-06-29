@@ -4,7 +4,8 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
-import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
+import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -14,6 +15,7 @@ export default function PartidosPage() {
   const [torneoNombre, setTorneoNombre] = useState<string>("Torneo Oficial");
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [costoArbitraje, setCostoArbitraje] = useState<number>(20);
+  const [costosFinancieros, setCostosFinancieros] = useState({ inscripcion: 150, arbitraje: 20, amarilla: 2, roja: 5 });
   const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]);
   const [auspiciantesTorneo, setAuspiciantesTorneo] = useState<string[]>([]);
   
@@ -39,10 +41,21 @@ export default function PartidosPage() {
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
   const [observacionesManual, setObservacionesManual] = useState("");
+  const [partidoEditando, setPartidoEditando] = useState<any>(null);
+  const [editLocalId, setEditLocalId] = useState("");
+  const [editVisitanteId, setEditVisitanteId] = useState("");
+  const [editFecha, setEditFecha] = useState("");
+  const [editJornada, setEditJornada] = useState<number>(1);
+  const [editCancha, setEditCancha] = useState("");
+  const [editFase, setEditFase] = useState("Fase de Grupos");
+  const [editNotas, setEditNotas] = useState("");
 
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
+  const [autoDias, setAutoDias] = useState<string[]>([]);
   const [autoHoraInicio, setAutoHoraInicio] = useState("09:30");
+  const [autoHoraFin, setAutoHoraFin] = useState("17:00");
+  const [autoIntervalo, setAutoIntervalo] = useState<number>(60);
   const [autoDuracion, setAutoDuracion] = useState<number>(60);
   const [autoCancha, setAutoCancha] = useState("Cancha 1");
   const [autoFase, setAutoFase] = useState("Fase de Grupos");
@@ -66,6 +79,47 @@ export default function PartidosPage() {
   const [eventoMinuto, setEventoMinuto] = useState("");
   const [editandoEventoId, setEditandoEventoId] = useState<string | null>(null);
   const [observacionesPartido, setObservacionesPartido] = useState("");
+
+  const obtenerFechaHoraEcuador = () => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guayaquil",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date()).reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+    const dia = `${parts.year}-${parts.month}-${parts.day}`;
+    const hora = `${parts.hour}:${parts.minute}`;
+    return { dia, hora, fechaHora: `${dia}T${hora}` };
+  };
+
+  const aplicarFechaHoraEcuador = () => {
+    const ahora = obtenerFechaHoraEcuador();
+    setFecha(ahora.fechaHora);
+    setAutoDia(ahora.dia);
+    setAutoDias(dias => dias.length ? dias : [ahora.dia]);
+    setAutoHoraInicio(ahora.hora);
+  };
+
+  const fechaHoraEcuadorAISO = (value: string) => {
+    if (!value) return value;
+    return new Date(`${value.length === 16 ? `${value}:00` : value}-05:00`).toISOString();
+  };
+
+  const obtenerDiaDeCampo = (value: string) => (value || obtenerFechaHoraEcuador().fechaHora).split("T")[0] || obtenerFechaHoraEcuador().dia;
+  const obtenerHoraDeCampo = (value: string) => (value || obtenerFechaHoraEcuador().fechaHora).split("T")[1] || obtenerFechaHoraEcuador().hora;
+  const actualizarFechaHoraCampo = (value: string, tipo: "dia" | "hora", nuevoValor: string) => {
+    const ahora = obtenerFechaHoraEcuador();
+    const [diaActual, horaActual] = (value || ahora.fechaHora).split("T");
+    return tipo === "dia"
+      ? `${nuevoValor}T${horaActual || ahora.hora}`
+      : `${diaActual || ahora.dia}T${nuevoValor}`;
+  };
 
   // ============================================================================
   // ESCUCHADOR DE RED (PLAN DE CONTINGENCIA OFFLINE MANTENIDO)
@@ -99,7 +153,14 @@ export default function PartidosPage() {
 
   useEffect(() => {
     cargarDatos();
-    if (typeof window !== "undefined") setAppUrl(window.location.origin);
+    if (typeof window !== "undefined") {
+      setAppUrl(window.location.origin);
+      const ahora = obtenerFechaHoraEcuador();
+      setFecha(valor => valor || ahora.fechaHora);
+      setAutoDia(valor => valor || ahora.dia);
+      setAutoDias(valor => valor.length ? valor : [ahora.dia]);
+      setAutoHoraInicio(valor => valor || ahora.hora);
+    }
   }, []);
 
   const cargarDatos = async () => {
@@ -118,6 +179,12 @@ export default function PartidosPage() {
     setTorneoId(activeId);
     if (tourney) {
       setCostoArbitraje(Number(tourney.referee_fee || 20));
+      setCostosFinancieros({
+        inscripcion: Number(tourney.registration_fee || 150),
+        arbitraje: Number(tourney.referee_fee || 20),
+        amarilla: Number(tourney.yellow_card_fee || 2),
+        roja: Number(tourney.red_card_fee || 5),
+      });
       setTorneoNombre(tourney.name || "Torneo Oficial");
       setTorneoSlug(tourney.slug);
       setAuspiciantesTorneo(Array.isArray(tourney.tournament_sponsors) ? tourney.tournament_sponsors.filter(Boolean) : []);
@@ -136,10 +203,70 @@ export default function PartidosPage() {
     if (matchesData) setPartidos(matchesData);
   };
 
+  const mismaJornada = (partido: any, jornada: number, fase: string) => Number(partido.matchday) === Number(jornada) && partido.stage === fase;
+  const jornadaTienePartidos = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase));
+  const jornadaCulminada = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase) && partido.status === "finished");
+  const validarJornadaGenerable = (jornada: number, fase: string) => {
+    if (jornadaCulminada(jornada, fase)) return `La fecha ${jornada} de ${fase} ya esta culminada y no puede volver a generarse.`;
+    if (jornadaTienePartidos(jornada, fase)) return `La fecha ${jornada} de ${fase} ya tiene partidos guardados. Puedes editarlos, no volver a generarlos.`;
+    return "";
+  };
+
+  const agregarDiaAutomatico = () => {
+    if (!autoDia) return alert("Selecciona una fecha desde el calendario.");
+    setAutoDias(dias => [...new Set([...dias, autoDia])].sort());
+  };
+
+  const quitarDiaAutomatico = (dia: string) => {
+    setAutoDias(dias => dias.filter(item => item !== dia));
+  };
+
+  const crearSlotsJornada = () => {
+    const dias = (autoDias.length ? autoDias : autoDia ? [autoDia] : []).sort();
+    if (!dias.length) throw new Error("Selecciona al menos una fecha de jornada.");
+    const [inicioHora, inicioMinuto] = autoHoraInicio.split(":").map(Number);
+    const [finHora, finMinuto] = autoHoraFin.split(":").map(Number);
+    const inicioMinutos = inicioHora * 60 + inicioMinuto;
+    const finMinutos = finHora * 60 + finMinuto;
+    const intervalo = Math.max(1, Number(autoIntervalo || autoDuracion || configuracion.match_duration_minutes));
+    if (finMinutos < inicioMinutos) throw new Error("La hora de finalizacion debe ser igual o posterior a la hora de inicio.");
+
+    return dias.flatMap(dia => {
+      const slots: Date[] = [];
+      for (let minuto = inicioMinutos; minuto <= finMinutos; minuto += intervalo) {
+        const hora = String(Math.floor(minuto / 60)).padStart(2, "0");
+        const min = String(minuto % 60).padStart(2, "0");
+        slots.push(new Date(`${dia}T${hora}:${min}:00-05:00`));
+      }
+      return slots;
+    });
+  };
+
+  const distribuirPartidosEnHorarios = (fixtures: any[]) => {
+    const slots = crearSlotsJornada();
+    const capacidad = slots.length * Math.max(1, configuracion.court_count);
+    if (fixtures.length > capacidad) {
+      throw new Error(`El rango horario configurado es insuficiente. Hay ${capacidad} cupo(s) disponible(s) y ${fixtures.length} partido(s) por programar.`);
+    }
+    const programados = fixtures.map((fixture, index) => {
+      const slot = slots[Math.floor(index / configuracion.court_count)];
+      const cancha = `Cancha ${(index % configuracion.court_count) + 1}`;
+      return { ...fixture, court: cancha, match_date: slot.toISOString() };
+    });
+    const revisados: any[] = [];
+    for (const partido of programados) {
+      const conflict = validateManualMatch(partido, [...partidos, ...revisados], configuracion.match_duration_minutes);
+      if (conflict) throw new Error(conflict);
+      revisados.push(partido);
+    }
+    return programados;
+  };
+
   const programarPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     if (!torneoId) return alert("No hay torneo activo.");
+    if (jornadaCulminada(jornadaManual, faseManual)) return alert(`La fecha ${jornadaManual} de ${faseManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
     if (faseManual === "Fase de Grupos") {
       const local = equipos.find(equipo => equipo.id === localId);
       const visitante = equipos.find(equipo => equipo.id === visitanteId);
@@ -147,15 +274,16 @@ export default function PartidosPage() {
         return alert("En fase de grupos solo pueden enfrentarse equipos del mismo grupo.");
       }
     }
+    const fechaISO = fechaHoraEcuadorAISO(fecha);
     const conflict = validateManualMatch({
-      home_team_id: localId, away_team_id: visitanteId, match_date: fecha, court: canchaManual, stage: faseManual
+      home_team_id: localId, away_team_id: visitanteId, match_date: fechaISO, court: canchaManual, stage: faseManual
     }, partidos, configuracion.match_duration_minutes);
     if (conflict) return alert(conflict);
     setLoading(true);
     try {
       const { error } = await supabase.from("matches").insert([{
         tournament_id: torneoId, home_team_id: localId, away_team_id: visitanteId,
-        match_date: fecha, matchday: jornadaManual, court: canchaManual, stage: faseManual,
+        match_date: fechaISO, matchday: jornadaManual, court: canchaManual, stage: faseManual,
         notes: observacionesManual.trim() || null
       }]);
       if (error) throw error;
@@ -165,13 +293,15 @@ export default function PartidosPage() {
 
   const generarFechaInteligente = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
+    if ((!autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos un día de juego.");
     setLoading(true);
     try {
       if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
+      const bloqueo = validarJornadaGenerable(autoJornada, autoFase);
+      if (bloqueo) throw new Error(bloqueo);
       const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
-      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion });
+      const matchesToInsert = distribuirPartidosEnHorarios(fixtures);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       alert(`Fecha ${autoJornada} generada por grupos, sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
@@ -185,9 +315,11 @@ export default function PartidosPage() {
 
   const generarLlavesInteligentes = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
+    if ((!autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos un día de juego.");
     setLoading(true);
     try {
+      const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
+      if (bloqueo) throw new Error(bloqueo);
       const required: Record<string, number> = { "16vos de Final": 32, "Octavos de Final": 16, "Cuartos de Final": 8, "Semifinal": 4, "Final": 2 };
       const count = required[faseGenerar] || 0;
       const previousStage: Record<string, string> = { "Octavos de Final": "16vos de Final", "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
@@ -200,7 +332,7 @@ export default function PartidosPage() {
       const fixtures = createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
-      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion })
+      const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
         .map(match => faseGenerar === "Final" && configuracion.final_venue ? { ...match, court: configuracion.final_venue } : match);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
@@ -218,18 +350,19 @@ export default function PartidosPage() {
   // ============================================================================
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
+    if ((!autoDias.length && !autoDia) || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
     if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Generar Fecha ${autoJornada} de ${autoFase}?`)) return;
     setLoading(true);
     
     try {
+      const bloqueo = validarJornadaGenerable(autoJornada, autoFase);
+      if (bloqueo) throw new Error(bloqueo);
       const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
       const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
       
       let matchesToInsert: any[] = [];
       // CORRECCIÓN: Parseo estricto local sin alterar el Timezone de manera errónea.
-      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
       let maxIntentos = 100, exito = false;
 
       while (maxIntentos > 0 && !exito) {
@@ -258,11 +391,7 @@ export default function PartidosPage() {
         
         if (combinacionValida) {
           // CORRECCIÓN: Se asigna la fecha y luego se suma la duración correctamente.
-          matchesToInsert = tempMatches.map((match) => {
-             const fechaAsignada = new Date(currentDate).toISOString();
-             currentDate = new Date(currentDate.getTime() + autoDuracion * 60000);
-             return { ...match, match_date: fechaAsignada };
-          });
+          matchesToInsert = distribuirPartidosEnHorarios(tempMatches);
           exito = true;
         }
         maxIntentos--;
@@ -283,12 +412,14 @@ export default function PartidosPage() {
 
   const generarLlavesAutomaticas = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
+    if ((!autoDias.length && !autoDia) || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
     if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Calcular clasificados y generar ${faseGenerar}?`)) return;
     setLoading(true);
 
     try {
+      const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
+      if (bloqueo) throw new Error(bloqueo);
       const matchesGrupos = partidos.filter(p => p.stage === "Fase de Grupos" && p.status === "finished");
       const stats: Record<string, any> = {};
       equipos.forEach(t => { stats[t.id] = { id: t.id, gf: 0, gc: 0, pts: 0 }; });
@@ -319,29 +450,24 @@ export default function PartidosPage() {
       
       let matchesToInsert: any[] = [];
       // CORRECCIÓN HORARIA TAMBIÉN AQUÍ
-      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
-
       for (let i = 0; i < numEquipos / 2; i++) {
         const mejor = clasificados[i];
         const peor = clasificados[numEquipos - 1 - i];
 
-        const fechaAsignadaIda = new Date(currentDate).toISOString();
         matchesToInsert.push({
           tournament_id: torneoId, home_team_id: mejor.id, away_team_id: peor.id,
-          matchday: autoJornada, court: autoCancha, stage: faseGenerar, match_date: fechaAsignadaIda
+          matchday: autoJornada, court: autoCancha, stage: faseGenerar, match_date: null
         });
-        currentDate = new Date(currentDate.getTime() + autoDuracion * 60000);
 
         if (formatoEliminatoria === "Ida y Vuelta (Estilo Libertadores)") {
-           const fechaAsignadaVuelta = new Date(currentDate).toISOString();
            matchesToInsert.push({
              tournament_id: torneoId, home_team_id: peor.id, away_team_id: mejor.id,
-             matchday: autoJornada + 1, court: autoCancha, stage: `${faseGenerar} (Vuelta)`, match_date: fechaAsignadaVuelta
+             matchday: autoJornada + 1, court: autoCancha, stage: `${faseGenerar} (Vuelta)`, match_date: null
            });
-           currentDate = new Date(currentDate.getTime() + autoDuracion * 60000);
         }
       }
 
+      matchesToInsert = distribuirPartidosEnHorarios(matchesToInsert);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       
@@ -360,10 +486,106 @@ export default function PartidosPage() {
     } catch (error: any) { alert("Error al eliminar: " + error.message); } finally { setLoading(false); }
   };
 
+  const formatoDatetimeLocal = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guayaquil",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date).reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  };
+
+  const abrirEditorPartido = (partido: any) => {
+    if (partido.status === "finished") return alert("Este partido ya esta culminado. No se recomienda mover horarios de partidos finalizados.");
+    setPartidoEditando(partido);
+    setEditLocalId(partido.home_team_id || "");
+    setEditVisitanteId(partido.away_team_id || "");
+    setEditFecha(formatoDatetimeLocal(partido.match_date));
+    setEditJornada(Number(partido.matchday || 1));
+    setEditCancha(partido.court || "Cancha 1");
+    setEditFase(partido.stage || "Fase de Grupos");
+    setEditNotas(partido.notes || "");
+  };
+
+  const guardarEdicionPartido = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!partidoEditando) return;
+    if (!editLocalId || !editVisitanteId) return alert("Selecciona equipo local y visitante.");
+    if (editLocalId === editVisitanteId) return alert("Un equipo no puede jugar contra si mismo.");
+    if (editFase === "Fase de Grupos") {
+      const local = equipos.find(equipo => equipo.id === editLocalId);
+      const visitante = equipos.find(equipo => equipo.id === editVisitanteId);
+      if ((local?.group_name || "General") !== (visitante?.group_name || "General")) {
+        return alert("En fase de grupos solo pueden enfrentarse equipos del mismo grupo.");
+      }
+    }
+    if (jornadaCulminada(editJornada, editFase) && !mismaJornada(partidoEditando, editJornada, editFase)) {
+      return alert(`La fecha ${editJornada} de ${editFase} ya esta culminada.`);
+    }
+
+    const editFechaISO = fechaHoraEcuadorAISO(editFecha);
+    const conflict = validateManualMatch({
+      home_team_id: editLocalId,
+      away_team_id: editVisitanteId,
+      match_date: editFechaISO,
+      court: editCancha,
+      stage: editFase
+    }, partidos.filter(partido => partido.id !== partidoEditando.id), configuracion.match_duration_minutes);
+    if (conflict) return alert(conflict);
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("matches").update({
+        home_team_id: editLocalId,
+        away_team_id: editVisitanteId,
+        match_date: editFechaISO,
+        matchday: editJornada,
+        court: editCancha,
+        stage: editFase,
+        notes: editNotas.trim() || null
+      }).eq("id", partidoEditando.id);
+      if (error) throw error;
+      setPartidoEditando(null);
+      await cargarDatos();
+    } catch (error: any) {
+      alert("Error al editar partido: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reabrirJornada = async (fase: string, jornada: number) => {
+    if (!torneoId) return;
+    if (!window.confirm(`Reabrir administrativamente la fecha ${jornada} de ${fase}? Los partidos volveran a quedar editables.`)) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("matches")
+        .update({ status: "scheduled" })
+        .eq("tournament_id", torneoId)
+        .eq("stage", fase)
+        .eq("matchday", jornada);
+      if (error) throw error;
+      await cargarDatos();
+    } catch (error: any) {
+      alert("No se pudo reabrir la jornada: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- LÓGICA DE PARTIDO EN VIVO MANTENIDA ---
   const cargarConvocatoria = async (partido: any) => {
-    const { data: playersData } = await supabase.from("public_players")
-      .select("id, full_name, team_id")
+    const { data: playersData } = await supabase.from("players")
+      .select("id, cedula, full_name, team_id")
       .in("team_id", [partido.home_team_id, partido.away_team_id])
       .order("full_name");
     const idsPartidos = partidos.map(p => p.id);
@@ -406,7 +628,8 @@ export default function PartidosPage() {
          match_id: partidoActivo.id,
          amount: costoArbitraje,
          concept: "arbitraje",
-         description: `Abono arbitraje directo en cancha - Jornada ${partidoActivo.matchday}`
+         payment_method: "efectivo",
+         notes: `Abono arbitraje directo en cancha - Jornada ${partidoActivo.matchday}`
       };
 
       if (isOffline) {
@@ -626,32 +849,105 @@ export default function PartidosPage() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return alert("Permite las ventanas emergentes para generar la planilla.");
     const { suspendidos } = esEstandar ? { suspendidos: [] as any[] } : await cargarConvocatoria(partido);
+    const equiposPlanilla = [partido.home_team_id, partido.away_team_id].filter(Boolean);
+    const { data: ledgerPlanilla } = !esEstandar && torneoId && equiposPlanilla.length
+      ? await supabase.from("financial_ledger").select("*").eq("tournament_id", torneoId).in("team_id", equiposPlanilla)
+      : { data: [] as any[] };
+    const { data: pagosPlanilla } = !esEstandar && torneoId && equiposPlanilla.length
+      ? await supabase.from("payments").select("*").eq("tournament_id", torneoId).in("team_id", equiposPlanilla)
+      : { data: [] as any[] };
     const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
     const fechaPartido = new Date(partido.match_date);
-    const crearCasillas = () => Array.from({ length: configuracion.football_modality + configuracion.substitutes_count }, (_, index) => `<tr><td>${index + 1}</td><td>${index < configuracion.football_modality ? "T" : "S"}</td><td></td><td></td><td></td><td></td></tr>`).join("");
+    const crearLineas = (cantidad: number) => Array.from({ length: cantidad }, () => "<span></span>").join("");
+    const cupoConfigurado = Number(configuracion.football_modality || 0) + Number(configuracion.substitutes_count || 0);
+    const maximoPlantilla = Number(configuracion.max_players_per_team || cupoConfigurado);
+    const cupoPartido = Math.max(1, Math.min(cupoConfigurado || maximoPlantilla || 1, maximoPlantilla || cupoConfigurado || 1));
+    const altoFilaMm = cupoPartido > 22 ? 3.4 : cupoPartido > 18 ? 3.9 : cupoPartido > 14 ? 4.5 : 5.2;
+    const crearCasillas = () => Array.from({ length: cupoPartido }, (_, index) => `<article class="player-card">
+          <div class="card-index">${index + 1}</div>
+          <div class="field id"><b>Identificacion</b><span></span></div>
+          <div class="field shirt"><b>N° camiseta</b><span></span></div>
+          <div class="field name"><b>Nombres y apellidos</b><span></span></div>
+          <div class="mini-fields">
+            <div><b>T/S</b><span></span></div>
+            <div><b>Goles</b><span></span></div>
+            <div><b>TA</b><span></span></div>
+            <div><b>TR</b><span></span></div>
+          </div>
+          <div class="field substitution"><b>Sustitucion</b><span></span></div>
+          <div class="field entered"><b>Ingreso por</b><span></span></div>
+        </article>`).join("");
+    const esDescuento = (entry: any) => String(entry.category || entry.concept || entry.payment_method || "").toLowerCase().includes("descuento");
+    const montoFirmado = (entry: any) => (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0);
+    const saldoLibro = (teamId: string, categorias: string[]) => {
+      const movimientos = (ledgerPlanilla || []).filter(entry => entry.team_id === teamId);
+      const cargos = movimientos
+        .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categorias.includes(entry.category) && !esDescuento(entry))
+        .reduce((sum, entry) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount || 0), 0);
+      const pagos = movimientos
+        .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && categorias.includes(entry.category) && !esDescuento(entry))
+        .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+      const descuentos = movimientos
+        .filter(entry => ["payment", "reversal", "adjustment"].includes(entry.entry_type) && categorias.some(cat => String(entry.category || "").includes(cat)) && esDescuento(entry))
+        .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+      return Math.max(0, cargos - pagos - descuentos);
+    };
+    const pagosEquipo = (teamId: string, categorias: string[]) => (pagosPlanilla || [])
+      .filter(pago => pago.team_id === teamId && categorias.some(cat => String(pago.concept || "").includes(cat)))
+      .reduce((sum, pago) => sum + Number(pago.amount || 0), 0);
+    const crearPendientesFinancieros = (teamId: string) => {
+      if (esEstandar || !teamId) return ["Pendientes financieros: ________________________________________________"];
+      const alertas: string[] = [];
+      const saldoInscripcion = saldoLibro(teamId, ["inscripcion"]) || Math.max(0, costosFinancieros.inscripcion - pagosEquipo(teamId, ["inscripcion"]));
+      const saldoTarjetas = saldoLibro(teamId, ["amarilla", "roja", "multa"]);
+      const pagoArbitrajePartido = (pagosPlanilla || []).some(pago => pago.team_id === teamId && pago.match_id === partido.id && pago.concept === "arbitraje");
+      if (saldoInscripcion > 0) alertas.push(`Inscripcion pendiente: $${saldoInscripcion.toFixed(2)}`);
+      if (!pagoArbitrajePartido && costosFinancieros.arbitraje > 0) alertas.push(`Arbitraje del partido pendiente: $${costosFinancieros.arbitraje.toFixed(2)}`);
+      if (saldoTarjetas > 0) alertas.push(`Tarjetas o sanciones pendientes: $${saldoTarjetas.toFixed(2)}`);
+      return alertas.length ? alertas : ["Sin pendientes financieros registrados antes del partido."];
+    };
+    const crearObservacionesAutomaticas = () => {
+      return [
+        `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
+        `Regla disciplinaria: ${configuracion.yellow_cards_for_suspension} amarilla(s) generan suspension; roja directa suspende ${configuracion.red_suspension_matches} partido(s).`,
+        ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""}`),
+      ];
+    };
     const crearEquipo = (teamId: string, teamName: string) => {
       const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
       const suspendidosTexto = suspendidosEquipo.length
-        ? suspendidosEquipo.map(player => escapeHtml(player.full_name)).join(", ")
+        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
-      return `<div class="team"><h2>${escapeHtml(teamName)}</h2><div class="legend">T = Titular (${configuracion.football_modality}) · S = Suplente (${configuracion.substitutes_count})</div>
-        <table><colgroup><col class="number"><col class="role"><col class="identity"><col class="player-name"><col class="shirt"><col class="signature"></colgroup><tr><th>N°</th><th>Rol</th><th>Cédula</th><th>Nombres y apellidos</th><th>Dorsal</th><th>Firma</th></tr>${crearCasillas()}</table>
+      const pendientesFinancieros = crearPendientesFinancieros(teamId);
+      return `<section class="team-half"><div class="half-brand"><strong>${escapeHtml(torneoNombre)}</strong><span>${escapeHtml(configuracion.tournament_year)}</span></div><div class="team-head"><div><span>Equipo</span><h2>${escapeHtml(teamName)}</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
+        <div class="player-grid">${crearCasillas()}</div>
         <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
-        <div class="observations"><b>Observaciones del equipo:</b></div></div>`;
+        <div class="observ-mini"><b>Observaciones y pendientes</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(4)}</div></div>
+        <div class="team-footer"><div><b>Firma representante del equipo</b></div></div></section>`;
     };
+    const observacionesAutomaticas = crearObservacionesAutomaticas();
+    const observacionesManual = String(partido.notes || "").trim();
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
-      @page{size:A4 portrait;margin:5mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial;color:#182033;background:#fff}.sheet{width:100%;min-height:287mm;padding:4mm;border:2px solid #d4a017;display:flex;flex-direction:column}
-      .brand{display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid #d4a017;padding-bottom:6px}.brand strong{display:block;font-size:18px;letter-spacing:2px}.brand span{font-size:9px;text-transform:uppercase;color:#657085}.year{font-size:22px;font-weight:900;color:#d4a017}
-      h1{text-align:center;font-size:16px;text-transform:uppercase;margin:6px 0 2px}.subtitle{text-align:center;font-size:9px;color:#657085;text-transform:uppercase}.meta{display:grid;grid-template-columns:1fr 1fr 1.25fr 1.75fr;gap:4px;margin:6px 0;font-size:8px;background:#f4f5f7;padding:5px}.meta span{min-width:0}.teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;width:100%;align-items:stretch}.team{min-width:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}
-      h2{font-size:10px;text-align:center;text-transform:uppercase;background:#182033;color:#fff;padding:5px;margin:0}.legend{text-align:center;font-size:7px;padding:3px;background:#edf0f4}table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:6.5px;page-break-inside:avoid;break-inside:avoid}col.number{width:6%}col.role{width:7%}col.identity{width:19%}col.player-name{width:38%}col.shirt{width:10%}col.signature{width:20%}th,td{border:1px solid #9da4b1;padding:2px;height:14px;overflow:hidden}th{background:#edf0f4;text-transform:uppercase;line-height:1.15}.suspended{border-left:3px solid #b42318;background:#fff0ee;padding:5px;font-size:7px;margin-top:4px;min-height:25px;page-break-inside:avoid;break-inside:avoid}.observations{min-height:32px;flex:1;border:1px solid #9da4b1;padding:5px;font-size:7px;margin-top:4px;page-break-inside:avoid;break-inside:avoid}.general{min-height:40px;flex:1;border:1px solid #9da4b1;padding:6px;font-size:8px;margin-top:5px;page-break-inside:avoid;break-inside:avoid}.signatures{display:grid;grid-template-columns:repeat(4,1fr);gap:8mm;margin-top:18px;page-break-inside:avoid;break-inside:avoid}.signatures div{border-top:1px solid #182033;text-align:center;padding-top:3px;font-size:7px;text-transform:uppercase}
-      @media print{html,body{width:210mm;min-height:297mm}.sheet{width:100%;min-height:287mm;margin:0;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.teams,.general,.signatures{page-break-inside:avoid;break-inside:avoid}}
+      @page{size:A4 landscape;margin:6mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:285mm;height:198mm;padding:4mm;border:2px solid #111827;display:flex;flex-direction:column;gap:2mm;overflow:hidden;position:relative}.sheet:before{content:"";position:absolute;top:4mm;bottom:4mm;left:50%;border-left:1px dashed #94a3b8;z-index:1}
+      .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:3px solid #0f5132;padding-bottom:4px}.brand strong{display:block;font-size:17px;letter-spacing:1.7px;text-transform:uppercase}.brand span{font-size:8px;text-transform:uppercase;color:#4b5563;letter-spacing:.8px}.badge{justify-self:center;border:2px solid #0f5132;color:#0f5132;border-radius:999px;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:18px;font-weight:900;color:#0f5132}
+      h1{text-align:center;font-size:14px;text-transform:uppercase;margin:2px 0 0}.subtitle{text-align:center;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:4px;font-size:8px;background:#f3f4f6;border:1px solid #cbd5e1;padding:5px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:2px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc}.score-team{padding:5px;text-align:center;font-size:10px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:7px;padding:4px 7px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:14mm;height:9mm;border:2px solid #111827}.score-box span{font-size:8px;font-weight:900;color:#4b5563}
+      .teams{display:grid;grid-template-columns:1fr 1fr;gap:6mm;flex:1;min-height:0}.team-half{min-height:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}.cut-line{display:none}.half-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f5132;margin-bottom:1mm}.half-brand strong{font-size:9px;text-transform:uppercase;letter-spacing:.6px}.half-brand span{font-size:7px;color:#0f5132;font-weight:900}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}
+      table{display:none}.player-grid{display:grid;grid-template-columns:1fr 1fr;gap:1mm;margin-top:1.2mm;min-height:0}.player-card{display:grid;grid-template-columns:5mm 1fr 13mm;grid-template-areas:"idx id shirt" "idx name name" "idx mini mini" "idx sub entered";gap:.6mm;border:1px solid #64748b;background:#fff;padding:.8mm;min-height:${cupoPartido > 18 ? 8.2 : 9.4}mm;page-break-inside:avoid;break-inside:avoid}.card-index{grid-area:idx;display:flex;align-items:center;justify-content:center;background:#0f5132;color:#fff;font-size:7px;font-weight:900}.field{min-width:0}.field b,.mini-fields b{display:block;font-size:4.8px;line-height:1;text-transform:uppercase;color:#475569}.field span,.mini-fields span{display:block;height:2.8mm;border-bottom:1px solid #94a3b8}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{grid-area:sub}.field.entered{grid-area:entered}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:.6mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:1.4mm;font-size:6.3px;margin-top:1.2mm;min-height:6mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:1.3mm;font-size:6.2px;min-height:24mm;margin-top:1.2mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.5mm}.observ-mini ul{margin:0 0 .5mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1.5mm}.team-footer div{border:1px solid #111827;min-height:8mm;padding:3px;text-align:center}.observations{display:none}
+      .review-grid{display:none}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:4px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:none}
+      @media print{html,body{width:297mm;height:210mm}.sheet{width:285mm;height:198mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,table{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
-      <div class="brand"><div><strong>GAME-LEGAL PRO</strong><span>Planilla abierta por partido</span></div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
-      <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Fútbol ${configuracion.football_modality} · Inscripción libre para esta fecha</div>
+      <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
+      <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
       <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
-      <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
-      <div class="general"><b>Observaciones generales del partido:</b></div>
-      <div class="signatures"><div>DT local</div><div>DT visitante</div><div>Árbitro</div><div>Vocal</div></div>
+      <div class="score-band"><div class="score-team">${escapeHtml(partido.home?.name)}</div><div class="score-box"><div class="score-cell"></div><span>MARCADOR</span><div class="score-cell"></div></div><div class="score-team">${escapeHtml(partido.away?.name)}</div></div>
+      <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}<div class="cut-line"><span>CORTAR AQUÍ - ENTREGAR UNA PARTE A CADA DIRIGENTE</span></div>${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
+      <div class="review-grid">
+        <div class="ruled-box"><strong>Observaciones del sistema y adicionales</strong><ul class="auto-list">${observacionesAutomaticas.map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<div class="manual-note"><b>Observacion manual:</b> ${escapeHtml(observacionesManual)}</div>` : ""}<div class="lines">${crearLineas(3)}</div></div>
+        <div class="pending"><strong>Observaciones adicionales del usuario</strong>
+          <div class="lines">${crearLineas(6)}</div>
+        </div>
+      </div>
+      <div class="signatures"><div>DT local</div><div>DT visitante</div><div>Arbitro</div><div>Vocal</div></div>
     </section></body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
@@ -673,6 +969,17 @@ export default function PartidosPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
+  const copiarEnlacePublico = async () => {
+    const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
+    if (!torneoSlug) return alert("Este torneo aun no tiene enlace publico configurado.");
+    try {
+      await navigator.clipboard.writeText(enlaceOficial);
+      alert(`Link publico copiado:\n${enlaceOficial}`);
+    } catch {
+      window.prompt("Copia el link publico del torneo:", enlaceOficial);
+    }
+  };
+
   const enviarRecordatorioWhatsApp = (p: any) => {
     const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
     const fechaObj = new Date(p.match_date);
@@ -685,6 +992,11 @@ export default function PartidosPage() {
   };
 
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
+  const jornadasCulminadas = Array.from(new Map(
+    partidos
+      .filter(partido => partido.status === "finished")
+      .map(partido => [`${partido.stage}-${partido.matchday}`, { stage: partido.stage, matchday: partido.matchday }])
+  ).values());
   const fasesCuadro = ["16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Final"];
   const fasesVisibles = fasesCuadro.filter(fase => partidos.some(partido => partido.stage === fase || partido.stage === `${fase} (Vuelta)`));
   const faseBase = (stage: string) => String(stage || "").replace(" (Vuelta)", "");
@@ -841,7 +1153,30 @@ export default function PartidosPage() {
       </div>
       
       {/* ======================= FORMULARIOS ======================= */}
+      {jornadasCulminadas.length > 0 && (
+        <div className="rounded-2xl border border-emerald-700/50 bg-emerald-950/30 p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">Fechas culminadas</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {jornadasCulminadas.map(item => (
+              <span key={`${item.stage}-${item.matchday}`} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-900/40 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-100">
+                {item.stage} · Fecha {item.matchday}
+                <button type="button" onClick={() => reabrirJornada(item.stage, Number(item.matchday))} className="rounded-full border border-emerald-300/40 px-2 py-0.5 text-[9px] text-emerald-100 hover:bg-emerald-500 hover:text-black">Reabrir</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A017]">Hora oficial Ecuador</p>
+            <p className="text-sm font-bold text-gray-300">Los campos se cargan con la fecha actual y hora local de Ecuador.</p>
+          </div>
+          <button type="button" onClick={aplicarFechaHoraEcuador} className="rounded-lg border border-[#D4A017]/50 bg-[#D4A017]/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-[#D4A017] transition-all hover:bg-[#D4A017] hover:text-black">
+            Usar ahora
+          </button>
+        </div>
         
         {modoProgramacion === "manual" && (
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
@@ -849,8 +1184,9 @@ export default function PartidosPage() {
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
-            <div className="md:col-span-3"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><MapPin size={14} /> Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><CalendarDays size={14} /> Fecha</label><input type="date" value={obtenerDiaDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "dia", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><Clock3 size={14} /> Hora</label><input type="time" value={obtenerHoraDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "hora", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div className="md:col-span-4"><label className="text-xs font-bold text-gray-500 uppercase">Observaciones</label><textarea value={observacionesManual} onChange={e => setObservacionesManual(e.target.value)} rows={2} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Comentarios opcionales del encuentro..." /></div>
             <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar"}</button>
           </form>
@@ -865,9 +1201,19 @@ export default function PartidosPage() {
                 <span className="text-white font-bold text-xs uppercase">Torneo de Ida y Vuelta</span>
               </label>
             </div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración + descanso</label><div className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{configuracion.match_duration_minutes} + {configuracion.break_between_matches_minutes} min</div></div>
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><CalendarDays size={14} /> Fecha de jornada</label>
+              <div className="mt-1 flex gap-2">
+                <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" />
+                <button type="button" onClick={agregarDiaAutomatico} className="inline-flex items-center gap-1 px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase"><Plus size={14} /> Agregar</button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
+              </div>
+            </div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora primer partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora ultimo partido</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Intervalo</label><input type="number" min={1} value={autoIntervalo} onChange={e => setAutoIntervalo(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Instancia</label><select value={autoFase} onChange={e => setAutoFase(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <button type="submit" disabled={loading} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.4)] hover:bg-yellow-500 transition-all">⚡ Auto Generar</button>
@@ -902,9 +1248,19 @@ export default function PartidosPage() {
                  </select>
                </div>
                
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración + descanso</label><div className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{configuracion.match_duration_minutes} + {configuracion.break_between_matches_minutes} min</div></div>
+               <div className="md:col-span-2">
+                 <label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><CalendarDays size={14} /> Fecha de jornada</label>
+                 <div className="mt-1 flex gap-2">
+                   <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" />
+                   <button type="button" onClick={agregarDiaAutomatico} className="inline-flex items-center gap-1 px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase"><Plus size={14} /> Agregar</button>
+                 </div>
+                 <div className="mt-2 flex flex-wrap gap-2">
+                   {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
+                 </div>
+               </div>
+               <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora primer partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora ultimo partido</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Intervalo</label><input type="number" min={1} value={autoIntervalo} onChange={e => setAutoIntervalo(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
 
                <div className="md:col-span-4">
@@ -976,6 +1332,10 @@ export default function PartidosPage() {
               💬 Invitación
             </button>
 
+            <button onClick={copiarEnlacePublico} className="bg-blue-950 border border-blue-600 text-blue-200 hover:bg-blue-600 hover:text-white font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
+              <Copy size={14} /> Copiar link
+            </button>
+
             {/* BOTÓN POSTER */}
             <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               📸 Póster
@@ -1023,6 +1383,11 @@ export default function PartidosPage() {
                       📲 Notificar
                     </button>
                   )}
+                  {p.status !== 'finished' && (
+                    <button onClick={() => abrirEditorPartido(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-blue-950 text-blue-300 hover:bg-blue-800 border border-blue-700">
+                      Editar
+                    </button>
+                  )}
                   <button onClick={() => imprimirPlanilla(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600">
                     Planilla abierta
                   </button>
@@ -1046,6 +1411,61 @@ export default function PartidosPage() {
           )}
         </div>
       </div>
+
+      {partidoEditando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#D4A017]/50 bg-[#141414] shadow-[0_0_50px_rgba(212,160,23,0.18)]">
+            <div className="border-b border-[#2E2E2E] p-6">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A017]">Editar partido guardado</p>
+              <h3 className="mt-1 text-xl font-black uppercase text-white">{partidoEditando.home?.name} vs {partidoEditando.away?.name}</h3>
+            </div>
+            <form onSubmit={guardarEdicionPartido} className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Equipo local</label>
+                <select value={editLocalId} onChange={e => setEditLocalId(e.target.value)} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">
+                  <option value="" disabled>Seleccionar...</option>
+                  {equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Equipo visitante</label>
+                <select value={editVisitanteId} onChange={e => setEditVisitanteId(e.target.value)} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">
+                  <option value="" disabled>Seleccionar...</option>
+                  {equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="flex items-center gap-1 text-xs font-bold uppercase text-gray-400"><CalendarDays size={14} /> Fecha</label>
+                <input type="date" value={obtenerDiaDeCampo(editFecha)} onChange={e => setEditFecha(actualizarFechaHoraCampo(editFecha, "dia", e.target.value))} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+              </div>
+              <div>
+                <label className="flex items-center gap-1 text-xs font-bold uppercase text-gray-400"><Clock3 size={14} /> Hora</label>
+                <input type="time" value={obtenerHoraDeCampo(editFecha)} onChange={e => setEditFecha(actualizarFechaHoraCampo(editFecha, "hora", e.target.value))} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Cancha</label>
+                <input type="text" value={editCancha} onChange={e => setEditCancha(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Instancia</label>
+                <select value={editFase} onChange={e => setEditFase(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Jornada/Llave</label>
+                <input type="number" value={editJornada} onChange={e => setEditJornada(Number(e.target.value))} min={1} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase text-gray-400">Notas administrativas</label>
+                <textarea value={editNotas} onChange={e => setEditNotas(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" placeholder="Cambio de horario solicitado, cancha, observacion..." />
+              </div>
+              <div className="flex gap-3 md:col-span-2">
+                <button type="button" onClick={() => setPartidoEditando(null)} className="flex-1 rounded-xl border border-[#2E2E2E] bg-[#1C1C1C] py-3 text-xs font-black uppercase tracking-widest text-gray-300">Cancelar</button>
+                <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-[#D4A017] py-3 text-xs font-black uppercase tracking-widest text-black hover:bg-yellow-400">{loading ? "Guardando..." : "Guardar cambios"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ==============================================================================
           📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO" MANTENIDO INTACTO
