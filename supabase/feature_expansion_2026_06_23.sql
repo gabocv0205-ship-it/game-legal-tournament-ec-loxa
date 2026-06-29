@@ -84,12 +84,77 @@ begin
   values (v_tournament.id, v_user_id, 'owner')
   on conflict (tournament_id, user_id) do update set role = excluded.role;
 
-  return query select v_tournament.id, v_tournament.name;
+  return query select v_tournament.id::uuid, v_tournament.name::text;
 end;
 $$;
 
 revoke all on function public.create_owned_tournament(text, text, numeric) from public, anon;
 grant execute on function public.create_owned_tournament(text, text, numeric) to authenticated;
+
+create or replace function public.register_financial_discount(
+  p_tournament_id uuid,
+  p_team_id uuid,
+  p_category text,
+  p_amount numeric,
+  p_description text default null
+)
+returns public.financial_ledger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_entry public.financial_ledger;
+  v_category text := lower(btrim(coalesce(p_category, '')));
+  v_amount numeric := coalesce(p_amount, 0);
+begin
+  if not public.can_manage_tournament(p_tournament_id, 'finance') then
+    raise exception 'No tienes permiso para registrar descuentos en este torneo';
+  end if;
+
+  if v_category not in ('inscripcion', 'arbitraje', 'amarilla', 'roja') then
+    raise exception 'Selecciona un concepto valido para el descuento';
+  end if;
+
+  if v_amount <= 0 then
+    raise exception 'El descuento debe ser mayor a cero';
+  end if;
+
+  if not exists (
+    select 1 from public.teams
+    where id = p_team_id and tournament_id = p_tournament_id
+  ) then
+    raise exception 'El equipo no pertenece al torneo seleccionado';
+  end if;
+
+  insert into public.financial_ledger (
+    tournament_id,
+    team_id,
+    entry_type,
+    category,
+    amount,
+    reference_type,
+    reference_id,
+    description
+  )
+  values (
+    p_tournament_id,
+    p_team_id,
+    'adjustment',
+    v_category,
+    v_amount,
+    'discount',
+    gen_random_uuid()::text,
+    coalesce(nullif(btrim(p_description), ''), 'Descuento aplicado a ' || v_category)
+  )
+  returning * into v_entry;
+
+  return v_entry;
+end;
+$$;
+
+revoke all on function public.register_financial_discount(uuid, uuid, text, numeric, text) from public, anon;
+grant execute on function public.register_financial_discount(uuid, uuid, text, numeric, text) to authenticated;
 
 create index if not exists teams_tournament_manager_phone_idx
   on public.teams (tournament_id, manager_phone);

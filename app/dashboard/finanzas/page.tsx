@@ -28,6 +28,7 @@ export default function LibroMayorFinanzas() {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [equipoSeleccionado, setEquipoSeleccionado] = useState<any>(null);
   const [montoPago, setMontoPago] = useState("");
+  const [tipoMovimiento, setTipoMovimiento] = useState<"pago" | "descuento">("pago");
   const [concepto, setConcepto] = useState("inscripcion");
   const [descripcion, setDescripcion] = useState("");
   const [metodoPago, setMetodoPago] = useState("efectivo");
@@ -140,10 +141,11 @@ export default function LibroMayorFinanzas() {
     }
   };
 
-  const abrirModalPago = (equipo: any) => {
+  const abrirModalPago = (equipo: any, tipo: "pago" | "descuento" = "pago") => {
     setEquipoSeleccionado(equipo);
+    setTipoMovimiento(tipo);
     setConcepto("inscripcion");
-    setMontoPago(equipo.saldoPendiente > 0 ? equipo.saldoPendiente.toString() : "");
+    setMontoPago(tipo === "descuento" ? "" : (equipo.saldoPendiente > 0 ? equipo.saldoPendiente.toString() : ""));
     setDescripcion("");
     setMetodoPago("efectivo");
     setMostrarModal(true);
@@ -160,23 +162,36 @@ export default function LibroMayorFinanzas() {
 
   const registrarPago = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!torneoId || !equipoSeleccionado || !montoPago || Number(montoPago) <= 0) return alert("Datos inválidos.");
-    
+    const monto = Number(montoPago);
+    if (!torneoId || !equipoSeleccionado || !montoPago || !Number.isFinite(monto) || monto <= 0) {
+      return alert("Ingresa un valor mayor a cero.");
+    }
+
     setProcesando(true);
     try {
-      const { error } = await supabase.from("payments").insert([{
-        tournament_id: torneoId,
-        team_id: equipoSeleccionado.id,
-        amount: Number(montoPago),
-        concept: concepto,
-        payment_method: metodoPago,
-        notes: descripcion || null,
-        description: descripcion || `Liquidación de ${concepto}`
-      }]);
+      const { error } = tipoMovimiento === "descuento"
+        ? await supabase.rpc("register_financial_discount", {
+            p_tournament_id: torneoId,
+            p_team_id: equipoSeleccionado.id,
+            p_category: concepto,
+            p_amount: monto,
+            p_description: descripcion || `Descuento de ${concepto}`
+          })
+        : await supabase.from("payments").insert([{
+            tournament_id: torneoId,
+            team_id: equipoSeleccionado.id,
+            amount: monto,
+            concept: concepto,
+            payment_method: metodoPago,
+            notes: descripcion || null,
+            description: descripcion || `Liquidacion de ${concepto}`
+          }]);
 
       if (error) throw error;
       setMostrarModal(false);
       cargarDatos(); // Recalcular todo
+    } catch (error: any) {
+      alert(`No se pudo registrar el ${tipoMovimiento}: ${error?.message || "error desconocido"}`);
     } finally {
       setProcesando(false);
     }
@@ -338,9 +353,14 @@ export default function LibroMayorFinanzas() {
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
-                      Abonar
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                        Abonar
+                      </button>
+                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="bg-[#0a0a0a] hover:border-[#D4A017] text-[#D4A017] border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                        Descuento
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -384,7 +404,10 @@ export default function LibroMayorFinanzas() {
               <Summary label="Cancelado" value={equipoSeleccionado?.pagadoTotal} color="text-green-400" />
               <Summary label="Pendiente" value={equipoSeleccionado?.saldoPendiente} color="text-red-400" />
             </div>
-            <button onClick={() => { setMostrarDetalle(false); abrirModalPago(equipoSeleccionado); }} className="w-full mb-6 py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl">Registrar nuevo pago</button>
+            <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2">
+              <button onClick={() => { setMostrarDetalle(false); abrirModalPago(equipoSeleccionado); }} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl">Registrar nuevo pago</button>
+              <button onClick={() => { setMostrarDetalle(false); abrirModalPago(equipoSeleccionado, "descuento"); }} className="py-3 bg-[#1C1C1C] border border-[#D4A017]/40 text-[#D4A017] font-black uppercase rounded-xl">Aplicar descuento</button>
+            </div>
             {cargandoDetalle ? <p className="text-gray-500">Cargando historial...</p> : detallePagos.length === 0 ? <p className="text-gray-500">No existen pagos registrados.</p> : detallePagos.map(pago => (
               <div key={pago.id} className="mb-3 bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-4">
                 <div className="flex justify-between"><span className="text-white font-bold">${Number(pago.amount).toFixed(2)}</span><span className="text-gray-500 text-xs">{new Date(pago.created_at).toLocaleString('es-EC')}</span></div>
@@ -399,39 +422,54 @@ export default function LibroMayorFinanzas() {
       {/* MODAL CONTABLE (Igual que el anterior pero adaptado) */}
       {mostrarModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden">
+          <div className="bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden gl-finance-modal">
             <div className="p-6 border-b border-[#2E2E2E]">
-              <h3 className="text-xl font-black text-white uppercase">Registrar Ingreso</h3>
+              <h3 className="text-xl font-black text-white uppercase">{tipoMovimiento === "descuento" ? "Registrar Descuento" : "Registrar Ingreso"}</h3>
               <p className="text-[#D4A017] font-bold text-sm">A cuenta de: {equipoSeleccionado?.name}</p>
             </div>
             <form onSubmit={registrarPago} className="p-6 space-y-5">
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Concepto</label>
                 <select value={concepto} onChange={(e) => setConcepto(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none">
-                  <option value="inscripcion">Abono Inscripción</option>
-                  <option value="arbitraje">Abono Arbitraje</option>
-                  <option value="multa">Abono Multas</option>
-                  <option value="otro">Liquidación General</option>
+                  {tipoMovimiento === "descuento" ? (
+                    <>
+                      <option value="inscripcion">Descuento Inscripcion</option>
+                      <option value="arbitraje">Descuento Arbitraje</option>
+                      <option value="amarilla">Descuento Multa Amarilla</option>
+                      <option value="roja">Descuento Multa Roja</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="inscripcion">Abono Inscripcion</option>
+                      <option value="arbitraje">Abono Arbitraje</option>
+                      <option value="multa">Abono Multas</option>
+                      <option value="otro">Liquidacion General</option>
+                    </>
+                  )}
                 </select>
               </div>
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Método de pago</label>
-                <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl">
-                  <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="otro">Otro</option>
-                </select>
-              </div>
+              {tipoMovimiento === "pago" && (
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Metodo de pago</label>
+                  <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl">
+                    <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Deposito</option><option value="otro">Otro</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Observaciones</label>
                 <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl" />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Monto ($)</label>
-                <input type="number" step="0.01" max={equipoSeleccionado?.saldoPendiente} value={montoPago} onChange={(e) => setMontoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl outline-none" required />
-                <p className="text-[10px] text-gray-500 mt-2 text-right">Saldo máximo a cobrar: ${equipoSeleccionado?.saldoPendiente}</p>
+                <input type="number" step="0.01" min="0.01" value={montoPago} onChange={(e) => setMontoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl outline-none" required />
+                <p className="text-[10px] text-gray-500 mt-2 text-right">
+                  {tipoMovimiento === "descuento" ? "El descuento se resta del concepto seleccionado." : `Saldo maximo a cobrar: $${Number(equipoSeleccionado?.saldoPendiente || 0).toFixed(2)}`}
+                </p>
               </div>
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={() => setMostrarModal(false)} className="flex-1 py-3 bg-[#141414] text-gray-400 font-bold uppercase rounded-xl">Cancelar</button>
-                <button type="submit" disabled={procesando} className="flex-1 py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl">Registrar</button>
+                <button type="submit" disabled={procesando} className="flex-1 py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl disabled:opacity-60">{procesando ? "Registrando..." : tipoMovimiento === "descuento" ? "Aplicar descuento" : "Registrar"}</button>
               </div>
             </form>
           </div>

@@ -2,35 +2,198 @@
 @tailwind components;
 @tailwind utilities;
 
-/* CSS de emergencia para asegurar el fondo general */
-body {
-  background-color: #0a0a0a;
-  color: #ffffff;
+:root {
+  --gl-bg: #0a0a0a;
+  --gl-surface: #141414;
+  --gl-surface-2: #1c1c1c;
+  --gl-surface-3: #242424;
+  --gl-text: #ffffff;
+  --gl-text-muted: #a3a3a3;
+  --gl-border: #2e2e2e;
+  --gl-gold: #d4a017;
+  --gl-font: "Arial Nova Light", "Inter", "Segoe UI", "Source Sans Pro", "Helvetica Neue", Arial, sans-serif;
 }
 
-/* Fuerza el modo oscuro en los calendarios nativos del navegador */
+html[data-theme="light"] {
+  --gl-bg: #f7f4ec;
+  --gl-surface: #ffffff;
+  --gl-surface-2: #f0ebe0;
+  --gl-surface-3: #e4dccb;
+  --gl-text: #171717;
+  --gl-text-muted: #555f6d;
+  --gl-border: #d8cfbc;
+  --gl-gold: #a97706;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--gl-bg);
+  color: var(--gl-text);
+  font-family: var(--gl-font);
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
 input[type="date"],
 input[type="datetime-local"],
 input[type="time"] {
   color-scheme: dark;
 }
 
-/* Solución Definitiva: Fuerza a que TODAS las casillas tengan el diseño Dark de GAME-LEGAL */
-input[type="text"], 
-input[type="number"], 
-input[type="datetime-local"], 
-input[type="date"], 
-select, 
+html[data-theme="light"] input[type="date"],
+html[data-theme="light"] input[type="datetime-local"],
+html[data-theme="light"] input[type="time"] {
+  color-scheme: light;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"],
+input[type="email"],
+input[type="password"],
+select,
 textarea {
-  background-color: #1c1c1c !important;
-  color: #ffffff !important;
-  border: 1px solid #2e2e2e !important;
+  background-color: var(--gl-surface-2) !important;
+  color: var(--gl-text) !important;
+  border: 1px solid var(--gl-border) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--gl-text-muted) 72%, transparent);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: #d4a017 !important;
+  border-color: var(--gl-gold) !important;
   box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.16);
+}
+
+.gl-theme-control {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 100000;
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--gl-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gl-surface) 92%, transparent);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.gl-theme-control button {
+  min-width: 38px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 10px;
+  color: var(--gl-text-muted);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  cursor: pointer;
+}
+
+.gl-theme-control button[aria-pressed="true"] {
+  color: #111111;
+  background: var(--gl-gold);
+  box-shadow: 0 6px 18px rgba(212, 160, 23, 0.28);
+}
+
+@media (max-width: 640px) {
+  .gl-theme-control {
+    right: 10px;
+    bottom: 10px;
+    transform: scale(.92);
+    transform-origin: right bottom;
+  }
+}
+
+@media print {
+  .gl-theme-control {
+    display: none !important;
+  }
+}
+
+html[data-theme="light"] body,
+html[data-theme="light"] [class*="bg-[#0a0a0a]"] {
+  background-color: var(--gl-bg) !important;
+}
+
+html[data-theme="light"] [class*="bg-[#141414]"],
+html[data-theme="light"] [class*="bg-[#111]"],
+html[data-theme="light"] [class*="bg-black/"],
+html[data-theme="light"] [class*="bg-[#1a140a]"],
+html[data-theme="light"] [class*="bg-[#1a0a0a]"] {
+  background-color: var(--gl-surface) !important;
+}
+
+html[data-theme="light"] [class*="bg-[#1C1C1C]"],
+html[data-theme="light"] [class*="bg-[#1c1c1c]"],
+html[data-theme="light"] [class*="bg-[#242424]"],
+html[data-theme="light"] [class*="bg-[#2E2E2E]"],
+html[data-theme="light"] [class*="bg-[#2e2e2e]"] {
+  background-color: var(--gl-surface-2) !important;
+}
+
+html[data-theme="light"] [class*="text-white"],
+html[data-theme="light"] [class*="text-gray-300"],
+html[data-theme="light"] [class*="text-gray-400"] {
+  color: var(--gl-text) !important;
+}
+
+html[data-theme="light"] [class*="text-gray-500"],
+html[data-theme="light"] [class*="text-gray-600"],
+html[data-theme="light"] [class*="text-[#8A8A8A]"],
+html[data-theme="light"] [class*="text-[#8a8a8a]"] {
+  color: var(--gl-text-muted) !important;
+}
+
+html[data-theme="light"] [class*="border-[#2E2E2E]"],
+html[data-theme="light"] [class*="border-[#2e2e2e]"],
+html[data-theme="light"] [class*="border-[#242424]"],
+html[data-theme="light"] [class*="border-white/"],
+html[data-theme="light"] [class*="border-gray-"] {
+  border-color: var(--gl-border) !important;
+}
+
+html[data-theme="light"] [class*="shadow-"] {
+  box-shadow: 0 16px 42px rgba(58, 44, 21, 0.10) !important;
+}
+
+html[data-theme="light"] table,
+html[data-theme="light"] .stadium-glow,
+html[data-theme="light"] .glass-card {
+  background-color: var(--gl-surface) !important;
+  color: var(--gl-text) !important;
+}
+
+html[data-theme="light"] .gl-finance-modal {
+  background-color: var(--gl-surface) !important;
+  color: var(--gl-text) !important;
+}
+
+html[data-theme="light"] .gl-finance-modal input,
+html[data-theme="light"] .gl-finance-modal select,
+html[data-theme="light"] .gl-finance-modal textarea {
+  background-color: var(--gl-surface-2) !important;
+  color: var(--gl-text) !important;
+  border-color: var(--gl-border) !important;
+}
+
+html[data-theme="light"] .gl-finance-modal button[type="button"] {
+  background-color: var(--gl-surface-2) !important;
+  color: var(--gl-text-muted) !important;
 }
