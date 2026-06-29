@@ -40,6 +40,8 @@ export default function PartidosPage() {
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
   const [observacionesManual, setObservacionesManual] = useState("");
   const [partidoEditando, setPartidoEditando] = useState<any>(null);
+  const [editLocalId, setEditLocalId] = useState("");
+  const [editVisitanteId, setEditVisitanteId] = useState("");
   const [editFecha, setEditFecha] = useState("");
   const [editJornada, setEditJornada] = useState<number>(1);
   const [editCancha, setEditCancha] = useState("");
@@ -487,6 +489,8 @@ export default function PartidosPage() {
   const abrirEditorPartido = (partido: any) => {
     if (partido.status === "finished") return alert("Este partido ya esta culminado. No se recomienda mover horarios de partidos finalizados.");
     setPartidoEditando(partido);
+    setEditLocalId(partido.home_team_id || "");
+    setEditVisitanteId(partido.away_team_id || "");
     setEditFecha(formatoDatetimeLocal(partido.match_date));
     setEditJornada(Number(partido.matchday || 1));
     setEditCancha(partido.court || "Cancha 1");
@@ -497,14 +501,23 @@ export default function PartidosPage() {
   const guardarEdicionPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!partidoEditando) return;
+    if (!editLocalId || !editVisitanteId) return alert("Selecciona equipo local y visitante.");
+    if (editLocalId === editVisitanteId) return alert("Un equipo no puede jugar contra si mismo.");
+    if (editFase === "Fase de Grupos") {
+      const local = equipos.find(equipo => equipo.id === editLocalId);
+      const visitante = equipos.find(equipo => equipo.id === editVisitanteId);
+      if ((local?.group_name || "General") !== (visitante?.group_name || "General")) {
+        return alert("En fase de grupos solo pueden enfrentarse equipos del mismo grupo.");
+      }
+    }
     if (jornadaCulminada(editJornada, editFase) && !mismaJornada(partidoEditando, editJornada, editFase)) {
       return alert(`La fecha ${editJornada} de ${editFase} ya esta culminada.`);
     }
 
     const editFechaISO = fechaHoraEcuadorAISO(editFecha);
     const conflict = validateManualMatch({
-      home_team_id: partidoEditando.home_team_id,
-      away_team_id: partidoEditando.away_team_id,
+      home_team_id: editLocalId,
+      away_team_id: editVisitanteId,
       match_date: editFechaISO,
       court: editCancha,
       stage: editFase
@@ -514,6 +527,8 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { error } = await supabase.from("matches").update({
+        home_team_id: editLocalId,
+        away_team_id: editVisitanteId,
         match_date: editFechaISO,
         matchday: editJornada,
         court: editCancha,
@@ -525,6 +540,25 @@ export default function PartidosPage() {
       await cargarDatos();
     } catch (error: any) {
       alert("Error al editar partido: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reabrirJornada = async (fase: string, jornada: number) => {
+    if (!torneoId) return;
+    if (!window.confirm(`Reabrir administrativamente la fecha ${jornada} de ${fase}? Los partidos volveran a quedar editables.`)) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("matches")
+        .update({ status: "scheduled" })
+        .eq("tournament_id", torneoId)
+        .eq("stage", fase)
+        .eq("matchday", jornada);
+      if (error) throw error;
+      await cargarDatos();
+    } catch (error: any) {
+      alert("No se pudo reabrir la jornada: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -1058,8 +1092,9 @@ export default function PartidosPage() {
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">Fechas culminadas</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {jornadasCulminadas.map(item => (
-              <span key={`${item.stage}-${item.matchday}`} className="rounded-full border border-emerald-500/40 bg-emerald-900/40 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-100">
+              <span key={`${item.stage}-${item.matchday}`} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-900/40 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-100">
                 {item.stage} · Fecha {item.matchday}
+                <button type="button" onClick={() => reabrirJornada(item.stage, Number(item.matchday))} className="rounded-full border border-emerald-300/40 px-2 py-0.5 text-[9px] text-emerald-100 hover:bg-emerald-500 hover:text-black">Reabrir</button>
               </span>
             ))}
           </div>
@@ -1314,6 +1349,20 @@ export default function PartidosPage() {
               <h3 className="mt-1 text-xl font-black uppercase text-white">{partidoEditando.home?.name} vs {partidoEditando.away?.name}</h3>
             </div>
             <form onSubmit={guardarEdicionPartido} className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Equipo local</label>
+                <select value={editLocalId} onChange={e => setEditLocalId(e.target.value)} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">
+                  <option value="" disabled>Seleccionar...</option>
+                  {equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Equipo visitante</label>
+                <select value={editVisitanteId} onChange={e => setEditVisitanteId(e.target.value)} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">
+                  <option value="" disabled>Seleccionar...</option>
+                  {equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}
+                </select>
+              </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Fecha y hora</label>
                 <input type="datetime-local" value={editFecha} onChange={e => setEditFecha(e.target.value)} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" style={{ colorScheme: "dark" }} />
