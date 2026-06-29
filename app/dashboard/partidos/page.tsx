@@ -10,6 +10,12 @@ import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO 
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
+type JornadaWindow = {
+  day: string;
+  startTime: string;
+  endTime: string;
+};
+
 export default function PartidosPage() {
   const [torneoSlug, setTorneoSlug] = useState<string>("");
   const [torneoNombre, setTorneoNombre] = useState<string>("Torneo Oficial");
@@ -53,6 +59,7 @@ export default function PartidosPage() {
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
   const [autoDias, setAutoDias] = useState<string[]>([]);
+  const [autoVentanas, setAutoVentanas] = useState<JornadaWindow[]>([]);
   const [autoHoraInicio, setAutoHoraInicio] = useState("09:30");
   const [autoHoraFin, setAutoHoraFin] = useState("17:00");
   const [autoIntervalo, setAutoIntervalo] = useState<number>(60);
@@ -215,28 +222,49 @@ export default function PartidosPage() {
   const agregarDiaAutomatico = () => {
     if (!autoDia) return alert("Selecciona una fecha desde el calendario.");
     setAutoDias(dias => [...new Set([...dias, autoDia])].sort());
+    setAutoVentanas(ventanas => {
+      if (ventanas.some(ventana => ventana.day === autoDia)) return ventanas;
+      return [...ventanas, { day: autoDia, startTime: autoHoraInicio, endTime: autoHoraFin }].sort((a, b) => a.day.localeCompare(b.day));
+    });
   };
 
   const quitarDiaAutomatico = (dia: string) => {
     setAutoDias(dias => dias.filter(item => item !== dia));
+    setAutoVentanas(ventanas => ventanas.filter(ventana => ventana.day !== dia));
+  };
+
+  const actualizarVentanaJornada = (index: number, key: keyof JornadaWindow, value: string) => {
+    setAutoVentanas(ventanas => ventanas
+      .map((ventana, current) => current === index ? { ...ventana, [key]: value } : ventana)
+      .sort((a, b) => a.day.localeCompare(b.day))
+    );
+  };
+
+  const obtenerVentanasJornada = () => {
+    const ventanas = autoVentanas.length
+      ? autoVentanas
+      : (autoDias.length ? autoDias : autoDia ? [autoDia] : []).map(day => ({ day, startTime: autoHoraInicio, endTime: autoHoraFin }));
+    const normalizadas = ventanas
+      .filter(ventana => ventana.day && ventana.startTime && ventana.endTime)
+      .sort((a, b) => `${a.day} ${a.startTime}`.localeCompare(`${b.day} ${b.startTime}`));
+    if (!normalizadas.length) throw new Error("Selecciona al menos una ventana de jornada.");
+    return normalizadas;
   };
 
   const crearSlotsJornada = () => {
-    const dias = (autoDias.length ? autoDias : autoDia ? [autoDia] : []).sort();
-    if (!dias.length) throw new Error("Selecciona al menos una fecha de jornada.");
-    const [inicioHora, inicioMinuto] = autoHoraInicio.split(":").map(Number);
-    const [finHora, finMinuto] = autoHoraFin.split(":").map(Number);
-    const inicioMinutos = inicioHora * 60 + inicioMinuto;
-    const finMinutos = finHora * 60 + finMinuto;
     const intervalo = Math.max(1, Number(autoIntervalo || autoDuracion || configuracion.match_duration_minutes));
-    if (finMinutos < inicioMinutos) throw new Error("La hora de finalizacion debe ser igual o posterior a la hora de inicio.");
 
-    return dias.flatMap(dia => {
+    return obtenerVentanasJornada().flatMap(ventana => {
+      const [inicioHora, inicioMinuto] = ventana.startTime.split(":").map(Number);
+      const [finHora, finMinuto] = ventana.endTime.split(":").map(Number);
+      const inicioMinutos = inicioHora * 60 + inicioMinuto;
+      const finMinutos = finHora * 60 + finMinuto;
+      if (finMinutos < inicioMinutos) throw new Error(`La hora final de ${ventana.day} debe ser igual o posterior a la hora inicial.`);
       const slots: Date[] = [];
       for (let minuto = inicioMinutos; minuto <= finMinutos; minuto += intervalo) {
         const hora = String(Math.floor(minuto / 60)).padStart(2, "0");
         const min = String(minuto % 60).padStart(2, "0");
-        slots.push(new Date(`${dia}T${hora}:${min}:00-05:00`));
+        slots.push(new Date(`${ventana.day}T${hora}:${min}:00-05:00`));
       }
       return slots;
     });
@@ -293,7 +321,7 @@ export default function PartidosPage() {
 
   const generarFechaInteligente = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos un día de juego.");
+    if ((!autoVentanas.length && !autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos una ventana de jornada.");
     setLoading(true);
     try {
       if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
@@ -315,7 +343,7 @@ export default function PartidosPage() {
 
   const generarLlavesInteligentes = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos un día de juego.");
+    if ((!autoVentanas.length && !autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos una ventana de jornada.");
     setLoading(true);
     try {
       const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
@@ -350,7 +378,7 @@ export default function PartidosPage() {
   // ============================================================================
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!autoDias.length && !autoDia) || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
+    if ((!autoVentanas.length && !autoDias.length && !autoDia) || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
     if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Generar Fecha ${autoJornada} de ${autoFase}?`)) return;
     setLoading(true);
@@ -412,7 +440,7 @@ export default function PartidosPage() {
 
   const generarLlavesAutomaticas = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!autoDias.length && !autoDia) || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
+    if ((!autoVentanas.length && !autoDias.length && !autoDia) || !autoHoraInicio) return alert("Define al menos una ventana de jornada.");
     if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Calcular clasificados y generar ${faseGenerar}?`)) return;
     setLoading(true);
@@ -877,18 +905,24 @@ export default function PartidosPage() {
           <div class="field substitution"><b>Sustitucion</b><span></span></div>
           <div class="field entered"><b>Ingreso por</b><span></span></div>
         </article>`).join("");
-    const esDescuento = (entry: any) => String(entry.category || entry.concept || entry.payment_method || "").toLowerCase().includes("descuento");
+    const normalizarTexto = (value: any) => String(value || "").toLowerCase().trim();
+    const esDescuento = (entry: any) =>
+      normalizarTexto(entry.category || entry.concept).includes("descuento") ||
+      normalizarTexto(entry.payment_method).includes("descuento") ||
+      normalizarTexto(entry.reference_type).includes("descuento") ||
+      normalizarTexto(entry.reference_type).includes("discount");
     const montoFirmado = (entry: any) => (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0);
     const saldoLibro = (teamId: string, categorias: string[]) => {
       const movimientos = (ledgerPlanilla || []).filter(entry => entry.team_id === teamId);
+      const categoriaCoincide = (entry: any) => categorias.some(cat => normalizarTexto(entry.category || entry.concept).includes(cat));
       const cargos = movimientos
-        .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categorias.includes(entry.category) && !esDescuento(entry))
+        .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categoriaCoincide(entry) && !esDescuento(entry))
         .reduce((sum, entry) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount || 0), 0);
       const pagos = movimientos
-        .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && categorias.includes(entry.category) && !esDescuento(entry))
+        .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && categoriaCoincide(entry) && !esDescuento(entry))
         .reduce((sum, entry) => sum + montoFirmado(entry), 0);
       const descuentos = movimientos
-        .filter(entry => ["payment", "reversal", "adjustment"].includes(entry.entry_type) && categorias.some(cat => String(entry.category || "").includes(cat)) && esDescuento(entry))
+        .filter(entry => ["payment", "reversal", "adjustment"].includes(entry.entry_type) && categoriaCoincide(entry) && esDescuento(entry))
         .reduce((sum, entry) => sum + montoFirmado(entry), 0);
       return Math.max(0, cargos - pagos - descuentos);
     };
@@ -898,10 +932,13 @@ export default function PartidosPage() {
     const crearPendientesFinancieros = (teamId: string) => {
       if (esEstandar || !teamId) return ["Pendientes financieros: ________________________________________________"];
       const alertas: string[] = [];
-      const saldoInscripcion = saldoLibro(teamId, ["inscripcion"]) || Math.max(0, costosFinancieros.inscripcion - pagosEquipo(teamId, ["inscripcion"]));
+      const tieneLibroEquipo = (ledgerPlanilla || []).some(entry => entry.team_id === teamId);
+      const saldoInscripcion = tieneLibroEquipo ? saldoLibro(teamId, ["inscripcion"]) : Math.max(0, costosFinancieros.inscripcion - pagosEquipo(teamId, ["inscripcion"]));
       const saldoTarjetas = saldoLibro(teamId, ["amarilla", "roja", "multa"]);
+      const saldoArbitrajeAcumulado = saldoLibro(teamId, ["arbitraje"]);
       const pagoArbitrajePartido = (pagosPlanilla || []).some(pago => pago.team_id === teamId && pago.match_id === partido.id && pago.concept === "arbitraje");
       if (saldoInscripcion > 0) alertas.push(`Inscripcion pendiente: $${saldoInscripcion.toFixed(2)}`);
+      if (saldoArbitrajeAcumulado > 0) alertas.push(`Arbitraje acumulado pendiente: $${saldoArbitrajeAcumulado.toFixed(2)}`);
       if (!pagoArbitrajePartido && costosFinancieros.arbitraje > 0) alertas.push(`Arbitraje del partido pendiente: $${costosFinancieros.arbitraje.toFixed(2)}`);
       if (saldoTarjetas > 0) alertas.push(`Tarjetas o sanciones pendientes: $${saldoTarjetas.toFixed(2)}`);
       return alertas.length ? alertas : ["Sin pendientes financieros registrados antes del partido."];
@@ -928,13 +965,13 @@ export default function PartidosPage() {
     const observacionesAutomaticas = crearObservacionesAutomaticas();
     const observacionesManual = String(partido.notes || "").trim();
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
-      @page{size:A4 landscape;margin:6mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:285mm;height:198mm;padding:4mm;border:2px solid #111827;display:flex;flex-direction:column;gap:2mm;overflow:hidden;position:relative}.sheet:before{content:"";position:absolute;top:4mm;bottom:4mm;left:50%;border-left:1px dashed #94a3b8;z-index:1}
+      @page{size:A4 portrait;margin:6mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:198mm;min-height:285mm;padding:4mm;border:2px solid #111827;display:flex;flex-direction:column;gap:2mm;overflow:hidden;position:relative}.sheet:before{display:none}
       .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:3px solid #0f5132;padding-bottom:4px}.brand strong{display:block;font-size:17px;letter-spacing:1.7px;text-transform:uppercase}.brand span{font-size:8px;text-transform:uppercase;color:#4b5563;letter-spacing:.8px}.badge{justify-self:center;border:2px solid #0f5132;color:#0f5132;border-radius:999px;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:18px;font-weight:900;color:#0f5132}
       h1{text-align:center;font-size:14px;text-transform:uppercase;margin:2px 0 0}.subtitle{text-align:center;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:4px;font-size:8px;background:#f3f4f6;border:1px solid #cbd5e1;padding:5px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:2px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc}.score-team{padding:5px;text-align:center;font-size:10px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:7px;padding:4px 7px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:14mm;height:9mm;border:2px solid #111827}.score-box span{font-size:8px;font-weight:900;color:#4b5563}
-      .teams{display:grid;grid-template-columns:1fr 1fr;gap:6mm;flex:1;min-height:0}.team-half{min-height:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}.cut-line{display:none}.half-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f5132;margin-bottom:1mm}.half-brand strong{font-size:9px;text-transform:uppercase;letter-spacing:.6px}.half-brand span{font-size:7px;color:#0f5132;font-weight:900}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}
-      table{display:none}.player-grid{display:grid;grid-template-columns:1fr 1fr;gap:1mm;margin-top:1.2mm;min-height:0}.player-card{display:grid;grid-template-columns:5mm 1fr 13mm;grid-template-areas:"idx id shirt" "idx name name" "idx mini mini" "idx sub entered";gap:.6mm;border:1px solid #64748b;background:#fff;padding:.8mm;min-height:${cupoPartido > 18 ? 8.2 : 9.4}mm;page-break-inside:avoid;break-inside:avoid}.card-index{grid-area:idx;display:flex;align-items:center;justify-content:center;background:#0f5132;color:#fff;font-size:7px;font-weight:900}.field{min-width:0}.field b,.mini-fields b{display:block;font-size:4.8px;line-height:1;text-transform:uppercase;color:#475569}.field span,.mini-fields span{display:block;height:2.8mm;border-bottom:1px solid #94a3b8}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{grid-area:sub}.field.entered{grid-area:entered}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:.6mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:1.4mm;font-size:6.3px;margin-top:1.2mm;min-height:6mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:1.3mm;font-size:6.2px;min-height:24mm;margin-top:1.2mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.5mm}.observ-mini ul{margin:0 0 .5mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1.5mm}.team-footer div{border:1px solid #111827;min-height:8mm;padding:3px;text-align:center}.observations{display:none}
+      .teams{display:grid;grid-template-columns:1fr;gap:3mm;flex:1;min-height:0}.team-half{min-height:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;border:1px solid #cbd5e1;padding:2mm}.cut-line{display:none}.half-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f5132;margin-bottom:1mm}.half-brand strong{font-size:9px;text-transform:uppercase;letter-spacing:.6px}.half-brand span{font-size:7px;color:#0f5132;font-weight:900}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}
+      table{display:none}.player-grid{display:grid;grid-template-columns:1fr 1fr;gap:1mm;margin-top:1.2mm;min-height:0}.player-card{display:grid;grid-template-columns:5mm 1fr 13mm;grid-template-areas:"idx id shirt" "idx name name" "idx mini mini";gap:.6mm;border:1px solid #64748b;background:#fff;padding:.8mm;min-height:${cupoPartido > 18 ? 7.2 : 8.2}mm;page-break-inside:avoid;break-inside:avoid}.card-index{grid-area:idx;display:flex;align-items:center;justify-content:center;background:#0f5132;color:#fff;font-size:7px;font-weight:900}.field{min-width:0}.field b,.mini-fields b{display:block;font-size:4.8px;line-height:1;text-transform:uppercase;color:#475569}.field span,.mini-fields span{display:block;height:2.8mm;border-bottom:1px solid #94a3b8}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{display:none}.field.entered{display:none}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:.6mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:1.2mm;font-size:6.3px;margin-top:1mm;min-height:5mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:1.2mm;font-size:6.2px;min-height:15mm;margin-top:1mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.5mm}.observ-mini ul{margin:0 0 .5mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1mm}.team-footer div{border:1px solid #111827;min-height:6mm;padding:3px;text-align:center}.observations{display:none}
       .review-grid{display:none}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:4px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:none}
-      @media print{html,body{width:297mm;height:210mm}.sheet{width:285mm;height:198mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,table{page-break-inside:avoid;break-inside:avoid}}
+      @media print{html,body{width:210mm;min-height:297mm}.sheet{width:198mm;min-height:285mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,table{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
       <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
       <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
@@ -1211,6 +1248,22 @@ export default function PartidosPage() {
                 {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
               </div>
             </div>
+            <div className="md:col-span-6 rounded-xl border border-[#2E2E2E] bg-[#141414] p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#D4A017]">Horarios por dia de juego</p>
+              <p className="mt-1 text-xs font-bold text-gray-400">Configura horarios distintos para cada dia de la misma jornada.</p>
+              <div className="mt-3 grid gap-2">
+                {autoVentanas.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-[#2E2E2E] p-3 text-xs font-bold text-gray-500">Agrega una fecha para crear su ventana horaria.</p>
+                ) : autoVentanas.map((ventana, index) => (
+                  <div key={`${ventana.day}-${index}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1.2fr_1fr_1fr_auto]">
+                    <input type="date" value={ventana.day} onChange={e => actualizarVentanaJornada(index, "day", e.target.value)} className="rounded border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white" />
+                    <input type="time" value={ventana.startTime} onChange={e => actualizarVentanaJornada(index, "startTime", e.target.value)} className="rounded border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white" />
+                    <input type="time" value={ventana.endTime} onChange={e => actualizarVentanaJornada(index, "endTime", e.target.value)} className="rounded border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white" />
+                    <button type="button" onClick={() => quitarDiaAutomatico(ventana.day)} className="rounded border border-red-500/40 px-3 py-2 text-xs font-black uppercase text-red-400 hover:bg-red-600 hover:text-white">Quitar</button>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora primer partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora ultimo partido</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Intervalo</label><input type="number" min={1} value={autoIntervalo} onChange={e => setAutoIntervalo(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
@@ -1256,6 +1309,22 @@ export default function PartidosPage() {
                  </div>
                  <div className="mt-2 flex flex-wrap gap-2">
                    {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
+                 </div>
+               </div>
+               <div className="md:col-span-4 rounded-xl border border-[#2E2E2E] bg-[#141414] p-4">
+                 <p className="text-[10px] font-black uppercase tracking-widest text-[#D4A017]">Horarios por dia de juego</p>
+                 <p className="mt-1 text-xs font-bold text-gray-400">Estas ventanas tambien se usan para llaves, semifinales y final.</p>
+                 <div className="mt-3 grid gap-2">
+                   {autoVentanas.length === 0 ? (
+                     <p className="rounded-lg border border-dashed border-[#2E2E2E] p-3 text-xs font-bold text-gray-500">Agrega una fecha para crear su ventana horaria.</p>
+                   ) : autoVentanas.map((ventana, index) => (
+                     <div key={`${ventana.day}-${index}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1.2fr_1fr_1fr_auto]">
+                       <input type="date" value={ventana.day} onChange={e => actualizarVentanaJornada(index, "day", e.target.value)} className="rounded border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white" />
+                       <input type="time" value={ventana.startTime} onChange={e => actualizarVentanaJornada(index, "startTime", e.target.value)} className="rounded border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white" />
+                       <input type="time" value={ventana.endTime} onChange={e => actualizarVentanaJornada(index, "endTime", e.target.value)} className="rounded border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white" />
+                       <button type="button" onClick={() => quitarDiaAutomatico(ventana.day)} className="rounded border border-red-500/40 px-3 py-2 text-xs font-black uppercase text-red-400 hover:bg-red-600 hover:text-white">Quitar</button>
+                     </div>
+                   ))}
                  </div>
                </div>
                <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora primer partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
