@@ -241,7 +241,7 @@ export function validateManualMatch(candidate: any, matches: any[], durationMinu
     const existingEnd = existingStart + durationMinutes * 60000;
     const overlaps = start < existingEnd && end > existingStart;
     if (!overlaps) continue;
-    if (match.court === candidate.court) return `${candidate.court} ya está ocupada en ese horario.`;
+    if (match.court === candidate.court) return "Ya existe un partido programado en esta fecha, hora y cancha. Seleccione otro horario. La cancha ya esta ocupada.";
     if ([candidate.home_team_id, candidate.away_team_id].includes(match.home_team_id) || [candidate.home_team_id, candidate.away_team_id].includes(match.away_team_id)) {
       return "Uno de los equipos ya tiene un partido en ese horario.";
     }

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
-import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, scheduleFixtures, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -48,7 +48,10 @@ export default function PartidosPage() {
 
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
+  const [autoDias, setAutoDias] = useState<string[]>([]);
   const [autoHoraInicio, setAutoHoraInicio] = useState("09:30");
+  const [autoHoraFin, setAutoHoraFin] = useState("17:00");
+  const [autoIntervalo, setAutoIntervalo] = useState<number>(60);
   const [autoDuracion, setAutoDuracion] = useState<number>(60);
   const [autoCancha, setAutoCancha] = useState("Cancha 1");
   const [autoFase, setAutoFase] = useState("Fase de Grupos");
@@ -95,6 +98,7 @@ export default function PartidosPage() {
     const ahora = obtenerFechaHoraEcuador();
     setFecha(ahora.fechaHora);
     setAutoDia(ahora.dia);
+    setAutoDias(dias => dias.length ? dias : [ahora.dia]);
     setAutoHoraInicio(ahora.hora);
   };
 
@@ -140,6 +144,7 @@ export default function PartidosPage() {
       const ahora = obtenerFechaHoraEcuador();
       setFecha(valor => valor || ahora.fechaHora);
       setAutoDia(valor => valor || ahora.dia);
+      setAutoDias(valor => valor.length ? valor : [ahora.dia]);
       setAutoHoraInicio(valor => valor || ahora.hora);
     }
   }, []);
@@ -187,6 +192,56 @@ export default function PartidosPage() {
     return "";
   };
 
+  const agregarDiaAutomatico = () => {
+    if (!autoDia) return alert("Selecciona una fecha desde el calendario.");
+    setAutoDias(dias => [...new Set([...dias, autoDia])].sort());
+  };
+
+  const quitarDiaAutomatico = (dia: string) => {
+    setAutoDias(dias => dias.filter(item => item !== dia));
+  };
+
+  const crearSlotsJornada = () => {
+    const dias = (autoDias.length ? autoDias : autoDia ? [autoDia] : []).sort();
+    if (!dias.length) throw new Error("Selecciona al menos una fecha de jornada.");
+    const [inicioHora, inicioMinuto] = autoHoraInicio.split(":").map(Number);
+    const [finHora, finMinuto] = autoHoraFin.split(":").map(Number);
+    const inicioMinutos = inicioHora * 60 + inicioMinuto;
+    const finMinutos = finHora * 60 + finMinuto;
+    const intervalo = Math.max(1, Number(autoIntervalo || autoDuracion || configuracion.match_duration_minutes));
+    if (finMinutos < inicioMinutos) throw new Error("La hora de finalizacion debe ser igual o posterior a la hora de inicio.");
+
+    return dias.flatMap(dia => {
+      const slots: Date[] = [];
+      for (let minuto = inicioMinutos; minuto <= finMinutos; minuto += intervalo) {
+        const hora = String(Math.floor(minuto / 60)).padStart(2, "0");
+        const min = String(minuto % 60).padStart(2, "0");
+        slots.push(new Date(`${dia}T${hora}:${min}:00-05:00`));
+      }
+      return slots;
+    });
+  };
+
+  const distribuirPartidosEnHorarios = (fixtures: any[]) => {
+    const slots = crearSlotsJornada();
+    const capacidad = slots.length * Math.max(1, configuracion.court_count);
+    if (fixtures.length > capacidad) {
+      throw new Error(`El rango horario configurado es insuficiente. Hay ${capacidad} cupo(s) disponible(s) y ${fixtures.length} partido(s) por programar.`);
+    }
+    const programados = fixtures.map((fixture, index) => {
+      const slot = slots[Math.floor(index / configuracion.court_count)];
+      const cancha = `Cancha ${(index % configuracion.court_count) + 1}`;
+      return { ...fixture, court: cancha, match_date: slot.toISOString() };
+    });
+    const revisados: any[] = [];
+    for (const partido of programados) {
+      const conflict = validateManualMatch(partido, [...partidos, ...revisados], configuracion.match_duration_minutes);
+      if (conflict) throw new Error(conflict);
+      revisados.push(partido);
+    }
+    return programados;
+  };
+
   const programarPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
@@ -218,7 +273,7 @@ export default function PartidosPage() {
 
   const generarFechaInteligente = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
+    if ((!autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos un día de juego.");
     setLoading(true);
     try {
       if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
@@ -226,7 +281,7 @@ export default function PartidosPage() {
       if (bloqueo) throw new Error(bloqueo);
       const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
-      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion });
+      const matchesToInsert = distribuirPartidosEnHorarios(fixtures);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       alert(`Fecha ${autoJornada} generada por grupos, sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
@@ -240,7 +295,7 @@ export default function PartidosPage() {
 
   const generarLlavesInteligentes = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
+    if ((!autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos un día de juego.");
     setLoading(true);
     try {
       const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
@@ -257,7 +312,7 @@ export default function PartidosPage() {
       const fixtures = createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
-      const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion })
+      const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
         .map(match => faseGenerar === "Final" && configuracion.final_venue ? { ...match, court: configuracion.final_venue } : match);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
@@ -275,7 +330,7 @@ export default function PartidosPage() {
   // ============================================================================
   const generarFechaAutomatica = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
+    if ((!autoDias.length && !autoDia) || !autoHoraInicio) return alert("Faltan datos de fecha/hora.");
     if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Generar Fecha ${autoJornada} de ${autoFase}?`)) return;
     setLoading(true);
@@ -288,7 +343,6 @@ export default function PartidosPage() {
       
       let matchesToInsert: any[] = [];
       // CORRECCIÓN: Parseo estricto local sin alterar el Timezone de manera errónea.
-      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00-05:00`);
       let maxIntentos = 100, exito = false;
 
       while (maxIntentos > 0 && !exito) {
@@ -317,11 +371,7 @@ export default function PartidosPage() {
         
         if (combinacionValida) {
           // CORRECCIÓN: Se asigna la fecha y luego se suma la duración correctamente.
-          matchesToInsert = tempMatches.map((match) => {
-             const fechaAsignada = new Date(currentDate).toISOString();
-             currentDate = new Date(currentDate.getTime() + autoDuracion * 60000);
-             return { ...match, match_date: fechaAsignada };
-          });
+          matchesToInsert = distribuirPartidosEnHorarios(tempMatches);
           exito = true;
         }
         maxIntentos--;
@@ -342,7 +392,7 @@ export default function PartidosPage() {
 
   const generarLlavesAutomaticas = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!autoDia || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
+    if ((!autoDias.length && !autoDia) || !autoHoraInicio) return alert("Define el día y la hora de inicio en los campos inferiores primero.");
     if (!torneoId) return alert("No hay torneo activo.");
     if (!window.confirm(`¿Calcular clasificados y generar ${faseGenerar}?`)) return;
     setLoading(true);
@@ -380,29 +430,24 @@ export default function PartidosPage() {
       
       let matchesToInsert: any[] = [];
       // CORRECCIÓN HORARIA TAMBIÉN AQUÍ
-      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00-05:00`);
-
       for (let i = 0; i < numEquipos / 2; i++) {
         const mejor = clasificados[i];
         const peor = clasificados[numEquipos - 1 - i];
 
-        const fechaAsignadaIda = new Date(currentDate).toISOString();
         matchesToInsert.push({
           tournament_id: torneoId, home_team_id: mejor.id, away_team_id: peor.id,
-          matchday: autoJornada, court: autoCancha, stage: faseGenerar, match_date: fechaAsignadaIda
+          matchday: autoJornada, court: autoCancha, stage: faseGenerar, match_date: null
         });
-        currentDate = new Date(currentDate.getTime() + autoDuracion * 60000);
 
         if (formatoEliminatoria === "Ida y Vuelta (Estilo Libertadores)") {
-           const fechaAsignadaVuelta = new Date(currentDate).toISOString();
            matchesToInsert.push({
              tournament_id: torneoId, home_team_id: peor.id, away_team_id: mejor.id,
-             matchday: autoJornada + 1, court: autoCancha, stage: `${faseGenerar} (Vuelta)`, match_date: fechaAsignadaVuelta
+             matchday: autoJornada + 1, court: autoCancha, stage: `${faseGenerar} (Vuelta)`, match_date: null
            });
-           currentDate = new Date(currentDate.getTime() + autoDuracion * 60000);
         }
       }
 
+      matchesToInsert = distribuirPartidosEnHorarios(matchesToInsert);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       
@@ -757,7 +802,7 @@ export default function PartidosPage() {
     const cupoConfigurado = Number(configuracion.football_modality || 0) + Number(configuracion.substitutes_count || 0);
     const maximoPlantilla = Number(configuracion.max_players_per_team || cupoConfigurado);
     const cupoPartido = Math.max(1, Math.min(cupoConfigurado || maximoPlantilla || 1, maximoPlantilla || cupoConfigurado || 1));
-    const altoFichaMm = cupoPartido > 22 ? 5.8 : cupoPartido > 18 ? 6.5 : cupoPartido > 14 ? 7.2 : 8.4;
+    const altoFilaMm = cupoPartido > 22 ? 3.4 : cupoPartido > 18 ? 3.9 : cupoPartido > 14 ? 4.5 : 5.2;
     const crearCasillas = () => Array.from({ length: cupoPartido }, (_, index) => `<article class="player-card">
           <div class="card-index">${index + 1}</div>
           <div class="field id"><b>Identificacion</b><span></span></div>
@@ -772,6 +817,7 @@ export default function PartidosPage() {
           <div class="field substitution"><b>Sustitucion</b><span></span></div>
           <div class="field entered"><b>Ingreso por</b><span></span></div>
         </article>`).join("");
+    const crearFilasTabla = () => Array.from({ length: cupoPartido }, () => `<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
     const crearObservacionesAutomaticas = () => {
       return [
         `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
@@ -784,21 +830,22 @@ export default function PartidosPage() {
       const suspendidosTexto = suspendidosEquipo.length
         ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
-      return `<section class="team-half"><div class="team-head"><div><span>Equipo</span><h2>${escapeHtml(teamName)}</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
-        <div class="player-grid">${crearCasillas()}</div>
+      return `<section class="team-half"><div class="half-brand"><strong>${escapeHtml(torneoNombre)}</strong><span>${escapeHtml(configuracion.tournament_year)}</span></div><div class="team-head"><div><span>Equipo</span><h2>${escapeHtml(teamName)}</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
+        <table><colgroup><col class="player-id"><col class="shirt"><col class="player-name"><col class="role"><col class="goals"><col class="yellow"><col class="red"><col class="substitution"><col class="entered-for"></colgroup><thead><tr><th>Identificacion</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>G</th><th>TA</th><th>TR</th><th>Sust.</th><th>Ingreso por</th></tr></thead><tbody>${crearFilasTabla()}</tbody></table>
         <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
+        <div class="observ-mini"><b>Observaciones</b><ul>${observacionesAutomaticas.map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(2)}</div></div>
         <div class="team-footer"><div><b>Capitan:</b></div><div><b>Delegado:</b></div><div><b>Firma mesa:</b></div></div></section>`;
     };
     const observacionesAutomaticas = crearObservacionesAutomaticas();
     const observacionesManual = String(partido.notes || "").trim();
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
-      @page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:100%;min-height:283mm;padding:4mm;border:2px solid #111827;display:flex;flex-direction:column;gap:3mm}
+      @page{size:A4 landscape;margin:6mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:285mm;height:198mm;padding:4mm;border:2px solid #111827;display:flex;flex-direction:column;gap:2mm;overflow:hidden;position:relative}.sheet:before{content:"";position:absolute;top:4mm;bottom:4mm;left:50%;border-left:1px dashed #94a3b8;z-index:1}
       .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:3px solid #0f5132;padding-bottom:4px}.brand strong{display:block;font-size:17px;letter-spacing:1.7px;text-transform:uppercase}.brand span{font-size:8px;text-transform:uppercase;color:#4b5563;letter-spacing:.8px}.badge{justify-self:center;border:2px solid #0f5132;color:#0f5132;border-radius:999px;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:18px;font-weight:900;color:#0f5132}
       h1{text-align:center;font-size:14px;text-transform:uppercase;margin:2px 0 0}.subtitle{text-align:center;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:4px;font-size:8px;background:#f3f4f6;border:1px solid #cbd5e1;padding:5px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:2px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc}.score-team{padding:5px;text-align:center;font-size:10px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:7px;padding:4px 7px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:14mm;height:9mm;border:2px solid #111827}.score-box span{font-size:8px;font-weight:900;color:#4b5563}
-      .teams{display:flex;flex:1;flex-direction:column;gap:0}.team-half{min-height:91mm;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}.cut-line{position:relative;margin:1.7mm 0;border-top:1.2px dashed #6b7280;text-align:center;color:#6b7280;font-size:7px;font-weight:900;text-transform:uppercase}.cut-line span{position:relative;top:-6px;background:#fff;padding:0 8px}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}
-      .player-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.6mm;margin-top:1.6mm;page-break-inside:avoid;break-inside:avoid}.player-card{position:relative;min-height:${altoFichaMm}mm;border:1px solid #8b949e;background:#fff;display:grid;grid-template-columns:18mm 12mm 1fr 34mm;grid-template-areas:"id shirt name mini" "sub sub entered entered";gap:1.2mm;padding:1.3mm 1.6mm 1.1mm 6mm;page-break-inside:avoid;break-inside:avoid}.card-index{position:absolute;left:1.2mm;top:1.2mm;width:3.8mm;height:3.8mm;border:1px solid #111827;border-radius:50%;font-size:6px;font-weight:900;text-align:center;line-height:3.6mm;background:#f1f5f9}.field b,.mini-fields b{display:block;font-size:5.4px;line-height:1;text-transform:uppercase;color:#475569;white-space:nowrap}.field span,.mini-fields span{display:block;height:3.2mm;border-bottom:1px solid #111827}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{grid-area:sub}.field.entered{grid-area:entered}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:1mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:2.4px;font-size:6.5px;margin-top:1.5mm;min-height:6.5mm;page-break-inside:avoid;break-inside:avoid}.team-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1.5mm}.team-footer div{border:1px solid #9ca3af;min-height:6mm;padding:3px}.observations{display:none}
-      .review-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:5px}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:7px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:grid;grid-template-columns:repeat(4,1fr);gap:8mm;padding-top:5px;page-break-inside:avoid;break-inside:avoid}.signatures div{border-top:1px solid #111827;text-align:center;padding-top:2px;font-size:7px;text-transform:uppercase;font-weight:700}
-      @media print{html,body{width:210mm;min-height:297mm}.sheet{width:100%;height:283mm;max-height:283mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,.player-grid,.player-card{page-break-inside:avoid;break-inside:avoid}}
+      .teams{display:grid;grid-template-columns:1fr 1fr;gap:6mm;flex:1;min-height:0}.team-half{min-height:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}.cut-line{display:none}.half-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f5132;margin-bottom:1mm}.half-brand strong{font-size:9px;text-transform:uppercase;letter-spacing:.6px}.half-brand span{font-size:7px;color:#0f5132;font-weight:900}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}
+      table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:6px;margin-top:1.2mm}col.player-id{width:15%}col.shirt{width:6%}col.player-name{width:28%}col.role{width:6%}col.goals{width:5%}col.yellow{width:5%}col.red{width:5%}col.substitution{width:12%}col.entered-for{width:18%}th,td{border:1px solid #94a3b8;padding:1px;height:${altoFilaMm}mm;overflow:hidden}th{height:4.3mm;background:#eef2f7;text-transform:uppercase;line-height:1.05}.player-grid{display:none}.player-card{display:none}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:1.4mm;font-size:6.3px;margin-top:1.2mm;min-height:6mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:1.3mm;font-size:6.2px;min-height:18mm;margin-top:1.2mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.5mm}.observ-mini ul{margin:0 0 .5mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1.5mm}.team-footer div{border:1px solid #9ca3af;min-height:6mm;padding:3px}.observations{display:none}
+      .review-grid{display:none}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:4px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:none}
+      @media print{html,body{width:297mm;height:210mm}.sheet{width:285mm;height:198mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,table{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
       <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
       <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
@@ -1052,9 +1099,19 @@ export default function PartidosPage() {
                 <span className="text-white font-bold text-xs uppercase">Torneo de Ida y Vuelta</span>
               </label>
             </div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+            <div className="md:col-span-2">
+              <label className="text-xs font-bold text-[#D4A017] uppercase">Fecha de jornada</label>
+              <div className="mt-1 flex gap-2">
+                <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} />
+                <button type="button" onClick={agregarDiaAutomatico} className="px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase">Agregar</button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
+              </div>
+            </div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración + descanso</label><div className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{configuracion.match_duration_minutes} + {configuracion.break_between_matches_minutes} min</div></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora final</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Intervalo</label><input type="number" min={1} value={autoIntervalo} onChange={e => setAutoIntervalo(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Instancia</label><select value={autoFase} onChange={e => setAutoFase(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <button type="submit" disabled={loading} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.4)] hover:bg-yellow-500 transition-all">⚡ Auto Generar</button>
@@ -1089,9 +1146,19 @@ export default function PartidosPage() {
                  </select>
                </div>
                
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Día a jugar</label><input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+               <div className="md:col-span-2">
+                 <label className="text-xs font-bold text-[#D4A017] uppercase">Fecha de jornada</label>
+                 <div className="mt-1 flex gap-2">
+                   <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} />
+                   <button type="button" onClick={agregarDiaAutomatico} className="px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase">Agregar</button>
+                 </div>
+                 <div className="mt-2 flex flex-wrap gap-2">
+                   {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
+                 </div>
+               </div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Duración + descanso</label><div className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{configuracion.match_duration_minutes} + {configuracion.break_between_matches_minutes} min</div></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora final</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Intervalo</label><input type="number" min={1} value={autoIntervalo} onChange={e => setAutoIntervalo(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
 
                <div className="md:col-span-4">
