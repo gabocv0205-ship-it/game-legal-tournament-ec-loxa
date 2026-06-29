@@ -4,6 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
+import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
 import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
@@ -14,6 +15,7 @@ export default function PartidosPage() {
   const [torneoNombre, setTorneoNombre] = useState<string>("Torneo Oficial");
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [costoArbitraje, setCostoArbitraje] = useState<number>(20);
+  const [costosFinancieros, setCostosFinancieros] = useState({ inscripcion: 150, arbitraje: 20, amarilla: 2, roja: 5 });
   const [pagosArbitraje, setPagosArbitraje] = useState<string[]>([]);
   const [auspiciantesTorneo, setAuspiciantesTorneo] = useState<string[]>([]);
   
@@ -109,6 +111,16 @@ export default function PartidosPage() {
     return new Date(`${value.length === 16 ? `${value}:00` : value}-05:00`).toISOString();
   };
 
+  const obtenerDiaDeCampo = (value: string) => (value || obtenerFechaHoraEcuador().fechaHora).split("T")[0] || obtenerFechaHoraEcuador().dia;
+  const obtenerHoraDeCampo = (value: string) => (value || obtenerFechaHoraEcuador().fechaHora).split("T")[1] || obtenerFechaHoraEcuador().hora;
+  const actualizarFechaHoraCampo = (value: string, tipo: "dia" | "hora", nuevoValor: string) => {
+    const ahora = obtenerFechaHoraEcuador();
+    const [diaActual, horaActual] = (value || ahora.fechaHora).split("T");
+    return tipo === "dia"
+      ? `${nuevoValor}T${horaActual || ahora.hora}`
+      : `${diaActual || ahora.dia}T${nuevoValor}`;
+  };
+
   // ============================================================================
   // ESCUCHADOR DE RED (PLAN DE CONTINGENCIA OFFLINE MANTENIDO)
   // ============================================================================
@@ -167,6 +179,12 @@ export default function PartidosPage() {
     setTorneoId(activeId);
     if (tourney) {
       setCostoArbitraje(Number(tourney.referee_fee || 20));
+      setCostosFinancieros({
+        inscripcion: Number(tourney.registration_fee || 150),
+        arbitraje: Number(tourney.referee_fee || 20),
+        amarilla: Number(tourney.yellow_card_fee || 2),
+        roja: Number(tourney.red_card_fee || 5),
+      });
       setTorneoNombre(tourney.name || "Torneo Oficial");
       setTorneoSlug(tourney.slug);
       setAuspiciantesTorneo(Array.isArray(tourney.tournament_sponsors) ? tourney.tournament_sponsors.filter(Boolean) : []);
@@ -610,7 +628,8 @@ export default function PartidosPage() {
          match_id: partidoActivo.id,
          amount: costoArbitraje,
          concept: "arbitraje",
-         description: `Abono arbitraje directo en cancha - Jornada ${partidoActivo.matchday}`
+         payment_method: "efectivo",
+         notes: `Abono arbitraje directo en cancha - Jornada ${partidoActivo.matchday}`
       };
 
       if (isOffline) {
@@ -830,6 +849,13 @@ export default function PartidosPage() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return alert("Permite las ventanas emergentes para generar la planilla.");
     const { suspendidos } = esEstandar ? { suspendidos: [] as any[] } : await cargarConvocatoria(partido);
+    const equiposPlanilla = [partido.home_team_id, partido.away_team_id].filter(Boolean);
+    const { data: ledgerPlanilla } = !esEstandar && torneoId && equiposPlanilla.length
+      ? await supabase.from("financial_ledger").select("*").eq("tournament_id", torneoId).in("team_id", equiposPlanilla)
+      : { data: [] as any[] };
+    const { data: pagosPlanilla } = !esEstandar && torneoId && equiposPlanilla.length
+      ? await supabase.from("payments").select("*").eq("tournament_id", torneoId).in("team_id", equiposPlanilla)
+      : { data: [] as any[] };
     const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
     const fechaPartido = new Date(partido.match_date);
     const crearLineas = (cantidad: number) => Array.from({ length: cantidad }, () => "<span></span>").join("");
@@ -851,7 +877,35 @@ export default function PartidosPage() {
           <div class="field substitution"><b>Sustitucion</b><span></span></div>
           <div class="field entered"><b>Ingreso por</b><span></span></div>
         </article>`).join("");
-    const crearFilasTabla = () => Array.from({ length: cupoPartido }, () => `<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
+    const esDescuento = (entry: any) => String(entry.category || entry.concept || entry.payment_method || "").toLowerCase().includes("descuento");
+    const montoFirmado = (entry: any) => (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0);
+    const saldoLibro = (teamId: string, categorias: string[]) => {
+      const movimientos = (ledgerPlanilla || []).filter(entry => entry.team_id === teamId);
+      const cargos = movimientos
+        .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categorias.includes(entry.category) && !esDescuento(entry))
+        .reduce((sum, entry) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount || 0), 0);
+      const pagos = movimientos
+        .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && categorias.includes(entry.category) && !esDescuento(entry))
+        .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+      const descuentos = movimientos
+        .filter(entry => ["payment", "reversal", "adjustment"].includes(entry.entry_type) && categorias.some(cat => String(entry.category || "").includes(cat)) && esDescuento(entry))
+        .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+      return Math.max(0, cargos - pagos - descuentos);
+    };
+    const pagosEquipo = (teamId: string, categorias: string[]) => (pagosPlanilla || [])
+      .filter(pago => pago.team_id === teamId && categorias.some(cat => String(pago.concept || "").includes(cat)))
+      .reduce((sum, pago) => sum + Number(pago.amount || 0), 0);
+    const crearPendientesFinancieros = (teamId: string) => {
+      if (esEstandar || !teamId) return ["Pendientes financieros: ________________________________________________"];
+      const alertas: string[] = [];
+      const saldoInscripcion = saldoLibro(teamId, ["inscripcion"]) || Math.max(0, costosFinancieros.inscripcion - pagosEquipo(teamId, ["inscripcion"]));
+      const saldoTarjetas = saldoLibro(teamId, ["amarilla", "roja", "multa"]);
+      const pagoArbitrajePartido = (pagosPlanilla || []).some(pago => pago.team_id === teamId && pago.match_id === partido.id && pago.concept === "arbitraje");
+      if (saldoInscripcion > 0) alertas.push(`Inscripcion pendiente: $${saldoInscripcion.toFixed(2)}`);
+      if (!pagoArbitrajePartido && costosFinancieros.arbitraje > 0) alertas.push(`Arbitraje del partido pendiente: $${costosFinancieros.arbitraje.toFixed(2)}`);
+      if (saldoTarjetas > 0) alertas.push(`Tarjetas o sanciones pendientes: $${saldoTarjetas.toFixed(2)}`);
+      return alertas.length ? alertas : ["Sin pendientes financieros registrados antes del partido."];
+    };
     const crearObservacionesAutomaticas = () => {
       return [
         `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
@@ -864,11 +918,12 @@ export default function PartidosPage() {
       const suspendidosTexto = suspendidosEquipo.length
         ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
+      const pendientesFinancieros = crearPendientesFinancieros(teamId);
       return `<section class="team-half"><div class="half-brand"><strong>${escapeHtml(torneoNombre)}</strong><span>${escapeHtml(configuracion.tournament_year)}</span></div><div class="team-head"><div><span>Equipo</span><h2>${escapeHtml(teamName)}</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
-        <table><colgroup><col class="player-id"><col class="shirt"><col class="player-name"><col class="role"><col class="goals"><col class="yellow"><col class="red"><col class="substitution"><col class="entered-for"></colgroup><thead><tr><th>Identificacion</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>G</th><th>TA</th><th>TR</th><th>Sust.</th><th>Ingreso por</th></tr></thead><tbody>${crearFilasTabla()}</tbody></table>
+        <div class="player-grid">${crearCasillas()}</div>
         <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
-        <div class="observ-mini"><b>Observaciones</b><ul>${observacionesAutomaticas.map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(2)}</div></div>
-        <div class="team-footer"><div><b>Capitan:</b></div><div><b>Delegado:</b></div><div><b>Firma mesa:</b></div></div></section>`;
+        <div class="observ-mini"><b>Observaciones y pendientes</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(4)}</div></div>
+        <div class="team-footer"><div><b>Firma representante del equipo</b></div></div></section>`;
     };
     const observacionesAutomaticas = crearObservacionesAutomaticas();
     const observacionesManual = String(partido.notes || "").trim();
@@ -877,7 +932,7 @@ export default function PartidosPage() {
       .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:3px solid #0f5132;padding-bottom:4px}.brand strong{display:block;font-size:17px;letter-spacing:1.7px;text-transform:uppercase}.brand span{font-size:8px;text-transform:uppercase;color:#4b5563;letter-spacing:.8px}.badge{justify-self:center;border:2px solid #0f5132;color:#0f5132;border-radius:999px;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:18px;font-weight:900;color:#0f5132}
       h1{text-align:center;font-size:14px;text-transform:uppercase;margin:2px 0 0}.subtitle{text-align:center;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:4px;font-size:8px;background:#f3f4f6;border:1px solid #cbd5e1;padding:5px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:2px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc}.score-team{padding:5px;text-align:center;font-size:10px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:7px;padding:4px 7px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:14mm;height:9mm;border:2px solid #111827}.score-box span{font-size:8px;font-weight:900;color:#4b5563}
       .teams{display:grid;grid-template-columns:1fr 1fr;gap:6mm;flex:1;min-height:0}.team-half{min-height:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}.cut-line{display:none}.half-brand{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f5132;margin-bottom:1mm}.half-brand strong{font-size:9px;text-transform:uppercase;letter-spacing:.6px}.half-brand span{font-size:7px;color:#0f5132;font-weight:900}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}
-      table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:6px;margin-top:1.2mm}col.player-id{width:15%}col.shirt{width:6%}col.player-name{width:28%}col.role{width:6%}col.goals{width:5%}col.yellow{width:5%}col.red{width:5%}col.substitution{width:12%}col.entered-for{width:18%}th,td{border:1px solid #94a3b8;padding:1px;height:${altoFilaMm}mm;overflow:hidden}th{height:4.3mm;background:#eef2f7;text-transform:uppercase;line-height:1.05}.player-grid{display:none}.player-card{display:none}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:1.4mm;font-size:6.3px;margin-top:1.2mm;min-height:6mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:1.3mm;font-size:6.2px;min-height:18mm;margin-top:1.2mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.5mm}.observ-mini ul{margin:0 0 .5mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1.5mm}.team-footer div{border:1px solid #9ca3af;min-height:6mm;padding:3px}.observations{display:none}
+      table{display:none}.player-grid{display:grid;grid-template-columns:1fr 1fr;gap:1mm;margin-top:1.2mm;min-height:0}.player-card{display:grid;grid-template-columns:5mm 1fr 13mm;grid-template-areas:"idx id shirt" "idx name name" "idx mini mini" "idx sub entered";gap:.6mm;border:1px solid #64748b;background:#fff;padding:.8mm;min-height:${cupoPartido > 18 ? 8.2 : 9.4}mm;page-break-inside:avoid;break-inside:avoid}.card-index{grid-area:idx;display:flex;align-items:center;justify-content:center;background:#0f5132;color:#fff;font-size:7px;font-weight:900}.field{min-width:0}.field b,.mini-fields b{display:block;font-size:4.8px;line-height:1;text-transform:uppercase;color:#475569}.field span,.mini-fields span{display:block;height:2.8mm;border-bottom:1px solid #94a3b8}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{grid-area:sub}.field.entered{grid-area:entered}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:.6mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:1.4mm;font-size:6.3px;margin-top:1.2mm;min-height:6mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:1.3mm;font-size:6.2px;min-height:24mm;margin-top:1.2mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.5mm}.observ-mini ul{margin:0 0 .5mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1.5mm}.team-footer div{border:1px solid #111827;min-height:8mm;padding:3px;text-align:center}.observations{display:none}
       .review-grid{display:none}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:4px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:none}
       @media print{html,body{width:297mm;height:210mm}.sheet{width:285mm;height:198mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,table{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
@@ -912,6 +967,17 @@ export default function PartidosPage() {
     const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
     const mensaje = `🏆 *¡TE INVITAMOS A SEGUIR EL TORNEO EN VIVO!* 🏆\n\nRevisa el calendario oficial, resultados y el minuto a minuto de los partidos directamente desde nuestra plataforma:\n\n🔗 *Enlace Oficial:*\n${enlaceOficial}\n\n¡No te lo pierdas! ⚽🔥`;
     window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
+  const copiarEnlacePublico = async () => {
+    const enlaceOficial = `${appUrl}/torneo/${torneoSlug}`;
+    if (!torneoSlug) return alert("Este torneo aun no tiene enlace publico configurado.");
+    try {
+      await navigator.clipboard.writeText(enlaceOficial);
+      alert(`Link publico copiado:\n${enlaceOficial}`);
+    } catch {
+      window.prompt("Copia el link publico del torneo:", enlaceOficial);
+    }
   };
 
   const enviarRecordatorioWhatsApp = (p: any) => {
@@ -1118,8 +1184,9 @@ export default function PartidosPage() {
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
-            <div className="md:col-span-3"><label className="text-xs font-bold text-gray-500 uppercase">Fecha/Hora</label><input type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><MapPin size={14} /> Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><CalendarDays size={14} /> Fecha</label><input type="date" value={obtenerDiaDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "dia", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><Clock3 size={14} /> Hora</label><input type="time" value={obtenerHoraDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "hora", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div className="md:col-span-4"><label className="text-xs font-bold text-gray-500 uppercase">Observaciones</label><textarea value={observacionesManual} onChange={e => setObservacionesManual(e.target.value)} rows={2} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Comentarios opcionales del encuentro..." /></div>
             <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar"}</button>
           </form>
@@ -1135,17 +1202,17 @@ export default function PartidosPage() {
               </label>
             </div>
             <div className="md:col-span-2">
-              <label className="text-xs font-bold text-[#D4A017] uppercase">Fecha de jornada</label>
+              <label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><CalendarDays size={14} /> Fecha de jornada</label>
               <div className="mt-1 flex gap-2">
-                <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} />
-                <button type="button" onClick={agregarDiaAutomatico} className="px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase">Agregar</button>
+                <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" />
+                <button type="button" onClick={agregarDiaAutomatico} className="inline-flex items-center gap-1 px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase"><Plus size={14} /> Agregar</button>
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
               </div>
             </div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora de Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-            <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora final</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora primer partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora ultimo partido</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Intervalo</label><input type="number" min={1} value={autoIntervalo} onChange={e => setAutoIntervalo(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Número Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="text-xs font-bold text-[#D4A017] uppercase">Instancia</label><select value={autoFase} onChange={e => setAutoFase(e.target.value)} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
@@ -1182,17 +1249,17 @@ export default function PartidosPage() {
                </div>
                
                <div className="md:col-span-2">
-                 <label className="text-xs font-bold text-[#D4A017] uppercase">Fecha de jornada</label>
+                 <label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><CalendarDays size={14} /> Fecha de jornada</label>
                  <div className="mt-1 flex gap-2">
-                   <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} />
-                   <button type="button" onClick={agregarDiaAutomatico} className="px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase">Agregar</button>
+                   <input type="date" value={autoDia} onChange={e => setAutoDia(e.target.value)} className="w-full p-3 bg-[#141414] text-white border border-[#2E2E2E] rounded" />
+                   <button type="button" onClick={agregarDiaAutomatico} className="inline-flex items-center gap-1 px-3 rounded bg-[#D4A017] text-black text-xs font-black uppercase"><Plus size={14} /> Agregar</button>
                  </div>
                  <div className="mt-2 flex flex-wrap gap-2">
                    {autoDias.map(dia => <button type="button" key={dia} onClick={() => quitarDiaAutomatico(dia)} className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black text-[#D4A017]">{dia} ×</button>)}
                  </div>
                </div>
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora Inicio</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
-               <div><label className="text-xs font-bold text-[#D4A017] uppercase">Hora final</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" style={{ colorScheme: 'dark' }} /></div>
+               <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora primer partido</label><input type="time" value={autoHoraInicio} onChange={e => setAutoHoraInicio(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
+               <div><label className="flex items-center gap-1 text-xs font-bold text-[#D4A017] uppercase"><Clock3 size={14} /> Hora ultimo partido</label><input type="time" value={autoHoraFin} onChange={e => setAutoHoraFin(e.target.value)} required className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">Intervalo</label><input type="number" min={1} value={autoIntervalo} onChange={e => setAutoIntervalo(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
 
@@ -1263,6 +1330,10 @@ export default function PartidosPage() {
             {/* BOTÓN WHATSAPP */}
             <button onClick={compartirEnlaceInvitacion} className="bg-[#25D366]/10 border border-[#25D366]/50 text-[#25D366] hover:bg-[#25D366] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               💬 Invitación
+            </button>
+
+            <button onClick={copiarEnlacePublico} className="bg-blue-950 border border-blue-600 text-blue-200 hover:bg-blue-600 hover:text-white font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
+              <Copy size={14} /> Copiar link
             </button>
 
             {/* BOTÓN POSTER */}
@@ -1364,8 +1435,12 @@ export default function PartidosPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold uppercase text-gray-400">Fecha y hora</label>
-                <input type="datetime-local" value={editFecha} onChange={e => setEditFecha(e.target.value)} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" style={{ colorScheme: "dark" }} />
+                <label className="flex items-center gap-1 text-xs font-bold uppercase text-gray-400"><CalendarDays size={14} /> Fecha</label>
+                <input type="date" value={obtenerDiaDeCampo(editFecha)} onChange={e => setEditFecha(actualizarFechaHoraCampo(editFecha, "dia", e.target.value))} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+              </div>
+              <div>
+                <label className="flex items-center gap-1 text-xs font-bold uppercase text-gray-400"><Clock3 size={14} /> Hora</label>
+                <input type="time" value={obtenerHoraDeCampo(editFecha)} onChange={e => setEditFecha(actualizarFechaHoraCampo(editFecha, "hora", e.target.value))} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Cancha</label>

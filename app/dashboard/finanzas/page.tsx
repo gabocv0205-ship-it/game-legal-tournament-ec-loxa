@@ -203,15 +203,35 @@ export default function LibroMayorFinanzas() {
     
     setProcesando(true);
     try {
-      const { error } = await supabase.from("payments").insert([{
+      const payload = {
         tournament_id: torneoId,
         team_id: equipoSeleccionado.id,
         amount: monto,
         concept: concepto,
         payment_method: esRegistroDescuento ? "descuento" : metodoPago,
         notes: descripcion || null,
-        description: descripcion || (esRegistroDescuento ? "Ajuste contable de descuento aplicado" : `Liquidacion de ${concepto}`)
-      }]);
+      };
+
+      if (esRegistroDescuento) {
+        const { error: rpcError } = await supabase.rpc("register_team_discount", {
+          p_tournament_id: torneoId,
+          p_team_id: equipoSeleccionado.id,
+          p_amount: monto,
+          p_category: concepto,
+          p_reason: descripcion || "Ajuste contable de descuento aplicado",
+        });
+        if (!rpcError) {
+          setMostrarModal(false);
+          cargarDatos();
+          return;
+        }
+        const rpcMessage = String(rpcError.message || "");
+        if (!rpcMessage.toLowerCase().includes("function") && !rpcMessage.toLowerCase().includes("register_team_discount")) {
+          throw rpcError;
+        }
+      }
+
+      const { error } = await supabase.from("payments").insert([payload]);
 
       if (error) throw error;
       setMostrarModal(false);
