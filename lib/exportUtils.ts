@@ -24,6 +24,15 @@ function escapeCsv(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function exportFinanceCsv(rows: FinanceExportRow[], filename: string) {
   const headers = ["Fecha", "Equipo", "Tipo", "Categoria", "Metodo", "Descripcion", "Ingreso", "Egreso", "Saldo"];
   const csv = [
@@ -61,6 +70,104 @@ export function exportFinancePdf(rows: FinanceExportRow[], filename: string, tit
   popup.document.close();
   popup.focus();
   setTimeout(() => popup.print(), 250);
+}
+
+export type TeamPlayerPdfRow = {
+  index: number;
+  fullName: string;
+  identification: string;
+  jerseyNumber: string;
+  status: string;
+  goals: number;
+  yellowCards: number;
+  redCards: number;
+  matchesPlayed: number;
+};
+
+export type TeamPlayersPdfReport = {
+  tournamentName: string;
+  tournamentCategory?: string;
+  teamName: string;
+  teamShieldUrl?: string;
+  generatedAt: string;
+  rows: TeamPlayerPdfRow[];
+};
+
+export function exportTeamPlayersPdf(report: TeamPlayersPdfReport, filename: string) {
+  const category = report.tournamentCategory ? `<p class="muted">Modalidad/Categoria: ${escapeHtml(report.tournamentCategory)}</p>` : "";
+  const shield = report.teamShieldUrl
+    ? `<img class="shield" src="${escapeHtml(report.teamShieldUrl)}" alt="Escudo de ${escapeHtml(report.teamName)}" />`
+    : `<div class="shield placeholder">GL</div>`;
+  const rowsHtml = report.rows.length
+    ? report.rows.map(row => `<tr>
+        <td class="center">${row.index}</td>
+        <td>${escapeHtml(row.fullName)}</td>
+        <td>${escapeHtml(row.identification)}</td>
+        <td class="center">${escapeHtml(row.jerseyNumber)}</td>
+        <td><span class="badge">${escapeHtml(row.status)}</span></td>
+        <td class="center">${row.matchesPlayed}</td>
+        <td class="center">${row.goals}</td>
+        <td class="center">${row.yellowCards}</td>
+        <td class="center">${row.redCards}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="9" class="empty">No existen jugadores registrados para este equipo en el torneo seleccionado.</td></tr>`;
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(report.teamName)} - Jugadores</title><style>
+    @page { size: A4 portrait; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Arial Nova Light", Inter, "Segoe UI", Arial, sans-serif; color: #172033; background: #f7f8fb; }
+    .page { min-height: 100vh; padding: 18px; background: linear-gradient(180deg, #ffffff 0%, #f3f5fa 100%); border: 1px solid #d8dde8; }
+    .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px; border-radius: 18px; background: #101827; color: #fff; border-bottom: 5px solid #d4a017; }
+    h1 { margin: 0; font-size: 20px; letter-spacing: .08em; text-transform: uppercase; }
+    h2 { margin: 6px 0 0; font-size: 14px; color: #d4a017; letter-spacing: .12em; text-transform: uppercase; }
+    .muted { margin: 4px 0 0; color: #d8dde8; font-size: 11px; }
+    .shield { width: 76px; height: 76px; object-fit: contain; border-radius: 18px; background: #fff; padding: 8px; border: 1px solid rgba(212,160,23,.55); }
+    .placeholder { display: grid; place-items: center; color: #101827; font-weight: 900; font-size: 18px; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+    .card { border: 1px solid #d8dde8; border-radius: 14px; padding: 10px 12px; background: #fff; }
+    .label { margin: 0 0 4px; color: #687386; font-size: 9px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+    .value { margin: 0; color: #172033; font-size: 13px; font-weight: 800; }
+    table { width: 100%; border-collapse: collapse; background: #fff; font-size: 10px; border-radius: 14px; overflow: hidden; }
+    th { background: #101827; color: #d4a017; padding: 8px 6px; text-align: left; text-transform: uppercase; letter-spacing: .08em; font-size: 8px; }
+    td { border-bottom: 1px solid #e4e8f0; padding: 7px 6px; color: #172033; vertical-align: middle; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .center { text-align: center; }
+    .badge { display: inline-block; border-radius: 999px; padding: 3px 8px; background: #eef2f7; color: #172033; font-weight: 800; font-size: 9px; }
+    .empty { text-align: center; padding: 22px; color: #687386; font-style: italic; }
+    .footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #d8dde8; color: #687386; font-size: 9px; text-align: center; letter-spacing: .1em; text-transform: uppercase; }
+    @media print { body { background: #fff; } .page { border: 0; min-height: auto; } table, tr, .card, .header { page-break-inside: avoid; } }
+  </style></head><body>
+    <main class="page">
+      <section class="header">
+        <div>
+          <h1>${escapeHtml(report.tournamentName)}</h1>
+          <h2>${escapeHtml(report.teamName)}</h2>
+          ${category}
+          <p class="muted">Reporte generado: ${escapeHtml(report.generatedAt)}</p>
+        </div>
+        ${shield}
+      </section>
+      <section class="meta">
+        <div class="card"><p class="label">Equipo</p><p class="value">${escapeHtml(report.teamName)}</p></div>
+        <div class="card"><p class="label">Total jugadores</p><p class="value">${report.rows.length}</p></div>
+      </section>
+      <table>
+        <thead><tr><th>#</th><th>Jugador</th><th>Identificacion</th><th>Nro.</th><th>Estado</th><th>PJ</th><th>Goles</th><th>TA</th><th>TR</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div class="footer">Game Legal Tournament &middot; Reporte oficial de jugadores por equipo</div>
+    </main>
+  </body></html>`;
+
+  const popup = window.open("", "_blank");
+  if (!popup) {
+    downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), filename.replace(/\.pdf$/i, ".html"));
+    return;
+  }
+  popup.document.write(html);
+  popup.document.close();
+  popup.focus();
+  setTimeout(() => popup.print(), 300);
 }
 
 function crc32(input: string) {
