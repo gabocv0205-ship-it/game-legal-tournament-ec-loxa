@@ -200,6 +200,38 @@ textarea:focus {
   background-color: rgba(7, 20, 13, 0.36) !important;
 }
 
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-overlay {
+  background-color: rgba(7, 20, 13, 0.28) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f5fbf7 100%) !important;
+  color: #07140d !important;
+  border-color: rgba(9, 126, 63, 0.24) !important;
+  box-shadow: 0 24px 70px rgba(6, 92, 45, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel h3,
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel label {
+  color: #07140d !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel input,
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel select,
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel textarea {
+  background-color: #ffffff !important;
+  color: #07140d !important;
+  border-color: rgba(9, 126, 63, 0.28) !important;
+  box-shadow: inset 0 1px 0 rgba(9, 126, 63, 0.04);
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel input:focus,
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel select:focus,
+:root[data-admin-theme="light"] .admin-premium-shell .finance-modal-panel textarea:focus {
+  border-color: var(--admin-green) !important;
+  box-shadow: 0 0 0 3px rgba(9, 126, 63, 0.12);
+}
+
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-gray-800"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-gray-900"],
 :root[data-admin-theme="light"] .admin-premium-shell [class*="bg-slate-800"],

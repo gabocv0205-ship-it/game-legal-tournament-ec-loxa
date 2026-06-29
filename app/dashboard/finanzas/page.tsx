@@ -94,17 +94,36 @@ export default function LibroMayorFinanzas() {
       const calcEquipos = teams?.map(t => {
         // --- A) Calcular Pagos Realizados ---
         const movimientos = (ledger || []).filter(entry => entry.team_id === t.id);
+        const pagosEquipo = t.payments || [];
         const tieneLibro = movimientos.length > 0;
+        const normalizar = (value: any) => String(value || "").toLowerCase().trim();
+        const esDescuento = (entry: any) =>
+          normalizar(entry.category || entry.concept).includes("descuento") ||
+          normalizar(entry.payment_method).includes("descuento") ||
+          normalizar(entry.reference_type).includes("descuento");
+        const montoFirmado = (entry: any) => (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0);
         const cargosNetos = (categorias: string[]) => movimientos
           .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categorias.includes(entry.category))
           .reduce((sum, entry) => sum + (entry.entry_type === "adjustment" ? -1 : 1) * Number(entry.amount), 0);
-        const esDescuento = (entry: any) => String(entry.category || entry.concept || "").startsWith("descuento") || entry.payment_method === "descuento";
-        const pagadoTotal = tieneLibro
-          ? movimientos.filter(entry => ["payment", "reversal"].includes(entry.entry_type) && !esDescuento(entry)).reduce((sum, entry) => sum + (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount), 0)
-          : t.payments?.filter((p: any) => !esDescuento(p)).reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0;
-        const descuentoTotal = tieneLibro
-          ? movimientos.filter(entry => ["payment", "reversal", "adjustment"].includes(entry.entry_type) && esDescuento(entry)).reduce((sum, entry) => sum + (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount), 0)
-          : t.payments?.filter((p: any) => esDescuento(p)).reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0;
+        const ledgerPaymentReferenceIds = new Set(
+          movimientos
+            .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && entry.reference_type === "payments")
+            .map(entry => normalizar(String(entry.reference_id || "").replace(":deleted", "")))
+        );
+        const pagosLibro = movimientos
+          .filter(entry => ["payment", "reversal"].includes(entry.entry_type) && !esDescuento(entry))
+          .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+        const pagosSinLibro = pagosEquipo
+          .filter((p: any) => !esDescuento(p) && !ledgerPaymentReferenceIds.has(normalizar(p.id)))
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const descuentosLibro = movimientos
+          .filter(entry => ["payment", "reversal", "adjustment"].includes(entry.entry_type) && esDescuento(entry))
+          .reduce((sum, entry) => sum + montoFirmado(entry), 0);
+        const descuentosSinLibro = pagosEquipo
+          .filter((p: any) => esDescuento(p) && !ledgerPaymentReferenceIds.has(normalizar(p.id)))
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const pagadoTotal = Math.max(0, pagosLibro + pagosSinLibro);
+        const descuentoTotal = Math.max(0, descuentosLibro + descuentosSinLibro);
 
         // --- B) Calcular Deuda Generada ---
         const deudaInscripcion = tieneLibro ? cargosNetos(["inscripcion"]) : c_insc;
@@ -175,8 +194,10 @@ export default function LibroMayorFinanzas() {
 
   const registrarPago = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!torneoId || !equipoSeleccionado || !montoPago || Number(montoPago) <= 0) return alert("Datos inválidos.");
-    if (concepto === "descuento_inscripcion" && Number(montoPago) > Number(equipoSeleccionado.saldoPendiente || 0)) {
+    const monto = Number(montoPago);
+    const esRegistroDescuento = concepto.startsWith("descuento");
+    if (!torneoId || !equipoSeleccionado || !montoPago || monto <= 0) return alert("Datos invalidos.");
+    if (esRegistroDescuento && monto > Number(equipoSeleccionado.saldoPendiente || 0)) {
       return alert("El descuento no puede ser mayor al saldo pendiente.");
     }
     
@@ -185,11 +206,11 @@ export default function LibroMayorFinanzas() {
       const { error } = await supabase.from("payments").insert([{
         tournament_id: torneoId,
         team_id: equipoSeleccionado.id,
-        amount: Number(montoPago),
+        amount: monto,
         concept: concepto,
-        payment_method: metodoPago,
+        payment_method: esRegistroDescuento ? "descuento" : metodoPago,
         notes: descripcion || null,
-        description: descripcion || (concepto === "descuento_inscripcion" ? "Descuento de inscripcion aplicado" : `Liquidación de ${concepto}`)
+        description: descripcion || (esRegistroDescuento ? "Ajuste contable de descuento aplicado" : `Liquidacion de ${concepto}`)
       }]);
 
       if (error) throw error;
@@ -426,8 +447,8 @@ export default function LibroMayorFinanzas() {
 
       {/* MODAL CONTABLE (Igual que el anterior pero adaptado) */}
       {mostrarModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden">
+        <div className="finance-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="finance-modal-panel bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden">
             <div className="p-6 border-b border-[#2E2E2E]">
               <h3 className="text-xl font-black text-white uppercase">{concepto === "descuento_inscripcion" ? "Registrar Descuento" : "Registrar Ingreso"}</h3>
               <p className="text-[#D4A017] font-bold text-sm">A cuenta de: {equipoSeleccionado?.name}</p>
@@ -435,7 +456,10 @@ export default function LibroMayorFinanzas() {
             <form onSubmit={registrarPago} className="p-6 space-y-5">
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Concepto</label>
-                <select value={concepto} onChange={(e) => setConcepto(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none">
+                <select value={concepto} onChange={(e) => {
+                  setConcepto(e.target.value);
+                  if (e.target.value.startsWith("descuento")) setMetodoPago("descuento");
+                }} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none">
                   <option value="inscripcion">Abono Inscripción</option>
                   <option value="descuento_inscripcion">Descuento Inscripción</option>
                   <option value="arbitraje">Abono Arbitraje</option>
@@ -445,7 +469,7 @@ export default function LibroMayorFinanzas() {
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Método de pago</label>
-                <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl">
+                <select value={concepto.startsWith("descuento") ? "descuento" : metodoPago} onChange={(e) => setMetodoPago(e.target.value)} disabled={concepto.startsWith("descuento")} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl disabled:cursor-not-allowed disabled:opacity-80">
                   <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="descuento">Descuento / auspicio</option><option value="otro">Otro</option>
                 </select>
               </div>
@@ -454,9 +478,13 @@ export default function LibroMayorFinanzas() {
                 <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl" />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Monto ($)</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{concepto.startsWith("descuento") ? "Valor del descuento ($)" : "Monto ($)"}</label>
                 <input type="number" step="0.01" max={equipoSeleccionado?.saldoPendiente} value={montoPago} onChange={(e) => setMontoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl outline-none" required />
-                <p className="text-[10px] text-gray-500 mt-2 text-right">Saldo máximo a cobrar: ${equipoSeleccionado?.saldoPendiente}</p>
+                <p className="text-[10px] text-gray-500 mt-2 text-right">
+                  {concepto.startsWith("descuento")
+                    ? `Saldo despues del descuento: $${Math.max(0, Number(equipoSeleccionado?.saldoPendiente || 0) - Number(montoPago || 0)).toFixed(2)}`
+                    : `Saldo maximo a cobrar: $${Number(equipoSeleccionado?.saldoPendiente || 0).toFixed(2)}`}
+                </p>
               </div>
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={() => setMostrarModal(false)} className="flex-1 py-3 bg-[#141414] text-gray-400 font-bold uppercase rounded-xl">Cancelar</button>
