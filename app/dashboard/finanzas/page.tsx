@@ -79,8 +79,9 @@ export default function LibroMayorFinanzas() {
       setHistorialExportaciones(exports || []);
       
       // 3. Traer Partidos Finalizados para el cálculo de arbitraje
-      const { data: matches } = await supabase.from("matches").select("id, home_team_id, away_team_id, status").eq("tournament_id", activeId).eq("status", "finished");
-      const matchIds = matches?.map(m => m.id) || [];
+      const { data: allMatches } = await supabase.from("matches").select("id, home_team_id, away_team_id, status").eq("tournament_id", activeId);
+      const matches = (allMatches || []).filter(match => match.status === "finished");
+      const matchIds = matches.map(m => m.id) || [];
 
       // 4. Traer Eventos (Tarjetas) de los partidos finalizados
       let matchEvents: any[] = [];
@@ -106,6 +107,7 @@ export default function LibroMayorFinanzas() {
         
         // Partidos jugados por este equipo (como local o visitante)
         const partidosJugados = matches?.filter(m => m.home_team_id === t.id || m.away_team_id === t.id).length || 0;
+        const partidosProgramados = (allMatches || []).filter(m => m.status !== "finished" && (m.home_team_id === t.id || m.away_team_id === t.id)).length;
         const deudaArbitraje = tieneLibro ? cargosNetos(["arbitraje"]) : partidosJugados * c_arb;
 
         // Multas por tarjetas generadas por este equipo
@@ -119,7 +121,7 @@ export default function LibroMayorFinanzas() {
 
         return { 
           ...t, 
-          partidosJugados, amarillas, rojas,
+          partidosJugados, partidosProgramados, amarillas, rojas,
           deudaInscripcion, deudaArbitraje, deudaMultas,
           totalDeudaGenerada, pagadoTotal,
           saldoPendiente: saldoPendiente > 0 ? saldoPendiente : 0 
@@ -149,6 +151,15 @@ export default function LibroMayorFinanzas() {
     setMostrarModal(true);
   };
 
+  const abrirModalDescuento = (equipo: any) => {
+    setEquipoSeleccionado(equipo);
+    setConcepto("descuento_inscripcion");
+    setMontoPago(equipo.saldoPendiente > 0 ? Math.min(equipo.saldoPendiente, equipo.deudaInscripcion).toString() : "");
+    setDescripcion("Descuento de inscripcion por auspicio, dacion en pago o compensacion.");
+    setMetodoPago("descuento");
+    setMostrarModal(true);
+  };
+
   const abrirDetalleEquipo = async (equipo: any) => {
     setEquipoSeleccionado(equipo);
     setMostrarDetalle(true);
@@ -171,7 +182,7 @@ export default function LibroMayorFinanzas() {
         concept: concepto,
         payment_method: metodoPago,
         notes: descripcion || null,
-        description: descripcion || `Liquidación de ${concepto}`
+        description: descripcion || (concepto === "descuento_inscripcion" ? "Descuento de inscripcion aplicado" : `Liquidación de ${concepto}`)
       }]);
 
       if (error) throw error;
@@ -269,7 +280,7 @@ export default function LibroMayorFinanzas() {
       {/* TABLA DE LIQUIDACIÓN POR EQUIPO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl">
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los estados</option><option value="aldia">Al día</option><option value="parcial">Pago parcial</option><option value="mora">En mora</option></select>
-        <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los métodos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select>
+        <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los métodos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="descuento">Descuento / compensacion</option><option value="otro">Otro</option></select>
         <input type="date" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg" style={{ colorScheme: 'dark' }} />
       </div>
 
@@ -323,7 +334,7 @@ export default function LibroMayorFinanzas() {
                   </td>
                   <td className="p-4 text-center text-gray-300 font-mono">${eq.deudaInscripcion.toFixed(2)}</td>
                   <td className="p-4 text-center text-gray-300 font-mono">
-                    ${eq.deudaArbitraje.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.partidosJugados} PJ)</span>
+                    ${eq.deudaArbitraje.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.partidosJugados} jugados / {eq.partidosProgramados} prog.)</span>
                   </td>
                   <td className="p-4 text-center text-gray-300 font-mono">
                     ${eq.deudaMultas.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.amarillas}A / {eq.rojas}R)</span>
@@ -338,9 +349,14 @@ export default function LibroMayorFinanzas() {
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
-                      Abonar
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={(event) => { event.stopPropagation(); abrirModalDescuento(eq); }} className="bg-emerald-950 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-700 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                        Descuento
+                      </button>
+                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                        Abonar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -401,7 +417,7 @@ export default function LibroMayorFinanzas() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#1C1C1C] w-full max-w-md border border-[#D4A017]/50 rounded-2xl shadow-[0_0_50px_rgba(212,160,23,0.15)] overflow-hidden">
             <div className="p-6 border-b border-[#2E2E2E]">
-              <h3 className="text-xl font-black text-white uppercase">Registrar Ingreso</h3>
+              <h3 className="text-xl font-black text-white uppercase">{concepto === "descuento_inscripcion" ? "Registrar Descuento" : "Registrar Ingreso"}</h3>
               <p className="text-[#D4A017] font-bold text-sm">A cuenta de: {equipoSeleccionado?.name}</p>
             </div>
             <form onSubmit={registrarPago} className="p-6 space-y-5">
@@ -409,6 +425,7 @@ export default function LibroMayorFinanzas() {
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Concepto</label>
                 <select value={concepto} onChange={(e) => setConcepto(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none">
                   <option value="inscripcion">Abono Inscripción</option>
+                  <option value="descuento_inscripcion">Descuento Inscripción</option>
                   <option value="arbitraje">Abono Arbitraje</option>
                   <option value="multa">Abono Multas</option>
                   <option value="otro">Liquidación General</option>
@@ -417,7 +434,7 @@ export default function LibroMayorFinanzas() {
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Método de pago</label>
                 <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} className="w-full mt-2 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl">
-                  <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="otro">Otro</option>
+                  <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="descuento">Descuento / auspicio</option><option value="otro">Otro</option>
                 </select>
               </div>
               <div>

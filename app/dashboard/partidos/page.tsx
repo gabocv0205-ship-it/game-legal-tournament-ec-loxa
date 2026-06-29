@@ -39,6 +39,12 @@ export default function PartidosPage() {
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
   const [observacionesManual, setObservacionesManual] = useState("");
+  const [partidoEditando, setPartidoEditando] = useState<any>(null);
+  const [editFecha, setEditFecha] = useState("");
+  const [editJornada, setEditJornada] = useState<number>(1);
+  const [editCancha, setEditCancha] = useState("");
+  const [editFase, setEditFase] = useState("Fase de Grupos");
+  const [editNotas, setEditNotas] = useState("");
 
   const [autoJornada, setAutoJornada] = useState<number>(1);
   const [autoDia, setAutoDia] = useState("");
@@ -136,10 +142,20 @@ export default function PartidosPage() {
     if (matchesData) setPartidos(matchesData);
   };
 
+  const mismaJornada = (partido: any, jornada: number, fase: string) => Number(partido.matchday) === Number(jornada) && partido.stage === fase;
+  const jornadaTienePartidos = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase));
+  const jornadaCulminada = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase) && partido.status === "finished");
+  const validarJornadaGenerable = (jornada: number, fase: string) => {
+    if (jornadaCulminada(jornada, fase)) return `La fecha ${jornada} de ${fase} ya esta culminada y no puede volver a generarse.`;
+    if (jornadaTienePartidos(jornada, fase)) return `La fecha ${jornada} de ${fase} ya tiene partidos guardados. Puedes editarlos, no volver a generarlos.`;
+    return "";
+  };
+
   const programarPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     if (!torneoId) return alert("No hay torneo activo.");
+    if (jornadaCulminada(jornadaManual, faseManual)) return alert(`La fecha ${jornadaManual} de ${faseManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
     if (faseManual === "Fase de Grupos") {
       const local = equipos.find(equipo => equipo.id === localId);
       const visitante = equipos.find(equipo => equipo.id === visitanteId);
@@ -169,6 +185,8 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
+      const bloqueo = validarJornadaGenerable(autoJornada, autoFase);
+      if (bloqueo) throw new Error(bloqueo);
       const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
       const matchesToInsert = scheduleFixtures(fixtures, autoDia, autoHoraInicio, { ...configuracion, match_duration_minutes: autoDuracion });
@@ -188,6 +206,8 @@ export default function PartidosPage() {
     if (!autoDia || !torneoId) return alert("Selecciona el día de juego.");
     setLoading(true);
     try {
+      const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
+      if (bloqueo) throw new Error(bloqueo);
       const required: Record<string, number> = { "16vos de Final": 32, "Octavos de Final": 16, "Cuartos de Final": 8, "Semifinal": 4, "Final": 2 };
       const count = required[faseGenerar] || 0;
       const previousStage: Record<string, string> = { "Octavos de Final": "16vos de Final", "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
@@ -224,6 +244,8 @@ export default function PartidosPage() {
     setLoading(true);
     
     try {
+      const bloqueo = validarJornadaGenerable(autoJornada, autoFase);
+      if (bloqueo) throw new Error(bloqueo);
       const historialCruces = new Set(partidos.map(p => `${p.home_team_id}-${p.away_team_id}`));
       const historialCrucesInverso = new Set(partidos.map(p => `${p.away_team_id}-${p.home_team_id}`));
       
@@ -289,6 +311,8 @@ export default function PartidosPage() {
     setLoading(true);
 
     try {
+      const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
+      if (bloqueo) throw new Error(bloqueo);
       const matchesGrupos = partidos.filter(p => p.stage === "Fase de Grupos" && p.status === "finished");
       const stats: Record<string, any> = {};
       equipos.forEach(t => { stats[t.id] = { id: t.id, gf: 0, gc: 0, pts: 0 }; });
@@ -358,6 +382,58 @@ export default function PartidosPage() {
       if (error) throw error;
       cargarDatos();
     } catch (error: any) { alert("Error al eliminar: " + error.message); } finally { setLoading(false); }
+  };
+
+  const formatoDatetimeLocal = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const abrirEditorPartido = (partido: any) => {
+    if (partido.status === "finished") return alert("Este partido ya esta culminado. No se recomienda mover horarios de partidos finalizados.");
+    setPartidoEditando(partido);
+    setEditFecha(formatoDatetimeLocal(partido.match_date));
+    setEditJornada(Number(partido.matchday || 1));
+    setEditCancha(partido.court || "Cancha 1");
+    setEditFase(partido.stage || "Fase de Grupos");
+    setEditNotas(partido.notes || "");
+  };
+
+  const guardarEdicionPartido = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!partidoEditando) return;
+    if (jornadaCulminada(editJornada, editFase) && !mismaJornada(partidoEditando, editJornada, editFase)) {
+      return alert(`La fecha ${editJornada} de ${editFase} ya esta culminada.`);
+    }
+
+    const conflict = validateManualMatch({
+      home_team_id: partidoEditando.home_team_id,
+      away_team_id: partidoEditando.away_team_id,
+      match_date: editFecha,
+      court: editCancha,
+      stage: editFase
+    }, partidos.filter(partido => partido.id !== partidoEditando.id), configuracion.match_duration_minutes);
+    if (conflict) return alert(conflict);
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("matches").update({
+        match_date: editFecha,
+        matchday: editJornada,
+        court: editCancha,
+        stage: editFase,
+        notes: editNotas.trim() || null
+      }).eq("id", partidoEditando.id);
+      if (error) throw error;
+      setPartidoEditando(null);
+      await cargarDatos();
+    } catch (error: any) {
+      alert("Error al editar partido: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // --- LÓGICA DE PARTIDO EN VIVO MANTENIDA ---
@@ -661,8 +737,8 @@ export default function PartidosPage() {
       .review-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:5px}.ruled-box{border:1px solid #111827;padding:5px;min-height:24mm;font-size:8px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:3px}.auto-list{margin:0 0 3px 0;padding-left:12px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:3px;margin-bottom:3px}.lines span{display:block;height:8px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:5px;font-size:8px}.pending strong{display:block;text-transform:uppercase;margin-bottom:3px;color:#0f5132}.signatures{display:grid;grid-template-columns:repeat(4,1fr);gap:8mm;padding-top:6px;page-break-inside:avoid;break-inside:avoid}.signatures div{border-top:1px solid #111827;text-align:center;padding-top:3px;font-size:7px;text-transform:uppercase;font-weight:700}
       @media print{html,body{width:210mm;min-height:297mm}.sheet{width:100%;min-height:283mm;margin:0;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
-      <div class="brand"><div><strong>GAME-LEGAL PRO</strong><span>Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
-      <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Inscripcion libre para esta fecha</div>
+      <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
+      <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
       <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
       <div class="score-band"><div class="score-team">${escapeHtml(partido.home?.name)}</div><div class="score-box"><div class="score-cell"></div><span>MARCADOR</span><div class="score-cell"></div></div><div class="score-team">${escapeHtml(partido.away?.name)}</div></div>
       <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}<div class="cut-line"><span>Cortar aqui - entregar una parte a cada dirigente</span></div>${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
@@ -706,6 +782,11 @@ export default function PartidosPage() {
   };
 
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
+  const jornadasCulminadas = Array.from(new Map(
+    partidos
+      .filter(partido => partido.status === "finished")
+      .map(partido => [`${partido.stage}-${partido.matchday}`, { stage: partido.stage, matchday: partido.matchday }])
+  ).values());
   const fasesCuadro = ["16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Final"];
   const fasesVisibles = fasesCuadro.filter(fase => partidos.some(partido => partido.stage === fase || partido.stage === `${fase} (Vuelta)`));
   const faseBase = (stage: string) => String(stage || "").replace(" (Vuelta)", "");
@@ -862,6 +943,19 @@ export default function PartidosPage() {
       </div>
       
       {/* ======================= FORMULARIOS ======================= */}
+      {jornadasCulminadas.length > 0 && (
+        <div className="rounded-2xl border border-emerald-700/50 bg-emerald-950/30 p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">Fechas culminadas</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {jornadasCulminadas.map(item => (
+              <span key={`${item.stage}-${item.matchday}`} className="rounded-full border border-emerald-500/40 bg-emerald-900/40 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-100">
+                {item.stage} · Fecha {item.matchday}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
         
         {modoProgramacion === "manual" && (
@@ -1044,6 +1138,11 @@ export default function PartidosPage() {
                       📲 Notificar
                     </button>
                   )}
+                  {p.status !== 'finished' && (
+                    <button onClick={() => abrirEditorPartido(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-blue-950 text-blue-300 hover:bg-blue-800 border border-blue-700">
+                      Editar
+                    </button>
+                  )}
                   <button onClick={() => imprimirPlanilla(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600">
                     Planilla abierta
                   </button>
@@ -1067,6 +1166,43 @@ export default function PartidosPage() {
           )}
         </div>
       </div>
+
+      {partidoEditando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#D4A017]/50 bg-[#141414] shadow-[0_0_50px_rgba(212,160,23,0.18)]">
+            <div className="border-b border-[#2E2E2E] p-6">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A017]">Editar partido guardado</p>
+              <h3 className="mt-1 text-xl font-black uppercase text-white">{partidoEditando.home?.name} vs {partidoEditando.away?.name}</h3>
+            </div>
+            <form onSubmit={guardarEdicionPartido} className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Fecha y hora</label>
+                <input type="datetime-local" value={editFecha} onChange={e => setEditFecha(e.target.value)} required className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" style={{ colorScheme: "dark" }} />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Cancha</label>
+                <input type="text" value={editCancha} onChange={e => setEditCancha(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Instancia</label>
+                <select value={editFase} onChange={e => setEditFase(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-gray-400">Jornada/Llave</label>
+                <input type="number" value={editJornada} onChange={e => setEditJornada(Number(e.target.value))} min={1} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase text-gray-400">Notas administrativas</label>
+                <textarea value={editNotas} onChange={e => setEditNotas(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" placeholder="Cambio de horario solicitado, cancha, observacion..." />
+              </div>
+              <div className="flex gap-3 md:col-span-2">
+                <button type="button" onClick={() => setPartidoEditando(null)} className="flex-1 rounded-xl border border-[#2E2E2E] bg-[#1C1C1C] py-3 text-xs font-black uppercase tracking-widest text-gray-300">Cancelar</button>
+                <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-[#D4A017] py-3 text-xs font-black uppercase tracking-widest text-black hover:bg-yellow-400">{loading ? "Guardando..." : "Guardar cambios"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ==============================================================================
           📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO" MANTENIDO INTACTO
