@@ -101,7 +101,8 @@ export default function LibroMayorFinanzas() {
         const esDescuento = (entry: any) =>
           normalizar(entry.category || entry.concept).includes("descuento") ||
           normalizar(entry.payment_method).includes("descuento") ||
-          normalizar(entry.reference_type).includes("descuento");
+          normalizar(entry.reference_type).includes("descuento") ||
+          normalizar(entry.reference_type).includes("discount");
         const montoFirmado = (entry: any) => (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0);
         const cargosNetos = (categorias: string[]) => movimientos
           .filter(entry => ["charge", "adjustment"].includes(entry.entry_type) && categorias.includes(entry.category))
@@ -232,7 +233,8 @@ export default function LibroMayorFinanzas() {
     const base = historialLibro.length > 0
       ? historialLibro.map(entry => {
           const amount = Number(entry.amount || 0);
-          const esDescuento = String(entry.category || "").startsWith("descuento") || entry.reference_type === "descuento";
+          const referenceType = String(entry.reference_type || "").toLowerCase();
+          const esDescuento = String(entry.category || "").startsWith("descuento") || referenceType === "descuento" || referenceType === "discount";
           const ingreso = entry.entry_type === "payment" && !esDescuento ? amount : 0;
           const egreso = entry.entry_type === "reversal" ? amount : ["charge", "adjustment"].includes(entry.entry_type) || esDescuento ? amount : 0;
           saldo += ingreso - egreso;
@@ -497,7 +499,7 @@ export default function LibroMayorFinanzas() {
                 <p className="text-[10px] text-gray-500 mt-2 text-right">
                   {tipoMovimiento === "descuento"
                     ? "El descuento se resta del concepto seleccionado."
-                    : `Saldo maximo a cobrar: ${Number(equipoSeleccionado?.saldoPendiente || 0).toFixed(2)}`}
+                    : `Saldo maximo a cobrar: $${Number(equipoSeleccionado?.saldoPendiente || 0).toFixed(2)}`}
                 </p>
               </div>
               <div className="flex gap-3 pt-4">
