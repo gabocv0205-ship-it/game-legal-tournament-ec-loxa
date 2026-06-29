@@ -73,6 +73,36 @@ export default function PartidosPage() {
   const [editandoEventoId, setEditandoEventoId] = useState<string | null>(null);
   const [observacionesPartido, setObservacionesPartido] = useState("");
 
+  const obtenerFechaHoraEcuador = () => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guayaquil",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date()).reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+    const dia = `${parts.year}-${parts.month}-${parts.day}`;
+    const hora = `${parts.hour}:${parts.minute}`;
+    return { dia, hora, fechaHora: `${dia}T${hora}` };
+  };
+
+  const aplicarFechaHoraEcuador = () => {
+    const ahora = obtenerFechaHoraEcuador();
+    setFecha(ahora.fechaHora);
+    setAutoDia(ahora.dia);
+    setAutoHoraInicio(ahora.hora);
+  };
+
+  const fechaHoraEcuadorAISO = (value: string) => {
+    if (!value) return value;
+    return new Date(`${value.length === 16 ? `${value}:00` : value}-05:00`).toISOString();
+  };
+
   // ============================================================================
   // ESCUCHADOR DE RED (PLAN DE CONTINGENCIA OFFLINE MANTENIDO)
   // ============================================================================
@@ -105,7 +135,13 @@ export default function PartidosPage() {
 
   useEffect(() => {
     cargarDatos();
-    if (typeof window !== "undefined") setAppUrl(window.location.origin);
+    if (typeof window !== "undefined") {
+      setAppUrl(window.location.origin);
+      const ahora = obtenerFechaHoraEcuador();
+      setFecha(valor => valor || ahora.fechaHora);
+      setAutoDia(valor => valor || ahora.dia);
+      setAutoHoraInicio(valor => valor || ahora.hora);
+    }
   }, []);
 
   const cargarDatos = async () => {
@@ -163,15 +199,16 @@ export default function PartidosPage() {
         return alert("En fase de grupos solo pueden enfrentarse equipos del mismo grupo.");
       }
     }
+    const fechaISO = fechaHoraEcuadorAISO(fecha);
     const conflict = validateManualMatch({
-      home_team_id: localId, away_team_id: visitanteId, match_date: fecha, court: canchaManual, stage: faseManual
+      home_team_id: localId, away_team_id: visitanteId, match_date: fechaISO, court: canchaManual, stage: faseManual
     }, partidos, configuracion.match_duration_minutes);
     if (conflict) return alert(conflict);
     setLoading(true);
     try {
       const { error } = await supabase.from("matches").insert([{
         tournament_id: torneoId, home_team_id: localId, away_team_id: visitanteId,
-        match_date: fecha, matchday: jornadaManual, court: canchaManual, stage: faseManual,
+        match_date: fechaISO, matchday: jornadaManual, court: canchaManual, stage: faseManual,
         notes: observacionesManual.trim() || null
       }]);
       if (error) throw error;
@@ -251,7 +288,7 @@ export default function PartidosPage() {
       
       let matchesToInsert: any[] = [];
       // CORRECCIÓN: Parseo estricto local sin alterar el Timezone de manera errónea.
-      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
+      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00-05:00`);
       let maxIntentos = 100, exito = false;
 
       while (maxIntentos > 0 && !exito) {
@@ -343,7 +380,7 @@ export default function PartidosPage() {
       
       let matchesToInsert: any[] = [];
       // CORRECCIÓN HORARIA TAMBIÉN AQUÍ
-      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00`);
+      let currentDate = new Date(`${autoDia}T${autoHoraInicio}:00-05:00`);
 
       for (let i = 0; i < numEquipos / 2; i++) {
         const mejor = clasificados[i];
@@ -387,8 +424,19 @@ export default function PartidosPage() {
   const formatoDatetimeLocal = (value: string) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guayaquil",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date).reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   };
 
   const abrirEditorPartido = (partido: any) => {
@@ -408,10 +456,11 @@ export default function PartidosPage() {
       return alert(`La fecha ${editJornada} de ${editFase} ya esta culminada.`);
     }
 
+    const editFechaISO = fechaHoraEcuadorAISO(editFecha);
     const conflict = validateManualMatch({
       home_team_id: partidoEditando.home_team_id,
       away_team_id: partidoEditando.away_team_id,
-      match_date: editFecha,
+      match_date: editFechaISO,
       court: editCancha,
       stage: editFase
     }, partidos.filter(partido => partido.id !== partidoEditando.id), configuracion.match_duration_minutes);
@@ -420,7 +469,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const { error } = await supabase.from("matches").update({
-        match_date: editFecha,
+        match_date: editFechaISO,
         matchday: editJornada,
         court: editCancha,
         stage: editFase,
@@ -708,8 +757,21 @@ export default function PartidosPage() {
     const cupoConfigurado = Number(configuracion.football_modality || 0) + Number(configuracion.substitutes_count || 0);
     const maximoPlantilla = Number(configuracion.max_players_per_team || cupoConfigurado);
     const cupoPartido = Math.max(1, Math.min(cupoConfigurado || maximoPlantilla || 1, maximoPlantilla || cupoConfigurado || 1));
-    const altoFilaMm = cupoPartido > 20 ? 3.8 : cupoPartido > 16 ? 4.2 : 4.8;
-    const crearCasillas = () => Array.from({ length: cupoPartido }, () => `<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
+    const altoFichaMm = cupoPartido > 22 ? 5.8 : cupoPartido > 18 ? 6.5 : cupoPartido > 14 ? 7.2 : 8.4;
+    const crearCasillas = () => Array.from({ length: cupoPartido }, (_, index) => `<article class="player-card">
+          <div class="card-index">${index + 1}</div>
+          <div class="field id"><b>Identificacion</b><span></span></div>
+          <div class="field shirt"><b>N° camiseta</b><span></span></div>
+          <div class="field name"><b>Nombres y apellidos</b><span></span></div>
+          <div class="mini-fields">
+            <div><b>T/S</b><span></span></div>
+            <div><b>Goles</b><span></span></div>
+            <div><b>TA</b><span></span></div>
+            <div><b>TR</b><span></span></div>
+          </div>
+          <div class="field substitution"><b>Sustitucion</b><span></span></div>
+          <div class="field entered"><b>Ingreso por</b><span></span></div>
+        </article>`).join("");
     const crearObservacionesAutomaticas = () => {
       return [
         `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
@@ -723,7 +785,7 @@ export default function PartidosPage() {
         ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
       return `<section class="team-half"><div class="team-head"><div><span>Equipo</span><h2>${escapeHtml(teamName)}</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
-        <table><colgroup><col class="player-id"><col class="shirt"><col class="player-name"><col class="role"><col class="goals"><col class="yellow"><col class="red"><col class="substitution"><col class="entered-for"></colgroup><tr><th>Identificacion</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Sustitucion</th><th>Ingreso por</th></tr>${crearCasillas()}</table>
+        <div class="player-grid">${crearCasillas()}</div>
         <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
         <div class="team-footer"><div><b>Capitan:</b></div><div><b>Delegado:</b></div><div><b>Firma mesa:</b></div></div></section>`;
     };
@@ -733,15 +795,16 @@ export default function PartidosPage() {
       @page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:100%;min-height:283mm;padding:4mm;border:2px solid #111827;display:flex;flex-direction:column;gap:3mm}
       .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:3px solid #0f5132;padding-bottom:4px}.brand strong{display:block;font-size:17px;letter-spacing:1.7px;text-transform:uppercase}.brand span{font-size:8px;text-transform:uppercase;color:#4b5563;letter-spacing:.8px}.badge{justify-self:center;border:2px solid #0f5132;color:#0f5132;border-radius:999px;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:18px;font-weight:900;color:#0f5132}
       h1{text-align:center;font-size:14px;text-transform:uppercase;margin:2px 0 0}.subtitle{text-align:center;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:4px;font-size:8px;background:#f3f4f6;border:1px solid #cbd5e1;padding:5px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:2px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc}.score-team{padding:5px;text-align:center;font-size:10px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:7px;padding:4px 7px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:14mm;height:9mm;border:2px solid #111827}.score-box span{font-size:8px;font-weight:900;color:#4b5563}
-      .teams{display:flex;flex:1;flex-direction:column;gap:0}.team-half{min-height:96mm;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}.cut-line{position:relative;margin:1.5mm 0;border-top:1px dashed #6b7280;text-align:center;color:#6b7280;font-size:7px;font-weight:900;text-transform:uppercase}.cut-line span{position:relative;top:-6px;background:#fff;padding:0 8px}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:6.5px;page-break-inside:avoid;break-inside:avoid}col.player-id{width:14%}col.shirt{width:6%}col.player-name{width:28%}col.role{width:6%}col.goals{width:6%}col.yellow{width:5%}col.red{width:5%}col.substitution{width:13%}col.entered-for{width:17%}th,td{border:1px solid #9ca3af;padding:1.5px;height:${altoFilaMm}mm;overflow:hidden}th{height:5mm;background:#f1f5f9;text-transform:uppercase;line-height:1.1}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:3px;font-size:6.8px;margin-top:2px;min-height:8mm;page-break-inside:avoid;break-inside:avoid}.team-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:2px}.team-footer div{border:1px solid #9ca3af;min-height:7mm;padding:3px}.observations{display:none}
-      .review-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:5px}.ruled-box{border:1px solid #111827;padding:5px;min-height:24mm;font-size:8px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:3px}.auto-list{margin:0 0 3px 0;padding-left:12px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:3px;margin-bottom:3px}.lines span{display:block;height:8px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:5px;font-size:8px}.pending strong{display:block;text-transform:uppercase;margin-bottom:3px;color:#0f5132}.signatures{display:grid;grid-template-columns:repeat(4,1fr);gap:8mm;padding-top:6px;page-break-inside:avoid;break-inside:avoid}.signatures div{border-top:1px solid #111827;text-align:center;padding-top:3px;font-size:7px;text-transform:uppercase;font-weight:700}
-      @media print{html,body{width:210mm;min-height:297mm}.sheet{width:100%;min-height:283mm;margin:0;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures{page-break-inside:avoid;break-inside:avoid}}
+      .teams{display:flex;flex:1;flex-direction:column;gap:0}.team-half{min-height:91mm;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}.cut-line{position:relative;margin:1.7mm 0;border-top:1.2px dashed #6b7280;text-align:center;color:#6b7280;font-size:7px;font-weight:900;text-transform:uppercase}.cut-line span{position:relative;top:-6px;background:#fff;padding:0 8px}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:3px 6px 0;font-size:7px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:11px;text-transform:uppercase;padding:0 6px 3px;margin:0}.team-meta{font-size:7px;font-weight:900;text-transform:uppercase;padding:5px;text-align:right;color:#d1fae5}
+      .player-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.6mm;margin-top:1.6mm;page-break-inside:avoid;break-inside:avoid}.player-card{position:relative;min-height:${altoFichaMm}mm;border:1px solid #8b949e;background:#fff;display:grid;grid-template-columns:18mm 12mm 1fr 34mm;grid-template-areas:"id shirt name mini" "sub sub entered entered";gap:1.2mm;padding:1.3mm 1.6mm 1.1mm 6mm;page-break-inside:avoid;break-inside:avoid}.card-index{position:absolute;left:1.2mm;top:1.2mm;width:3.8mm;height:3.8mm;border:1px solid #111827;border-radius:50%;font-size:6px;font-weight:900;text-align:center;line-height:3.6mm;background:#f1f5f9}.field b,.mini-fields b{display:block;font-size:5.4px;line-height:1;text-transform:uppercase;color:#475569;white-space:nowrap}.field span,.mini-fields span{display:block;height:3.2mm;border-bottom:1px solid #111827}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{grid-area:sub}.field.entered{grid-area:entered}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:1mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:2.4px;font-size:6.5px;margin-top:1.5mm;min-height:6.5mm;page-break-inside:avoid;break-inside:avoid}.team-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:7px;margin-top:auto;padding-top:1.5mm}.team-footer div{border:1px solid #9ca3af;min-height:6mm;padding:3px}.observations{display:none}
+      .review-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:5px}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:7px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:grid;grid-template-columns:repeat(4,1fr);gap:8mm;padding-top:5px;page-break-inside:avoid;break-inside:avoid}.signatures div{border-top:1px solid #111827;text-align:center;padding-top:2px;font-size:7px;text-transform:uppercase;font-weight:700}
+      @media print{html,body{width:210mm;min-height:297mm}.sheet{width:100%;height:283mm;max-height:283mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,.player-grid,.player-card{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
       <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
       <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
       <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
       <div class="score-band"><div class="score-team">${escapeHtml(partido.home?.name)}</div><div class="score-box"><div class="score-cell"></div><span>MARCADOR</span><div class="score-cell"></div></div><div class="score-team">${escapeHtml(partido.away?.name)}</div></div>
-      <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}<div class="cut-line"><span>Cortar aqui - entregar una parte a cada dirigente</span></div>${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
+      <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}<div class="cut-line"><span>CORTAR AQUÍ - ENTREGAR UNA PARTE A CADA DIRIGENTE</span></div>${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
       <div class="review-grid">
         <div class="ruled-box"><strong>Observaciones del sistema y adicionales</strong><ul class="auto-list">${observacionesAutomaticas.map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<div class="manual-note"><b>Observacion manual:</b> ${escapeHtml(observacionesManual)}</div>` : ""}<div class="lines">${crearLineas(3)}</div></div>
         <div class="pending"><strong>Observaciones adicionales del usuario</strong>
@@ -957,6 +1020,15 @@ export default function PartidosPage() {
       )}
 
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A017]">Hora oficial Ecuador</p>
+            <p className="text-sm font-bold text-gray-300">Los campos se cargan con la fecha actual y hora local de Ecuador.</p>
+          </div>
+          <button type="button" onClick={aplicarFechaHoraEcuador} className="rounded-lg border border-[#D4A017]/50 bg-[#D4A017]/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-[#D4A017] transition-all hover:bg-[#D4A017] hover:text-black">
+            Usar ahora
+          </button>
+        </div>
         
         {modoProgramacion === "manual" && (
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">

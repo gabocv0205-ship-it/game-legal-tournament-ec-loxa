@@ -219,7 +219,7 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
 }
 
 export function scheduleFixtures(fixtures: any[], day: string, startTime: string, config: TournamentConfig) {
-  const start = new Date(`${day}T${startTime}:00`);
+  const start = new Date(`${day}T${startTime}:00-05:00`);
   return fixtures.map((fixture, index) => {
     const slot = Math.floor(index / config.court_count);
     const interval = config.match_duration_minutes + config.break_between_matches_minutes;
