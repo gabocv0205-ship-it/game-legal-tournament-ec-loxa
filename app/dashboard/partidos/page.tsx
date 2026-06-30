@@ -73,6 +73,7 @@ export default function PartidosPage() {
 
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
   const capturaRef = useRef<HTMLDivElement>(null);
+  const jornadaPosterRef = useRef<HTMLDivElement>(null);
   const bracketPosterRef = useRef<HTMLDivElement>(null);
   const [appUrl, setAppUrl] = useState("");
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
@@ -769,6 +770,26 @@ export default function PartidosPage() {
     } catch (e) { alert("Error"); } finally { setLoading(false); }
   };
 
+  const descargarPosterJornada = async () => {
+    const posterNode = jornadaPosterRef.current || capturaRef.current;
+    if (!posterNode) return;
+    setLoading(true);
+    try {
+      posterNode.style.display = "block";
+      const canvas = await html2canvas(posterNode, { backgroundColor: "#071735", scale: 2, useCORS: true });
+      posterNode.style.display = "none";
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `Poster-${tituloPosterJornada.replace(/\s+/g, "-")}-${configuracion.tournament_year}.png`;
+      link.click();
+    } catch (error) {
+      posterNode.style.display = "none";
+      alert("No se pudo generar el poster de la jornada.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ============================================================================
   // FUNCIÓN NUEVA: GENERAR E IMPRIMIR PLANILLA FÍSICA PDF/A4
   // ============================================================================
@@ -1060,6 +1081,16 @@ export default function PartidosPage() {
   };
 
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
+  const partidosPoster = [...partidosFiltrados].sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
+  const claveDiaPoster = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+  const partidosPorDiaPoster = partidosPoster.reduce<Record<string, any[]>>((acc, partido) => {
+    const key = claveDiaPoster(partido.match_date);
+    (acc[key] ||= []).push(partido);
+    return acc;
+  }, {});
+  const diasPoster = Object.keys(partidosPorDiaPoster).sort();
+  const tituloPosterJornada = filtroJornada ? `FECHA ${filtroJornada}` : "JORNADA OFICIAL";
+  const fechasPosterTexto = diasPoster.map(dia => new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })).join(" / ");
   const jornadasCulminadas = Array.from(new Map(
     partidos
       .filter(partido => partido.status === "finished")
@@ -1248,6 +1279,11 @@ export default function PartidosPage() {
         
         {modoProgramacion === "manual" && (
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+            <div className="md:col-span-6 rounded-xl border border-blue-500/30 bg-blue-950/30 p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-300">Modo manual: partido individual</p>
+              <p className="mt-1 text-sm font-bold text-blue-100">Usa este modo para programar o corregir un solo partido con su fecha, hora y cancha. Para generar una jornada completa en sabado, domingo u otros dias con horas de inicio y cierre, usa el generador automatico por ventanas.</p>
+              <button type="button" onClick={() => setModoProgramacion("automatico")} className="mt-3 rounded-lg border border-[#D4A017]/50 bg-[#D4A017]/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">Ir a jornada por varios dias</button>
+            </div>
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
@@ -1437,7 +1473,7 @@ export default function PartidosPage() {
             </button>
 
             {/* BOTÓN POSTER */}
-            <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
+            <button onClick={descargarPosterJornada} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               📸 Póster
             </button>
             <button onClick={imprimirPlanillaEstandar} className="bg-gray-800 border border-gray-600 text-white hover:bg-gray-700 font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all">
@@ -1566,6 +1602,91 @@ export default function PartidosPage() {
           </div>
         </div>
       )}
+
+      <div style={{ display: "none" }} ref={jornadaPosterRef}>
+        <div
+          className="relative w-[1080px] min-h-[1350px] overflow-hidden bg-[#071735] px-14 py-12 font-sans text-white"
+          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(135deg, rgba(4,12,38,.82), rgba(7,23,53,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(212,160,23,.34),transparent_22%),radial-gradient(circle_at_84%_35%,rgba(59,130,246,.30),transparent_26%),linear-gradient(160deg,rgba(255,255,255,.08),transparent_35%)]" />
+          <div className="absolute -left-24 bottom-20 h-56 w-56 rotate-45 border-[28px] border-[#D4A017]/30" />
+          <div className="absolute right-10 top-10 rounded-2xl border border-white/20 bg-black/25 px-5 py-3 text-right">
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#D4A017]">Game Legal Tournament</p>
+            <p className="text-xl font-black uppercase">{configuracion.tournament_year}</p>
+          </div>
+          <div className="relative z-10 flex items-start justify-between gap-8">
+            <div className="max-w-[760px]">
+              <p className="mb-4 inline-block rounded-full border border-[#D4A017]/60 bg-[#D4A017]/15 px-5 py-2 text-[12px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Cronograma oficial</p>
+              <h1 className="text-7xl font-black uppercase leading-none tracking-wide drop-shadow-[0_5px_0_rgba(0,0,0,.65)]">{tituloPosterJornada}</h1>
+              <p className="mt-4 text-2xl font-black uppercase tracking-widest text-white/90">{partidosPoster[0]?.stage || "Programacion"}</p>
+              <p className="mt-2 text-lg font-black uppercase tracking-widest text-[#D4A017]">{fechasPosterTexto || "Fechas por confirmar"}</p>
+            </div>
+            <div className="rounded-2xl border border-[#D4A017]/60 bg-black/45 p-3 text-center shadow-2xl">
+              {appUrl && <QRCodeSVG value={appUrl} size={112} level={"H"} fgColor="#D4A017" bgColor="#071735" />}
+              <span className="mt-2 block text-[10px] font-black uppercase tracking-widest">Ver en vivo</span>
+            </div>
+          </div>
+          <div className="relative z-10 mt-10 space-y-7">
+            {diasPoster.map(dia => (
+              <section key={dia} className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
+                  <h2 className="rounded-full bg-[#D4A017] px-6 py-2 text-lg font-black uppercase tracking-widest text-black shadow-lg">
+                    {new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long" })}
+                  </h2>
+                  <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
+                </div>
+                <div className="space-y-4">
+                  {partidosPorDiaPoster[dia].map(p => (
+                    <div key={p.id} className="relative grid grid-cols-[116px_1fr_116px_1fr_116px] items-center overflow-visible rounded-[30px] border border-white/15 bg-gradient-to-r from-white/95 via-white/90 to-white/95 px-4 py-3 text-[#072047] shadow-[0_18px_35px_rgba(0,0,0,.35)]">
+                      <div className="flex justify-center">
+                        {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}
+                      </div>
+                      <div className="min-w-0 text-right">
+                        <p className="truncate text-2xl font-black uppercase tracking-wide">{p.home?.name || "Local"}</p>
+                      </div>
+                      <div className="relative mx-auto flex h-20 w-24 flex-col items-center justify-center">
+                        <div className="absolute inset-x-0 top-0 mx-auto h-20 w-24 bg-gradient-to-b from-[#09285f] to-[#06183a]" style={{ clipPath: "polygon(50% 0, 100% 42%, 74% 100%, 26% 100%, 0 42%)" }} />
+                        <span className="relative z-10 text-2xl font-black text-[#D4A017]">VS</span>
+                        <span className="relative z-10 mt-1 rounded-full bg-[#D4A017] px-3 py-0.5 text-[11px] font-black text-black">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-2xl font-black uppercase tracking-wide">{p.away?.name || "Visitante"}</p>
+                      </div>
+                      <div className="flex justify-center">
+                        {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}
+                      </div>
+                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-[#D4A017]/60 bg-[#06183a] px-5 py-1 text-[12px] font-black uppercase tracking-widest text-white shadow-lg">
+                        {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" })} - {p.court || "Cancha por confirmar"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+          <div className="relative z-10 mt-12 grid grid-cols-[1fr_auto] items-end gap-6">
+            <div>
+              <p className="text-4xl font-black italic tracking-wide text-white drop-shadow-[0_4px_0_rgba(0,0,0,.65)]">{torneoNombre}</p>
+              <p className="mt-2 text-xl font-black uppercase tracking-[0.2em] text-[#D4A017]">{configuracion.final_venue || "Cancha por confirmar"}</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-black/30 px-5 py-4 text-right">
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Organizacion</p>
+              <p className="text-2xl font-black uppercase">Game-Legal Pro</p>
+            </div>
+          </div>
+          {auspiciantesTorneo.length > 0 && (
+            <div className="relative z-10 mt-8 rounded-2xl border border-white/15 bg-black/30 p-4">
+              <p className="mb-3 text-center text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Auspiciantes oficiales</p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {auspiciantesTorneo.map((sponsor, index) => (
+                  <span key={`${sponsor}-${index}`} className="rounded-full border border-[#D4A017]/40 bg-white/10 px-4 py-1 text-[11px] font-black uppercase tracking-widest text-white">{sponsor}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ==============================================================================
           📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO" MANTENIDO INTACTO
