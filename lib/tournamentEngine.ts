@@ -228,14 +228,31 @@ export function scheduleFixtures(fixtures: any[], day: string, startTime: string
   });
 }
 
-export function validateManualMatch(candidate: any, matches: any[], durationMinutes: number) {
+const baseStage = (stage: string) => String(stage || "").replace(/\s+\(Vuelta\)$/i, "");
+
+export function validateManualMatch(candidate: any, matches: any[], durationMinutes: number, options: { maxLegs?: number; ignoreMatchId?: string } = {}) {
   const start = new Date(candidate.match_date).getTime();
   const end = start + durationMinutes * 60000;
   const pair = [candidate.home_team_id, candidate.away_team_id].sort().join(":");
+  const directedPair = `${candidate.home_team_id}:${candidate.away_team_id}`;
+  const candidateBaseStage = baseStage(candidate.stage);
+  const maxLegs = Math.max(1, Math.min(2, Number(options.maxLegs || 1)));
+  const sameTieMatches = matches.filter((match) => {
+    if (options.ignoreMatchId && match.id === options.ignoreMatchId) return false;
+    return baseStage(match.stage) === candidateBaseStage && [match.home_team_id, match.away_team_id].sort().join(":") === pair;
+  });
+  if (sameTieMatches.some(match => `${match.home_team_id}:${match.away_team_id}` === directedPair)) {
+    return "Este cruce con la misma localia ya existe en la misma fase.";
+  }
+  if (sameTieMatches.length >= maxLegs) {
+    return maxLegs === 1
+      ? "Este cruce ya fue programado o jugado en esta fase."
+      : "Este cruce ya tiene ida y vuelta registradas en esta fase.";
+  }
   for (const match of matches) {
+    if (options.ignoreMatchId && match.id === options.ignoreMatchId) continue;
     if (match.status === "finished") continue;
     const existingPair = [match.home_team_id, match.away_team_id].sort().join(":");
-    if (existingPair === pair && match.stage === candidate.stage) return "Este cruce ya existe en la misma fase.";
     if (!match.match_date) continue;
     const existingStart = new Date(match.match_date).getTime();
     const existingEnd = existingStart + durationMinutes * 60000;

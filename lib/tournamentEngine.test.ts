@@ -78,6 +78,20 @@ describe("motor deportivo", () => {
     expect(validateManualMatch({ home_team_id: "a", away_team_id: "c", court: "Cancha 2", match_date: "2026-07-01T09:20:00.000Z", stage: "Fase de Grupos" }, matches, 60)).toContain("equipo");
   });
 
+  it("no permite repetir manualmente un cruce ya jugado", () => {
+    const matches = [{ id: "m1", home_team_id: "a", away_team_id: "b", court: "Cancha 1", match_date: "2026-07-01T09:00:00.000Z", status: "finished", stage: "Fase de Grupos" }];
+    const conflict = validateManualMatch({ home_team_id: "b", away_team_id: "a", court: "Cancha 2", match_date: "2026-07-08T09:00:00.000Z", stage: "Fase de Grupos" }, matches, 60);
+    expect(conflict).toContain("programado o jugado");
+  });
+
+  it("permite vuelta invertida y bloquea tercer cruce cuando hay ida y vuelta", () => {
+    const ida = [{ id: "m1", home_team_id: "a", away_team_id: "b", court: "Cancha 1", match_date: "2026-07-01T09:00:00.000Z", status: "finished", stage: "Fase de Grupos" }];
+    expect(validateManualMatch({ home_team_id: "b", away_team_id: "a", court: "Cancha 2", match_date: "2026-07-08T09:00:00.000Z", stage: "Fase de Grupos (Vuelta)" }, ida, 60, { maxLegs: 2 })).toBeNull();
+    const idaYVuelta = [...ida, { id: "m2", home_team_id: "b", away_team_id: "a", court: "Cancha 2", match_date: "2026-07-08T09:00:00.000Z", status: "finished", stage: "Fase de Grupos (Vuelta)" }];
+    expect(validateManualMatch({ home_team_id: "a", away_team_id: "b", court: "Cancha 3", match_date: "2026-07-15T09:00:00.000Z", stage: "Fase de Grupos" }, idaYVuelta, 60, { maxLegs: 2 })).toContain("misma localia");
+    expect(validateManualMatch({ home_team_id: "b", away_team_id: "a", court: "Cancha 3", match_date: "2026-07-15T09:00:00.000Z", stage: "Fase de Grupos (Vuelta)" }, idaYVuelta, 60, { maxLegs: 2 })).toContain("misma localia");
+  });
+
   it("genera cruces eliminatorios mejor contra peor", () => {
     const fixtures = createKnockoutFixtures(teams, "t1", "Semifinal", 5, 1);
     expect(fixtures).toHaveLength(2);

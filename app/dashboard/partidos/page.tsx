@@ -46,6 +46,7 @@ export default function PartidosPage() {
   const [jornadaManual, setJornadaManual] = useState<number>(1);
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
+  const [manualEsVuelta, setManualEsVuelta] = useState(false);
   const [observacionesManual, setObservacionesManual] = useState("");
   const [partidoEditando, setPartidoEditando] = useState<any>(null);
   const [editLocalId, setEditLocalId] = useState("");
@@ -217,6 +218,13 @@ export default function PartidosPage() {
   const mismaJornada = (partido: any, jornada: number, fase: string) => Number(partido.matchday) === Number(jornada) && partido.stage === fase;
   const jornadaTienePartidos = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase));
   const jornadaCulminada = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase) && partido.status === "finished");
+  const faseBase = (fase: string) => String(fase || "").replace(/\s+\(Vuelta\)$/i, "");
+  const maxCrucesPorFase = (fase: string) => {
+    const base = faseBase(fase);
+    if (base === "Fase de Grupos") return idaYVuelta ? 2 : 1;
+    if (base === "Final") return configuracion.final_legs;
+    return configuracion.knockout_legs;
+  };
   const validarJornadaGenerable = (jornada: number, fase: string) => {
     if (jornadaCulminada(jornada, fase)) return `La fecha ${jornada} de ${fase} ya esta culminada y no puede volver a generarse.`;
     if (jornadaTienePartidos(jornada, fase)) return `La fecha ${jornada} de ${fase} ya tiene partidos guardados. Puedes editarlos, no volver a generarlos.`;
@@ -287,7 +295,7 @@ export default function PartidosPage() {
     });
     const revisados: any[] = [];
     for (const partido of programados) {
-      const conflict = validateManualMatch(partido, [...partidos, ...revisados], configuracion.match_duration_minutes);
+      const conflict = validateManualMatch(partido, [...partidos, ...revisados], configuracion.match_duration_minutes, { maxLegs: maxCrucesPorFase(partido.stage) });
       if (conflict) throw new Error(conflict);
       revisados.push(partido);
     }
@@ -298,8 +306,10 @@ export default function PartidosPage() {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     if (!torneoId) return alert("No hay torneo activo.");
-    if (jornadaCulminada(jornadaManual, faseManual)) return alert(`La fecha ${jornadaManual} de ${faseManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
-    if (faseManual === "Fase de Grupos") {
+    const fasePartidoManual = manualEsVuelta ? `${faseBase(faseManual)} (Vuelta)` : faseBase(faseManual);
+    if (manualEsVuelta && maxCrucesPorFase(faseManual) < 2) return alert("Este torneo no esta configurado para ida y vuelta en esta fase.");
+    if (jornadaCulminada(jornadaManual, fasePartidoManual)) return alert(`La fecha ${jornadaManual} de ${fasePartidoManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
+    if (faseBase(fasePartidoManual) === "Fase de Grupos") {
       const local = equipos.find(equipo => equipo.id === localId);
       const visitante = equipos.find(equipo => equipo.id === visitanteId);
       if ((local?.group_name || "General") !== (visitante?.group_name || "General")) {
@@ -308,18 +318,18 @@ export default function PartidosPage() {
     }
     const fechaISO = fechaHoraEcuadorAISO(fecha);
     const conflict = validateManualMatch({
-      home_team_id: localId, away_team_id: visitanteId, match_date: fechaISO, court: canchaManual, stage: faseManual
-    }, partidos, configuracion.match_duration_minutes);
+      home_team_id: localId, away_team_id: visitanteId, match_date: fechaISO, court: canchaManual, stage: fasePartidoManual
+    }, partidos, configuracion.match_duration_minutes, { maxLegs: maxCrucesPorFase(fasePartidoManual) });
     if (conflict) return alert(conflict);
     setLoading(true);
     try {
       const { error } = await supabase.from("matches").insert([{
         tournament_id: torneoId, home_team_id: localId, away_team_id: visitanteId,
-        match_date: fechaISO, matchday: jornadaManual, court: canchaManual, stage: faseManual,
+        match_date: fechaISO, matchday: jornadaManual, court: canchaManual, stage: fasePartidoManual,
         notes: observacionesManual.trim() || null
       }]);
       if (error) throw error;
-      setLocalId(""); setVisitanteId(""); setFecha(""); setObservacionesManual(""); cargarDatos();
+      setLocalId(""); setVisitanteId(""); setFecha(""); setObservacionesManual(""); setManualEsVuelta(false); cargarDatos();
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
@@ -571,7 +581,7 @@ export default function PartidosPage() {
       match_date: editFechaISO,
       court: editCancha,
       stage: editFase
-    }, partidos.filter(partido => partido.id !== partidoEditando.id), configuracion.match_duration_minutes);
+    }, partidos, configuracion.match_duration_minutes, { maxLegs: maxCrucesPorFase(editFase), ignoreMatchId: partidoEditando.id });
     if (conflict) return alert(conflict);
 
     setLoading(true);
@@ -1098,7 +1108,6 @@ export default function PartidosPage() {
   ).values());
   const fasesCuadro = ["16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Final"];
   const fasesVisibles = fasesCuadro.filter(fase => partidos.some(partido => partido.stage === fase || partido.stage === `${fase} (Vuelta)`));
-  const faseBase = (stage: string) => String(stage || "").replace(" (Vuelta)", "");
   const esMismaLlave = (a: any, b: any) =>
     faseBase(a.stage) === faseBase(b.stage) &&
     [a.home_team_id, a.away_team_id].sort().join(":") === [b.home_team_id, b.away_team_id].sort().join(":");
@@ -1287,6 +1296,10 @@ export default function PartidosPage() {
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <label className="flex items-center gap-3 rounded border border-[#2E2E2E] bg-[#1C1C1C] p-3 text-xs font-bold uppercase text-gray-300">
+              <input type="checkbox" checked={manualEsVuelta} onChange={e => setManualEsVuelta(e.target.checked)} className="h-4 w-4 accent-[#D4A017]" />
+              Partido de vuelta
+            </label>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><MapPin size={14} /> Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
             <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><CalendarDays size={14} /> Fecha</label><input type="date" value={obtenerDiaDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "dia", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
@@ -1584,7 +1597,9 @@ export default function PartidosPage() {
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Instancia</label>
-                <select value={editFase} onChange={e => setEditFase(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select>
+                <select value={editFase} onChange={e => setEditFase(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">
+                  {[...opcionesFase, ...opcionesFase.map(f => `${f} (Vuelta)`)].map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Jornada/Llave</label>
