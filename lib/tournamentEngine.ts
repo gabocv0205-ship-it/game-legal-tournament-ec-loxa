@@ -220,7 +220,9 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
     const rotation = [...group].sort((a, b) => a.name.localeCompare(b.name));
     if (rotation.length % 2) rotation.push({ id: "__bye__" });
     const rounds = rotation.length - 1;
+    if (rounds <= 0) return;
     const roundIndex = Math.max(0, (matchday - 1) % rounds);
+    const isReturnLeg = legs === 2 && matchday > rounds;
     const fixed = rotation[0];
     const rotating = rotation.slice(1);
     const shifted = rotating.map((_, index) => rotating[(index + roundIndex) % rotating.length]);
@@ -230,21 +232,24 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
       const home = round[index];
       const away = round[round.length - 1 - index];
       if (home.id === "__bye__" || away.id === "__bye__") continue;
+      const local = isReturnLeg ? away : home;
+      const visitante = isReturnLeg ? home : away;
       const key = [home.id, away.id].sort().join(":");
-      const firstLegKey = `${home.id}:${away.id}`;
-      const secondLegKey = `${away.id}:${home.id}`;
+      const directedKey = `${local.id}:${visitante.id}`;
       if (legs === 1 && !existingPairs.has(key)) {
         fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
         existingPairs.add(key);
-        existingDirectedPairs.add(firstLegKey);
+        existingDirectedPairs.add(directedKey);
       } else if (legs === 2) {
-        if (!existingDirectedPairs.has(firstLegKey)) {
-          fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
-          existingDirectedPairs.add(firstLegKey);
-        }
-        if (!existingDirectedPairs.has(secondLegKey)) {
-          fixtures.push({ tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + rounds, stage: `${stage} (Vuelta)` });
-          existingDirectedPairs.add(secondLegKey);
+        if (!existingDirectedPairs.has(directedKey)) {
+          fixtures.push({
+            tournament_id: tournamentId,
+            home_team_id: local.id,
+            away_team_id: visitante.id,
+            matchday,
+            stage: isReturnLeg ? `${stage} (Vuelta)` : stage,
+          });
+          existingDirectedPairs.add(directedKey);
         }
       }
     }

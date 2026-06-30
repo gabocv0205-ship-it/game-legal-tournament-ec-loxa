@@ -404,7 +404,9 @@ export default function PartidosPage() {
       if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
       const bloqueo = validarJornadaGenerable(autoJornada, autoFase);
       if (bloqueo) throw new Error(bloqueo);
-      const fixtures = createMatchdayFixtures(equiposActivos(), partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
+      const equiposDisponibles = equiposActivos();
+      if (equiposDisponibles.length < 2) throw new Error("No hay suficientes equipos activos para generar partidos. Revisa que los equipos esten registrados y habilitados.");
+      const fixtures = createMatchdayFixtures(equiposDisponibles, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures);
       const { error } = await supabase.from("matches").insert(matchesToInsert);

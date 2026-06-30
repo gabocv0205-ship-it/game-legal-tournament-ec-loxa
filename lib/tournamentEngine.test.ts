@@ -56,15 +56,21 @@ describe("motor deportivo", () => {
     expect(groups.B.find(team => team.id === "b1").pj).toBe(0);
   });
 
-  it("genera fixtures solo dentro de cada grupo y soporta ida y vuelta", () => {
+  it("genera fixtures solo dentro de cada grupo y separa ida y vuelta por jornada", () => {
     const fixtures = createMatchdayFixtures(groupedTeams, [], "t1", 1, "Fase de Grupos", { legs: 2 });
-    expect(fixtures).toHaveLength(4);
+    expect(fixtures).toHaveLength(2);
     expect(fixtures.every(match => {
       const home = groupedTeams.find(team => team.id === match.home_team_id);
       const away = groupedTeams.find(team => team.id === match.away_team_id);
       return home?.group_name === away?.group_name;
     })).toBe(true);
-    expect(fixtures.filter(match => [match.home_team_id, match.away_team_id].sort().join(":") === "a1:a2")).toHaveLength(2);
+    const vueltas = createMatchdayFixtures(groupedTeams, fixtures, "t1", 2, "Fase de Grupos", { legs: 2 });
+    expect(vueltas).toHaveLength(2);
+    expect(vueltas.every(match => match.stage === "Fase de Grupos (Vuelta)")).toBe(true);
+    expect(vueltas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ home_team_id: fixtures[0].away_team_id, away_team_id: fixtures[0].home_team_id }),
+      expect.objectContaining({ home_team_id: fixtures[1].away_team_id, away_team_id: fixtures[1].home_team_id }),
+    ]));
   });
 
   it("distribuye horarios entre canchas", () => {
