@@ -19,6 +19,7 @@ export default function EstadisticasPage() {
   const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
   const posterPosicionesRef = useRef<HTMLDivElement>(null);
   const posterGoleadoresRef = useRef<HTMLDivElement>(null);
+  const posterFontFamily = '"Segoe UI", Arial, Helvetica, sans-serif';
 
   useEffect(() => {
     cargarEstadisticas();
@@ -199,12 +200,12 @@ export default function EstadisticasPage() {
       }));
       const ancho = poster.scrollWidth;
       const alto = poster.scrollHeight;
-      const canvas = await html2canvas(poster, { backgroundColor: "#06132f", scale: 3, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
+      const canvas = await html2canvas(poster, { backgroundColor: "#f4f7f2", scale: 3, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
       const socialCanvas = document.createElement("canvas");
       socialCanvas.width = 1080; socialCanvas.height = 1350;
       const context = socialCanvas.getContext("2d");
       if (!context) throw new Error("No se pudo preparar el póster");
-      context.fillStyle = "#06132f"; context.fillRect(0, 0, 1080, 1350);
+      context.fillStyle = "#f4f7f2"; context.fillRect(0, 0, 1080, 1350);
       const scale = Math.min(1040 / canvas.width, 1310 / canvas.height);
       const width = canvas.width * scale; const height = canvas.height * scale;
       context.drawImage(canvas, (1080 - width) / 2, (1350 - height) / 2, width, height);
@@ -321,14 +322,14 @@ export default function EstadisticasPage() {
               ))}
             </tbody>
           </table>
-          <div ref={posterGoleadoresRef} className="fixed -left-[9999px] top-0 w-[1080px] h-[1350px] overflow-hidden bg-[#07122d] p-16" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(160deg, rgba(3,9,28,.86), rgba(6,35,73,.88), rgba(3,9,28,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 10% 15%, rgba(212,160,23,.34), transparent 23%), radial-gradient(circle at 90% 30%, rgba(37,99,235,.42), transparent 28%), linear-gradient(160deg, #03102c, #073b71 54%, #020817)" }}>
+          <div ref={posterGoleadoresRef} className="fixed -left-[9999px] top-0 w-[1080px] h-[1350px] overflow-hidden bg-[#07122d] p-16" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(160deg, rgba(3,9,28,.86), rgba(6,35,73,.88), rgba(3,9,28,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 10% 15%, rgba(212,160,23,.34), transparent 23%), radial-gradient(circle at 90% 30%, rgba(37,99,235,.42), transparent 28%), linear-gradient(160deg, #03102c, #073b71 54%, #020817)", fontFamily: posterFontFamily }}>
             <div className="absolute inset-10 rounded-[28px] border-4 border-white/90" />
             <div className="absolute inset-14 rounded-[22px] border border-[#D4A017]/55" />
             <div className="relative z-10 text-center">
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-[#D4A017] bg-white text-4xl font-black text-[#111827]">GL</div>
-              <p className="mt-8 text-[18px] font-black uppercase tracking-[0.45em] text-[#D4A017]">Tabla de goleadores</p>
-              <h3 className="mt-4 text-5xl font-black uppercase tracking-widest text-white">{nombreTorneo}</h3>
-              <p className="mt-3 text-xl font-black uppercase tracking-[0.3em] text-emerald-200">{anioTorneo}</p>
+              <p className="mt-8 text-[20px] font-black uppercase text-[#D4A017]">Tabla de goleadores</p>
+              <h3 className="mt-4 text-5xl font-black uppercase leading-tight text-white">{nombreTorneo}</h3>
+              <p className="mt-3 text-xl font-black uppercase text-emerald-200">{anioTorneo}</p>
             </div>
             <div className="relative z-10 mt-14 space-y-4">
               {(goleadores.length ? goleadores : [{ id: "empty", name: "Sin goles registrados", team: "Esperando resultados", goles: 0 }]).slice(0, 10).map((g, index) => (
@@ -336,16 +337,16 @@ export default function EstadisticasPage() {
                   <div className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black ${index === 0 ? "bg-[#D4A017] text-black" : "bg-[#0b1f43] text-white"}`}>{index + 1}</div>
                   <div className="min-w-0">
                     <p className="truncate text-[30px] font-black uppercase tracking-wide text-[#111827]">{g.name}</p>
-                    <p className="mt-1 truncate text-base font-black uppercase tracking-[0.16em] text-[#0b4f38]">Equipo: {g.team}</p>
+                    <p className="mt-1 truncate text-lg font-black uppercase text-[#0b4f38]">Equipo: {g.team}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-6xl font-black text-[#0b1f43]">{g.goles}</p>
-                    <p className="text-xs font-black uppercase tracking-[0.25em] text-[#0b4f38]">goles</p>
+                    <p className="text-sm font-black uppercase text-[#0b4f38]">goles</p>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="absolute bottom-12 left-16 right-16 flex items-center justify-between border-t border-[#D4A017]/30 pt-6 text-[12px] font-black uppercase tracking-[0.35em] text-[#D4A017]">
+            <div className="absolute bottom-12 left-16 right-16 flex items-center justify-between border-t border-[#D4A017]/30 pt-6 text-[13px] font-black uppercase text-[#D4A017]">
               <span>Game Legal Tournament</span>
               <span>Ranking oficial</span>
             </div>
@@ -353,41 +354,41 @@ export default function EstadisticasPage() {
         </div>
       </div>
 
-      <div ref={posterPosicionesRef} className="relative overflow-hidden rounded-2xl border border-[#D4A017]/40 p-7 bg-[#06132f]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(150deg, rgba(3,12,35,.9), rgba(8,39,84,.84), rgba(3,12,35,.95)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 18%, rgba(28,122,218,.42), transparent 32%), linear-gradient(150deg, #020817, #0a3068 48%, #020817)" }}>
-        <div className="absolute inset-4 rounded-xl border border-[#D4A017]/20 pointer-events-none" />
-        <div className="relative text-center mb-6">
-          <div className="mx-auto w-14 h-14 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#173e72] to-[#07122d] text-[#E7C36B] flex items-center justify-center font-black shadow-[0_0_25px_rgba(59,130,246,.45)]">G·L</div>
-          <h3 className="text-2xl text-white font-black uppercase tracking-widest mt-3">{nombreTorneo}</h3>
-          <p className="text-[#E7C36B] font-black uppercase tracking-[0.28em] text-xs mt-1">Tabla de posiciones · {anioTorneo}</p>
-          <div className="mt-4 mx-auto h-px max-w-2xl bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
+      <div ref={posterPosicionesRef} className="relative overflow-hidden rounded-2xl border-[10px] border-[#C99A1A] p-10 bg-[#f4f7f2] text-[#111827]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(244,247,242,.9), rgba(244,247,242,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 12% 18%, rgba(212,160,23,.2), transparent 24%), radial-gradient(circle at 88% 84%, rgba(5,96,78,.18), transparent 24%), linear-gradient(145deg, #f8fbf7, #dde9e1 55%, #f8fbf7)", fontFamily: posterFontFamily }}>
+        <div className="absolute inset-5 rounded-[26px] border-4 border-[#0B1620] pointer-events-none" />
+        <div className="relative text-center mb-8">
+          <div className="mx-auto w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-white text-[#111827] flex items-center justify-center text-xl font-black shadow-[0_0_24px_rgba(15,23,42,.18)]">G-L</div>
+          <h3 className="text-4xl text-[#111827] font-black uppercase leading-tight mt-3">{nombreTorneo}</h3>
+          <p className="text-[#9B7411] font-black uppercase text-base mt-1">Tabla de posiciones - {anioTorneo}</p>
+          <div className="mt-5 mx-auto h-px max-w-2xl bg-[#C99A1A]/60" />
         </div>
-        <div className={`relative grid gap-4 ${Object.keys(posicionesPorGrupo).length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+        <div className={`relative grid gap-5 ${Object.keys(posicionesPorGrupo).length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
           {Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
-            <div key={grupo} className="overflow-hidden rounded-xl border border-[#D4A017]/45 bg-[#06142d]/95 shadow-[0_12px_30px_rgba(0,0,0,.35)]">
-              <div className="bg-gradient-to-r from-[#07152f] via-[#173d70] to-[#07152f] border-b border-[#D4A017]/45 px-3 py-2 flex justify-between">
-                <span className="text-[#E7C36B] text-xs font-black uppercase tracking-widest">Grupo {grupo}</span>
-                <span className="text-blue-200/70 text-[8px] font-bold uppercase">PJ · GD · PTS</span>
+            <div key={grupo} className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-[0_14px_34px_rgba(15,23,42,.20)]">
+              <div className="bg-[#0b0b0b] border-b border-[#D4A017]/50 px-3 py-2.5 flex justify-between">
+                <span className="text-white text-base font-black uppercase">Grupo {grupo}</span>
+                <span className="text-[#D4A017] text-[11px] font-black uppercase">PJ - GD - PTS</span>
               </div>
-              <div className="p-2">
+              <div className="p-3">
                 {equipos.map((team, index) => (
-                  <div key={team.id} className={`grid grid-cols-[18px_24px_1fr_24px_28px_30px] items-center gap-1 border-b border-white/10 py-2 last:border-0 border-l-2 ${team.classificationStatus === "qualified" ? "border-l-green-400" : team.classificationStatus === "repechage" ? "border-l-yellow-400" : "border-l-gray-600"}`}>
-                    <span className="text-[9px] font-black text-blue-200 text-center">{index + 1}</span>
-                    {team.shield ? <Image src={team.shield} alt="" width={20} height={20} unoptimized crossOrigin="anonymous" className="w-5 h-5 object-contain" /> : <div className="w-5 h-5 rounded-full bg-white/10" />}
-                    <span className="truncate text-[9px] text-white font-black uppercase">{team.name}</span>
-                    <span className="text-[9px] text-blue-100 text-center">{team.pj}</span>
-                    <span className="text-[9px] text-blue-100 text-center">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
-                    <span className="text-xs text-[#E7C36B] font-black text-center">{team.pts}</span>
+                  <div key={team.id} className={`grid grid-cols-[24px_34px_1fr_30px_34px_38px] items-center gap-2 border-b border-slate-200 py-2.5 last:border-0 border-l-4 pl-2 ${team.classificationStatus === "qualified" ? "border-l-emerald-500" : team.classificationStatus === "repechage" ? "border-l-amber-400" : "border-l-slate-300"}`}>
+                    <span className="text-sm font-black text-slate-500 text-center">{index + 1}</span>
+                    {team.shield ? <Image src={team.shield} alt="" width={30} height={30} unoptimized crossOrigin="anonymous" className="w-8 h-8 object-contain" /> : <div className="w-8 h-8 rounded-full bg-slate-200" />}
+                    <span className="truncate text-sm text-[#111827] font-black uppercase">{team.name}</span>
+                    <span className="text-sm text-slate-700 font-black text-center">{team.pj}</span>
+                    <span className="text-sm text-slate-700 font-black text-center">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
+                    <span className="text-base text-[#9B7411] font-black text-center">{team.pts}</span>
                   </div>
                 ))}
               </div>
             </div>
           ))}
         </div>
-        <div className="relative mt-6 pt-4 border-t border-[#D4A017]/30 flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
-          <span className="text-green-400">Verde · Clasificado</span>
-          <span className="text-yellow-400">Amarillo · Repechaje</span>
-          <span className="text-gray-400">Gris · Eliminado</span>
-          <span className="text-[#E7C36B]">GAME LEGAL</span>
+        <div className="relative mt-7 pt-4 border-t border-[#C99A1A]/40 flex items-center justify-between text-[11px] font-black uppercase">
+          <span className="text-emerald-700">Verde - Clasificado</span>
+          <span className="text-amber-600">Amarillo - Repechaje</span>
+          <span className="text-slate-500">Gris - Eliminado</span>
+          <span className="text-[#9B7411]">Game Legal</span>
         </div>
       </div>
 
