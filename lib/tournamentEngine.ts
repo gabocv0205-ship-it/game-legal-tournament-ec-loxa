@@ -17,6 +17,8 @@ export type TournamentConfig = {
   yellow_cards_for_suspension: number;
   yellow_suspension_matches: number;
   red_suspension_matches: number;
+  double_yellow_suspension_matches: number;
+  reset_yellows_on_knockout: boolean;
   max_players_per_team: number;
   knockout_pairing_mode: "general_table" | "group_cross" | "manual";
   substitution_rule: "limited" | "unlimited" | "reentry";
@@ -40,7 +42,9 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   tournament_year: new Date().getFullYear(),
   yellow_cards_for_suspension: 3,
   yellow_suspension_matches: 1,
-  red_suspension_matches: 1,
+  red_suspension_matches: 2,
+  double_yellow_suspension_matches: 1,
+  reset_yellows_on_knockout: true,
   max_players_per_team: 25,
   knockout_pairing_mode: "general_table",
   substitution_rule: "limited",
@@ -75,6 +79,8 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     yellow_cards_for_suspension: number("yellow_cards_for_suspension"),
     yellow_suspension_matches: number("yellow_suspension_matches"),
     red_suspension_matches: number("red_suspension_matches"),
+    double_yellow_suspension_matches: number("double_yellow_suspension_matches"),
+    reset_yellows_on_knockout: source?.reset_yellows_on_knockout !== false,
     max_players_per_team: number("max_players_per_team"),
     knockout_pairing_mode: knockoutMode,
     substitution_rule: substitutionRule,
@@ -91,6 +97,15 @@ export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], con
   const targetOrder = matchOrder(targetMatch);
   const yellowCount: Record<string, number> = {};
   const suspended = new Set<string>();
+  const targetIsKnockout = baseStage(targetMatch?.stage) !== "Fase de Grupos";
+  const yellowEventsByMatchPlayer: Record<string, number> = {};
+
+  events.forEach((event) => {
+    if (event.event_type === "amarilla" && event.match_id && event.player_id) {
+      const key = `${event.match_id}:${event.player_id}`;
+      yellowEventsByMatchPlayer[key] = (yellowEventsByMatchPlayer[key] || 0) + 1;
+    }
+  });
 
   [...events]
     .filter((event) => event.player_id && event.team_id && matchById[event.match_id]?.status === "finished" && matchOrder(matchById[event.match_id]) < targetOrder)
@@ -100,6 +115,12 @@ export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], con
       if (event.event_type === "roja") {
         suspensionMatches = rules.red_suspension_matches;
       } else if (event.event_type === "amarilla") {
+        if (yellowEventsByMatchPlayer[`${event.match_id}:${event.player_id}`] >= 2) {
+          suspensionMatches = Math.max(suspensionMatches, rules.double_yellow_suspension_matches);
+        }
+        if (rules.reset_yellows_on_knockout && targetIsKnockout && baseStage(matchById[event.match_id]?.stage) === "Fase de Grupos") {
+          if (!suspensionMatches) return;
+        }
         yellowCount[event.player_id] = (yellowCount[event.player_id] || 0) + 1;
         if (yellowCount[event.player_id] % rules.yellow_cards_for_suspension === 0) suspensionMatches = rules.yellow_suspension_matches;
       }
@@ -331,6 +352,30 @@ export function createGroupSequenceKnockoutFixtures(groups: Record<string, any[]
       ? [fixture, { tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` }]
       : [fixture];
   });
+}
+
+export function createDrawKnockoutFixtures(qualified: any[], tournamentId: string, stage: string, matchday: number, legs: number, seed = Date.now()) {
+  const shuffled = [...qualified];
+  let value = Math.max(1, Number(seed) || 1);
+  const random = () => {
+    value = (value * 9301 + 49297) % 233280;
+    return value / 233280;
+  };
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  const fixtures: any[] = [];
+  const used = new Set<string>();
+  for (let index = 0; index < shuffled.length - 1; index += 2) {
+    const home = shuffled[index];
+    const away = shuffled[index + 1];
+    if (!home?.id || !away?.id || used.has(home.id) || used.has(away.id)) continue;
+    used.add(home.id); used.add(away.id);
+    fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
+    if (legs === 2) fixtures.push({ tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` });
+  }
+  return fixtures;
 }
 
 export function getStageWinners(matches: any[], teams: any[], stage: string) {

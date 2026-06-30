@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFinancialBalance,
   calculateStandings,
+  createDrawKnockoutFixtures,
   createGroupSequenceKnockoutFixtures,
   createKnockoutFixtures,
   createMatchdayFixtures,
   getStageWinners,
+  getSuspendedPlayerIdsForMatch,
   normalizeTournamentConfig,
   scheduleFixtures,
   validateManualMatch,
@@ -113,6 +115,27 @@ describe("motor deportivo", () => {
     expect(fixtures).toHaveLength(2);
     expect(fixtures[0]).toMatchObject({ home_team_id: "a1", away_team_id: "b2" });
     expect(fixtures[1]).toMatchObject({ home_team_id: "b1", away_team_id: "a2" });
+  });
+
+  it("sortea llaves sin duplicar equipos", () => {
+    const fixtures = createDrawKnockoutFixtures(teams, "t1", "Semifinal", 5, 1, 123);
+    const usados = fixtures.flatMap(match => [match.home_team_id, match.away_team_id]);
+    expect(fixtures).toHaveLength(2);
+    expect(new Set(usados).size).toBe(4);
+  });
+
+  it("aplica doble amarilla y limpia amarillas de grupos en eliminatorias", () => {
+    const matches = [
+      { id: "m1", status: "finished", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "b", match_date: "2026-07-01T09:00:00.000Z" },
+      { id: "m2", status: "scheduled", stage: "Cuartos de Final", home_team_id: "a", away_team_id: "c", match_date: "2026-07-08T09:00:00.000Z" },
+    ];
+    const unaAmarilla = [{ match_id: "m1", player_id: "p1", team_id: "a", event_type: "amarilla" }];
+    expect(getSuspendedPlayerIdsForMatch(unaAmarilla, matches, { yellow_cards_for_suspension: 1, reset_yellows_on_knockout: true }, matches[1]).has("p1")).toBe(false);
+    const dobleAmarilla = [
+      { match_id: "m1", player_id: "p1", team_id: "a", event_type: "amarilla" },
+      { match_id: "m1", player_id: "p1", team_id: "a", event_type: "amarilla" },
+    ];
+    expect(getSuspendedPlayerIdsForMatch(dobleAmarilla, matches, { reset_yellows_on_knockout: true, double_yellow_suspension_matches: 1 }, matches[1]).has("p1")).toBe(true);
   });
 
   it("avanza al ganador de una llave empatada resuelta por penales", () => {

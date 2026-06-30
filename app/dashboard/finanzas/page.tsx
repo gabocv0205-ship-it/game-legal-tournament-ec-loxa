@@ -38,6 +38,8 @@ export default function LibroMayorFinanzas() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroMetodo, setFiltroMetodo] = useState("");
   const [filtroFecha, setFiltroFecha] = useState("");
+  const [filtroEquipoId, setFiltroEquipoId] = useState("");
+  const [filtroRubro, setFiltroRubro] = useState("");
   const [exportDesde, setExportDesde] = useState("");
   const [exportHasta, setExportHasta] = useState("");
   const [historialExportaciones, setHistorialExportaciones] = useState<any[]>([]);
@@ -269,7 +271,13 @@ export default function LibroMayorFinanzas() {
 
     return base.filter(row => {
       const fecha = new Date(row.fecha);
-      return (!desde || fecha >= desde) && (!hasta || fecha <= hasta);
+      const equipoFiltro = filtroEquipoId ? equipos.find(equipo => equipo.id === filtroEquipoId)?.name : "";
+      const fechaOk = (!desde || fecha >= desde) && (!hasta || fecha <= hasta);
+      const equipoOk = !equipoFiltro || row.equipo === equipoFiltro;
+      const rubroOk = !filtroRubro || String(row.categoria || "").toLowerCase().includes(filtroRubro);
+      const metodoOk = !filtroMetodo || String(row.metodo || "").toLowerCase().includes(filtroMetodo);
+      const fechaRapidaOk = !filtroFecha || String(row.fecha || "").startsWith(filtroFecha);
+      return fechaOk && equipoOk && rubroOk && metodoOk && fechaRapidaOk;
     });
   };
 
@@ -297,7 +305,23 @@ export default function LibroMayorFinanzas() {
   };
 
   if (loading) return <div className="text-[#D4A017] text-center p-20 font-black animate-pulse">Auditando Liquidaciones...</div>;
-  const equiposFiltrados = equipos.filter(equipo => !filtroEstado || (filtroEstado === "aldia" ? equipo.saldoPendiente === 0 : filtroEstado === "parcial" ? equipo.saldoPendiente > 0 && equipo.pagadoTotal > 0 : equipo.saldoPendiente > 0 && equipo.pagadoTotal === 0));
+  const equiposFiltrados = equipos.filter(equipo => {
+    const estadoOk = !filtroEstado || (filtroEstado === "aldia" ? equipo.saldoPendiente === 0 : filtroEstado === "parcial" ? equipo.saldoPendiente > 0 && equipo.pagadoTotal > 0 : equipo.saldoPendiente > 0 && equipo.pagadoTotal === 0);
+    const equipoOk = !filtroEquipoId || equipo.id === filtroEquipoId;
+    const rubroOk = !filtroRubro || Number(filtroRubro === "inscripcion" ? equipo.deudaInscripcion : filtroRubro === "arbitraje" ? equipo.deudaArbitraje : equipo.deudaMultas) > 0;
+    return estadoOk && equipoOk && rubroOk;
+  });
+  const cierreFinanciero = equipos.reduce((acc, equipo) => {
+    acc.totalCargos += Number(equipo.totalDeudaGenerada || 0);
+    acc.totalIngresos += Number(equipo.pagadoTotal || 0);
+    acc.totalDescuentos += Number(equipo.descuentoTotal || 0);
+    acc.totalPendiente += Number(equipo.saldoPendiente || 0);
+    acc.inscripcion += Number(equipo.deudaInscripcion || 0);
+    acc.arbitraje += Number(equipo.deudaArbitraje || 0);
+    acc.tarjetas += Number(equipo.deudaMultas || 0);
+    return acc;
+  }, { totalCargos: 0, totalIngresos: 0, totalDescuentos: 0, totalPendiente: 0, inscripcion: 0, arbitraje: 0, tarjetas: 0 });
+  const saldoFinal = cierreFinanciero.totalIngresos - cierreFinanciero.totalCargos + cierreFinanciero.totalDescuentos;
 
   return (
     <div className="space-y-8">
@@ -312,10 +336,35 @@ export default function LibroMayorFinanzas() {
       </div>
 
       {/* TABLA DE LIQUIDACIÓN POR EQUIPO */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl">
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los estados</option><option value="aldia">Al día</option><option value="parcial">Pago parcial</option><option value="mora">En mora</option></select>
         <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los métodos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="deposito">Depósito</option><option value="descuento">Descuento / compensacion</option><option value="otro">Otro</option></select>
+        <select value={filtroEquipoId} onChange={e => setFiltroEquipoId(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los equipos</option>{equipos.map(equipo => <option key={equipo.id} value={equipo.id}>{equipo.name}</option>)}</select>
+        <select value={filtroRubro} onChange={e => setFiltroRubro(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg"><option value="">Todos los rubros</option><option value="inscripcion">Inscripcion</option><option value="arbitraje">Arbitraje</option><option value="tarjetas">Tarjetas</option></select>
         <input type="date" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} className="bg-[#0a0a0a] text-white border border-[#2E2E2E] p-3 rounded-lg" style={{ colorScheme: 'dark' }} />
+      </div>
+
+      <div className="rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-5">
+        <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#D4A017]">Cierre financiero del torneo</p>
+            <h3 className="text-2xl font-black uppercase text-white">Resumen ejecutivo</h3>
+          </div>
+          <span className={`rounded-full px-4 py-2 text-xs font-black uppercase tracking-widest ${saldoFinal >= 0 ? "bg-green-500/15 text-green-300 border border-green-500/30" : "bg-red-500/15 text-red-300 border border-red-500/30"}`}>
+            Saldo final ${saldoFinal.toFixed(2)}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Summary label="Ingresos" value={cierreFinanciero.totalIngresos} color="text-green-400" />
+          <Summary label="Cargos" value={cierreFinanciero.totalCargos} color="text-white" />
+          <Summary label="Descuentos" value={cierreFinanciero.totalDescuentos} color="text-emerald-300" />
+          <Summary label="Pendiente" value={cierreFinanciero.totalPendiente} color="text-red-400" />
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-xs"><b className="text-[#D4A017]">Inscripcion</b><p className="mt-1 font-mono text-white">${cierreFinanciero.inscripcion.toFixed(2)}</p></div>
+          <div className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-xs"><b className="text-[#D4A017]">Arbitraje</b><p className="mt-1 font-mono text-white">${cierreFinanciero.arbitraje.toFixed(2)}</p></div>
+          <div className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-xs"><b className="text-[#D4A017]">Tarjetas</b><p className="mt-1 font-mono text-white">${cierreFinanciero.tarjetas.toFixed(2)}</p></div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4">

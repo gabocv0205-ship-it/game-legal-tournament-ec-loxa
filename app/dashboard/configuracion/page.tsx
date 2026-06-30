@@ -23,6 +23,8 @@ export default function ConfiguracionPage() {
   const [amarillasSuspension, setAmarillasSuspension] = useState(3);
   const [partidosSuspensionAmarillas, setPartidosSuspensionAmarillas] = useState(1);
   const [partidosSuspensionRoja, setPartidosSuspensionRoja] = useState(1);
+  const [partidosDobleAmarilla, setPartidosDobleAmarilla] = useState(1);
+  const [limpiarAmarillasEliminatorias, setLimpiarAmarillasEliminatorias] = useState(true);
   const [numGrupos, setNumGrupos] = useState(1);
   const [equiposPorGrupo, setEquiposPorGrupo] = useState(4);
   const [clasificadosPorGrupo, setClasificadosPorGrupo] = useState(2);
@@ -79,7 +81,9 @@ export default function ConfiguracionPage() {
         if (data.red_card_fee) setCostoRoja(data.red_card_fee.toString());
         setAmarillasSuspension(Number(data.yellow_cards_for_suspension || 3));
         setPartidosSuspensionAmarillas(Number(data.yellow_suspension_matches || 1));
-        setPartidosSuspensionRoja(Number(data.red_suspension_matches || 1));
+        setPartidosSuspensionRoja(Number(data.red_suspension_matches || 2));
+        setPartidosDobleAmarilla(Number(data.double_yellow_suspension_matches || 1));
+        setLimpiarAmarillasEliminatorias(data.reset_yellows_on_knockout !== false);
         setNumGrupos(Number(data.group_count || 1));
         setEquiposPorGrupo(Number(data.teams_per_group || 4));
         setClasificadosPorGrupo(Number(data.qualifiers_per_group || 2));
@@ -181,6 +185,8 @@ export default function ConfiguracionPage() {
         yellow_cards_for_suspension: amarillasSuspension,
         yellow_suspension_matches: partidosSuspensionAmarillas,
         red_suspension_matches: partidosSuspensionRoja,
+        double_yellow_suspension_matches: partidosDobleAmarilla,
+        reset_yellows_on_knockout: limpiarAmarillasEliminatorias,
         group_count: numGrupos,
         teams_per_group: equiposPorGrupo,
         qualifiers_per_group: clasificadosPorGrupo,
@@ -348,7 +354,12 @@ export default function ConfiguracionPage() {
             <NumberField label="Amarillas para suspensión" value={amarillasSuspension} onChange={setAmarillasSuspension} />
             <NumberField label="Partidos por acumulación" value={partidosSuspensionAmarillas} onChange={setPartidosSuspensionAmarillas} />
             <NumberField label="Partidos por roja" value={partidosSuspensionRoja} onChange={setPartidosSuspensionRoja} />
+            <NumberField label="Partidos por doble amarilla" value={partidosDobleAmarilla} onChange={setPartidosDobleAmarilla} />
           </div>
+          <label className="flex items-center gap-3 bg-[#1c1c1c] border border-[#2e2e2e] rounded-xl p-4 cursor-pointer">
+            <input type="checkbox" checked={limpiarAmarillasEliminatorias} onChange={e => setLimpiarAmarillasEliminatorias(e.target.checked)} className="w-5 h-5 accent-red-400" />
+            <span className="text-white font-bold text-sm">Limpiar amarillas acumuladas al iniciar fases finales, manteniendo suspensiones pendientes</span>
+          </label>
         </div>
 
         <div className="space-y-4">

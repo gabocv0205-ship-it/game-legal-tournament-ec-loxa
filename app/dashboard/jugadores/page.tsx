@@ -31,6 +31,9 @@ export default function JugadoresPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nombreEditado, setNombreEditado] = useState("");
   const [cedulaEditada, setCedulaEditada] = useState("");
+  const [estadoEditandoId, setEstadoEditandoId] = useState<string | null>(null);
+  const [estadoJugadorManual, setEstadoJugadorManual] = useState("active");
+  const [motivoEstadoJugador, setMotivoEstadoJugador] = useState("");
 
   useEffect(() => {
     cargarDatos();
@@ -186,6 +189,28 @@ export default function JugadoresPage() {
     }
   };
 
+  const abrirEstadoJugador = (jugador: any) => {
+    setEstadoEditandoId(jugador.id);
+    setEstadoJugadorManual(jugador.eligibility_status || "active");
+    setMotivoEstadoJugador(jugador.eligibility_reason || "");
+  };
+
+  const guardarEstadoJugador = async (jugadorId: string) => {
+    try {
+      const { error } = await supabase.rpc("update_player_eligibility", {
+        p_player_id: jugadorId,
+        p_status: estadoJugadorManual,
+        p_reason: motivoEstadoJugador
+      });
+      if (error) throw error;
+      setEstadoEditandoId(null);
+      setMotivoEstadoJugador("");
+      cargarDatos();
+    } catch (error: any) {
+      alert("No se pudo actualizar el estado. Ejecuta supabase/advanced_tournament_config.sql si aun no lo hiciste. " + error.message);
+    }
+  };
+
   const seleccionarFotoJugador = async (jugadorId: string, file?: File) => {
     if (!file) return;
     try {
@@ -248,6 +273,14 @@ export default function JugadoresPage() {
       mvp,
       suspensiones: suspensionesPorAmarillas + suspensionesPorRojas,
     };
+  };
+
+  const etiquetaEstadoJugador = (jugador: any) => {
+    const status = jugador.eligibility_status || "active";
+    if (status === "suspended") return "Suspendido";
+    if (status === "expelled") return "Expulsado del torneo";
+    if (status === "ineligible") return "No habilitado";
+    return "Activo";
   };
 
   const jugadoresFiltrados = useMemo(() => {
@@ -380,6 +413,10 @@ export default function JugadoresPage() {
                             <>
                               <p className="truncate text-lg font-black uppercase text-white">{jugador.full_name}</p>
                               <p className="font-mono text-xs text-gray-400">ID: {jugador.cedula}</p>
+                              <span className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${jugador.eligibility_status && jugador.eligibility_status !== "active" ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-green-500/30 bg-green-500/10 text-green-300"}`}>
+                                {etiquetaEstadoJugador(jugador)}
+                              </span>
+                              {jugador.eligibility_reason && <p className="mt-1 text-xs font-bold text-gray-500">{jugador.eligibility_reason}</p>}
                             </>
                           )}
                         </div>
@@ -393,12 +430,32 @@ export default function JugadoresPage() {
                           ) : (
                             <>
                               <button onClick={() => setJugadorPerfil(jugador)} className="rounded-full bg-[#D4A017] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-black hover:bg-yellow-500">Perfil</button>
+                              <button onClick={() => abrirEstadoJugador(jugador)} className="rounded-full bg-red-500/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-300 hover:bg-red-500/25">Estado</button>
                               <button onClick={() => { setEditandoId(jugador.id); setNombreEditado(jugador.full_name); setCedulaEditada(jugador.cedula); }} className="rounded-full bg-[#D4A017]/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[#D4A017] hover:bg-[#D4A017]/25">Editar</button>
                               <button onClick={() => eliminarJugador(jugador.id)} className="rounded-full bg-red-500/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 hover:bg-red-500/25">Eliminar</button>
                             </>
                           )}
                         </div>
                       </div>
+
+                      {estadoEditandoId === jugador.id && (
+                        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-950/20 p-3">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-red-300">Estado disciplinario manual</p>
+                          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[180px_1fr_auto]">
+                            <select value={estadoJugadorManual} onChange={e => setEstadoJugadorManual(e.target.value)} className="rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white">
+                              <option value="active">Activo</option>
+                              <option value="suspended">Suspendido</option>
+                              <option value="expelled">Expulsado del torneo</option>
+                              <option value="ineligible">No habilitado</option>
+                            </select>
+                            <input value={motivoEstadoJugador} onChange={e => setMotivoEstadoJugador(e.target.value)} className="rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white" placeholder="Motivo u observacion" />
+                            <div className="flex gap-2">
+                              <button onClick={() => guardarEstadoJugador(jugador.id)} className="rounded-lg bg-red-500 px-3 py-2 text-[10px] font-black uppercase text-white">Guardar</button>
+                              <button onClick={() => setEstadoEditandoId(null)} className="rounded-lg border border-[#2E2E2E] px-3 py-2 text-[10px] font-black uppercase text-gray-300">Cancelar</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="mt-4 rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

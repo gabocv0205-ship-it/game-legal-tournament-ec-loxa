@@ -13,6 +13,8 @@ alter table public.tournaments
   add column if not exists final_legs integer default 1,
   add column if not exists knockout_pairing_mode text default 'general_table',
   add column if not exists substitution_rule text default 'limited',
+  add column if not exists double_yellow_suspension_matches integer default 1,
+  add column if not exists reset_yellows_on_knockout boolean default true,
   add column if not exists court_count integer default 1,
   add column if not exists start_date date,
   add column if not exists estimated_end_date date,
@@ -37,7 +39,17 @@ create index if not exists players_tournament_team_idx
   on public.players (tournament_id, team_id);
 
 alter table public.players
-  add column if not exists photo_url text;
+  add column if not exists photo_url text,
+  add column if not exists eligibility_status text default 'active',
+  add column if not exists eligibility_reason text,
+  add column if not exists eligibility_updated_at timestamptz,
+  add column if not exists eligibility_updated_by uuid references public.profiles(id) on delete set null;
+
+alter table public.teams
+  add column if not exists competition_status text default 'active',
+  add column if not exists competition_status_reason text,
+  add column if not exists competition_status_updated_at timestamptz,
+  add column if not exists competition_status_updated_by uuid references public.profiles(id) on delete set null;
 
 create index if not exists players_tournament_cedula_lookup_idx
   on public.players (tournament_id, lower(btrim(cedula)));

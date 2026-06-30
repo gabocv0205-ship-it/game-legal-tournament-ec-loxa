@@ -26,6 +26,9 @@ export default function EquiposPage() {
   const [escudoEditado, setEscudoEditado] = useState<File | null>(null);
   const [previewEscudoEditado, setPreviewEscudoEditado] = useState("");
   const [exportandoEquipoId, setExportandoEquipoId] = useState<string | null>(null);
+  const [estadoEquipoEditandoId, setEstadoEquipoEditandoId] = useState<string | null>(null);
+  const [estadoEquipo, setEstadoEquipo] = useState("active");
+  const [motivoEstadoEquipo, setMotivoEstadoEquipo] = useState("");
 
   useEffect(() => {
     cargarEquipos();
@@ -262,6 +265,35 @@ export default function EquiposPage() {
     } catch (error: any) { alert("Error al actualizar: " + (error.message || "Intenta nuevamente.")); }
   };
 
+  const abrirEstadoEquipo = (equipo: any) => {
+    setEstadoEquipoEditandoId(equipo.id);
+    setEstadoEquipo(equipo.competition_status || "active");
+    setMotivoEstadoEquipo(equipo.competition_status_reason || "");
+  };
+
+  const guardarEstadoEquipo = async (equipoId: string) => {
+    try {
+      const { error } = await supabase.rpc("update_team_competition_status", {
+        p_team_id: equipoId,
+        p_status: estadoEquipo,
+        p_reason: motivoEstadoEquipo
+      });
+      if (error) throw error;
+      setEstadoEquipoEditandoId(null);
+      setMotivoEstadoEquipo("");
+      cargarEquipos();
+    } catch (error: any) {
+      alert("No se pudo actualizar el estado del equipo. Ejecuta supabase/advanced_tournament_config.sql si aun no lo hiciste. " + error.message);
+    }
+  };
+
+  const etiquetaEstadoEquipo = (equipo: any) => {
+    const status = equipo.competition_status || "active";
+    if (status === "suspended") return "Suspendido";
+    if (status === "eliminated") return "Eliminado";
+    return "Activo";
+  };
+
   const estadoJugador = (jugador: any) => {
     const raw = String(jugador.status || jugador.estado || "").toLowerCase();
     if (jugador.suspended || jugador.is_suspended || raw.includes("suspend")) return "Suspendido";
@@ -405,6 +437,9 @@ export default function EquiposPage() {
                   ) : (
                     <p className="font-bold text-white text-lg uppercase tracking-wide">{eq.name}</p>
                   )}
+                  <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${eq.competition_status && eq.competition_status !== "active" ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-green-500/30 bg-green-500/10 text-green-300"}`}>
+                    {etiquetaEstadoEquipo(eq)}
+                  </span>
                 </div>
               </div>
               {editandoId === eq.id ? (
@@ -425,6 +460,24 @@ export default function EquiposPage() {
                   <p className="mt-1 font-bold text-white">{eq.manager_name || "Sin registrar"}</p>
                   <p className="text-gray-400">+593 {eq.manager_phone || "-"}</p>
                   {eq.manager_email && <p className="text-gray-500">{eq.manager_email}</p>}
+                  {eq.competition_status_reason && <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-2 font-bold text-red-200">{eq.competition_status_reason}</p>}
+                </div>
+              )}
+              {estadoEquipoEditandoId === eq.id && (
+                <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-red-300">Estado competitivo</p>
+                  <div className="mt-2 grid grid-cols-1 gap-2">
+                    <select value={estadoEquipo} onChange={e => setEstadoEquipo(e.target.value)} className="rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-xs text-white">
+                      <option value="active">Activo</option>
+                      <option value="suspended">Suspendido</option>
+                      <option value="eliminated">Eliminado del torneo</option>
+                    </select>
+                    <input value={motivoEstadoEquipo} onChange={e => setMotivoEstadoEquipo(e.target.value)} className="rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-xs text-white" placeholder="Motivo u observacion" />
+                    <div className="flex gap-2">
+                      <button onClick={() => guardarEstadoEquipo(eq.id)} className="rounded-lg bg-red-500 px-3 py-2 text-[10px] font-black uppercase text-white">Guardar</button>
+                      <button onClick={() => setEstadoEquipoEditandoId(null)} className="rounded-lg border border-[#2E2E2E] px-3 py-2 text-[10px] font-black uppercase text-gray-300">Cancelar</button>
+                    </div>
+                  </div>
                 </div>
               )}
               
@@ -438,6 +491,7 @@ export default function EquiposPage() {
                 ) : (
                   <>
                     <button onClick={() => descargarPdfJugadores(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-blue-400 hover:text-blue-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "PDF jugadores"}</button>
+                    <button onClick={() => abrirEstadoEquipo(eq)} className="text-[10px] uppercase tracking-wider font-bold text-red-300 hover:text-red-200 transition-all">Estado</button>
                     <button onClick={() => { cancelarEdicion(); setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="text-[10px] uppercase tracking-wider font-bold text-[#D4A017] hover:text-yellow-300 transition-all">Editar</button>
                     <button onClick={() => eliminarEquipo(eq.id, eq.shield_url)} className="text-[10px] uppercase tracking-wider font-bold text-red-500 hover:text-red-400 transition-all">Eliminar</button>
                   </>

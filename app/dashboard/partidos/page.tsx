@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
-import { calculateStandings, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -221,19 +221,33 @@ export default function PartidosPage() {
       setFondoPosterUrl(tourney.match_poster_background_url || "");
     }
 
-    const { data: teamsData } = await supabase.from("teams").select("id, name, group_name").eq("tournament_id", activeId).order("name");
-    if (teamsData) setEquipos(teamsData);
+    const teamsAdvanced = await supabase.from("teams").select("id, name, group_name, competition_status, competition_status_reason").eq("tournament_id", activeId).order("name");
+    if (teamsAdvanced.error) {
+      const { data: teamsBasic } = await supabase.from("teams").select("id, name, group_name").eq("tournament_id", activeId).order("name");
+      setEquipos((teamsBasic || []).map(team => ({ ...team, competition_status: "active", competition_status_reason: null })));
+    } else {
+      setEquipos(teamsAdvanced.data || []);
+    }
 
-    const { data: matchesData } = await supabase.from("matches")
-      .select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)")
+    const matchesAdvanced = await supabase.from("matches")
+      .select("*, home:home_team_id(name, shield_url, competition_status, competition_status_reason), away:away_team_id(name, shield_url, competition_status, competition_status_reason)")
       .eq("tournament_id", activeId).order("match_date", { ascending: true });
-    if (matchesData) setPartidos(matchesData);
+    if (matchesAdvanced.error) {
+      const { data: matchesBasic } = await supabase.from("matches")
+        .select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)")
+        .eq("tournament_id", activeId).order("match_date", { ascending: true });
+      setPartidos(matchesBasic || []);
+    } else {
+      setPartidos(matchesAdvanced.data || []);
+    }
   };
 
   const mismaJornada = (partido: any, jornada: number, fase: string) => Number(partido.matchday) === Number(jornada) && partido.stage === fase;
   const jornadaTienePartidos = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase));
   const jornadaCulminada = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase) && partido.status === "finished");
   const faseBase = (fase: string) => String(fase || "").replace(/\s+\(Vuelta\)$/i, "");
+  const equipoActivo = (equipo: any) => !["suspended", "eliminated"].includes(String(equipo?.competition_status || "active"));
+  const equiposActivos = () => equipos.filter(equipoActivo);
   const maxCrucesPorFase = (fase: string) => {
     const base = faseBase(fase);
     if (base === "Fase de Grupos") return idaYVuelta ? 2 : 1;
@@ -321,6 +335,9 @@ export default function PartidosPage() {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     if (!torneoId) return alert("No hay torneo activo.");
+    const localEstado = equipos.find(equipo => equipo.id === localId);
+    const visitanteEstado = equipos.find(equipo => equipo.id === visitanteId);
+    if (!equipoActivo(localEstado) || !equipoActivo(visitanteEstado)) return alert("Uno de los equipos esta suspendido o eliminado. Reactivalo antes de programar un nuevo partido.");
     const fasePartidoManual = manualEsVuelta ? `${faseBase(faseManual)} (Vuelta)` : faseBase(faseManual);
     if (manualEsVuelta && maxCrucesPorFase(faseManual) < 2) return alert("Este torneo no esta configurado para ida y vuelta en esta fase.");
     if (jornadaCulminada(jornadaManual, fasePartidoManual)) return alert(`La fecha ${jornadaManual} de ${fasePartidoManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
@@ -387,7 +404,7 @@ export default function PartidosPage() {
       if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
       const bloqueo = validarJornadaGenerable(autoJornada, autoFase);
       if (bloqueo) throw new Error(bloqueo);
-      const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
+      const fixtures = createMatchdayFixtures(equiposActivos(), partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
@@ -412,8 +429,8 @@ export default function PartidosPage() {
       const count = required[faseGenerar] || 0;
       const previousStage: Record<string, string> = { "Octavos de Final": "16vos de Final", "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
       const previous = previousStage[faseGenerar];
-      const winners = previous ? getStageWinners(partidos, equipos, previous) : [];
-      const groups = calculateStandings(equipos, partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
+      const winners = previous ? getStageWinners(partidos, equiposActivos(), previous) : [];
+      const groups = calculateStandings(equiposActivos(), partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
       const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
       if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados según las reglas del torneo.`);
       const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
@@ -459,7 +476,7 @@ export default function PartidosPage() {
       let maxIntentos = 100, exito = false;
 
       while (maxIntentos > 0 && !exito) {
-        let equiposDisponibles = [...equipos];
+        let equiposDisponibles = [...equiposActivos()];
         let combinacionValida = true;
         let tempMatches: any[] = [];
         
@@ -677,19 +694,64 @@ export default function PartidosPage() {
 
   // --- LÓGICA DE PARTIDO EN VIVO MANTENIDA ---
   const cargarConvocatoria = async (partido: any) => {
-    const { data: playersData } = await supabase.from("players")
-      .select("id, cedula, full_name, team_id")
+    const playersAdvanced = await supabase.from("players")
+      .select("id, cedula, full_name, team_id, eligibility_status, eligibility_reason")
       .in("team_id", [partido.home_team_id, partido.away_team_id])
       .order("full_name");
+    const playersData = playersAdvanced.error
+      ? ((await supabase.from("players").select("id, cedula, full_name, team_id").in("team_id", [partido.home_team_id, partido.away_team_id]).order("full_name")).data || [])
+      : (playersAdvanced.data || []);
     const idsPartidos = partidos.map(p => p.id);
     const { data: cardEvents } = idsPartidos.length
       ? await supabase.from("match_events").select("match_id, player_id, team_id, event_type").in("match_id", idsPartidos).in("event_type", ["amarilla", "roja"])
       : { data: [] as any[] };
     const suspendidos = getSuspendedPlayerIdsForMatch(cardEvents || [], partidos, configuracion, partido);
+    const bloqueadoManual = (player: any) => ["suspended", "expelled", "ineligible"].includes(String(player.eligibility_status || "active"));
     return {
-      habilitados: (playersData || []).filter(player => !suspendidos.has(player.id)),
-      suspendidos: (playersData || []).filter(player => suspendidos.has(player.id)),
+      habilitados: (playersData || []).filter(player => !suspendidos.has(player.id) && !bloqueadoManual(player)),
+      suspendidos: (playersData || []).filter(player => suspendidos.has(player.id) || bloqueadoManual(player)),
     };
+  };
+
+  const sortearLlavesEliminatorias = async () => {
+    if ((!autoVentanas.length && !autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos una ventana de jornada.");
+    if (!window.confirm(`¿Sortear cruces de ${faseGenerar} con los clasificados disponibles?`)) return;
+    setLoading(true);
+    try {
+      const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
+      if (bloqueo) throw new Error(bloqueo);
+      const required: Record<string, number> = { "16vos de Final": 32, "Octavos de Final": 16, "Cuartos de Final": 8, "Semifinal": 4, "Final": 2 };
+      const count = required[faseGenerar] || 0;
+      const previousStage: Record<string, string> = { "Octavos de Final": "16vos de Final", "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
+      const previous = previousStage[faseGenerar];
+      const winners = previous ? getStageWinners(partidos, equiposActivos(), previous) : [];
+      const groups = calculateStandings(equiposActivos(), partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
+      const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
+      if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados para sortear ${faseGenerar}.`);
+      const seed = Date.now();
+      const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
+      const fixtures = createDrawKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs, seed);
+      const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
+      if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
+      const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
+        .map(match => faseGenerar === "Final" && configuracion.final_venue ? { ...match, court: configuracion.final_venue } : match);
+      const { error } = await supabase.from("matches").insert(matchesToInsert);
+      if (error) throw error;
+      await supabase.from("draw_history").insert([{
+        tournament_id: torneoId,
+        mode: "automatic",
+        title: `Sorteo ${faseGenerar}`,
+        pots: qualified.map(team => ({ id: team.id, name: team.name, group: team.group })),
+        result: matchesToInsert.map(match => ({ home_team_id: match.home_team_id, away_team_id: match.away_team_id, stage: match.stage })),
+        random_seed: String(seed)
+      }]);
+      alert(`${faseGenerar} sorteada correctamente.`);
+      cargarDatos();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const abrirPartido = async (partido: any) => {
@@ -1042,7 +1104,8 @@ export default function PartidosPage() {
         `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
         `Regla de sustituciones: ${reglaCambios}`,
         `Regla disciplinaria: ${configuracion.yellow_cards_for_suspension} amarilla(s) generan suspension; roja directa suspende ${configuracion.red_suspension_matches} partido(s).`,
-        ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""}`),
+        ...[partido.home, partido.away].filter(team => team && team.competition_status && team.competition_status !== "active").map(team => `Alerta de equipo: ${team.name} figura como ${team.competition_status}. Motivo: ${team.competition_status_reason || "sin observacion"}`),
+        ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""}${player.eligibility_reason ? ` - Motivo: ${player.eligibility_reason}` : ""}`),
       ];
     };
     const crearEquipo = (teamId: string, teamName: string, etiqueta: "local" | "visitante", rival: string) => {
@@ -1353,8 +1416,8 @@ export default function PartidosPage() {
               <p className="mt-1 text-sm font-bold text-blue-100">Agrega cada cruce con su propia fecha, hora y cancha. Todos quedan dentro de la misma jornada, aunque se jueguen sabado, domingo u otros dias. El automatico sigue disponible cuando quieres que el sistema arme los cruces.</p>
               <button type="button" onClick={() => setModoProgramacion("automatico")} className="mt-3 rounded-lg border border-[#D4A017]/50 bg-[#D4A017]/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">Usar generador automatico</button>
             </div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <label className="flex items-center gap-3 rounded border border-[#2E2E2E] bg-[#1C1C1C] p-3 text-xs font-bold uppercase text-gray-300">
               <input type="checkbox" checked={manualEsVuelta} onChange={e => setManualEsVuelta(e.target.checked)} className="h-4 w-4 accent-[#D4A017]" />
@@ -1510,8 +1573,12 @@ export default function PartidosPage() {
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
 
                <div className="md:col-span-4">
+                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-cyan-200">Puedes generar por regla configurada o sortear los clasificados.</p>
                  <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black text-sm font-black uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(212,160,23,0.3)] hover:scale-[1.01] transition-transform">
                    ⚡ {loading ? "Calculando..." : "Calcular Clasificados y Generar Llaves"}
+                 </button>
+                 <button type="button" onClick={sortearLlavesEliminatorias} disabled={loading} className="mt-3 w-full py-4 rounded-xl border border-cyan-400/50 bg-cyan-500/10 text-sm font-black uppercase tracking-widest text-cyan-200 hover:bg-cyan-400 hover:text-black">
+                   Sortear cruces
                  </button>
                </div>
             </form>
