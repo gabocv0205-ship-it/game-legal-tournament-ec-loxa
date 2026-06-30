@@ -1791,11 +1791,11 @@ export default function PartidosPage() {
 
       <div style={{ display: "none" }} ref={jornadaPosterRef}>
         <div
-          className="relative w-[1080px] min-h-[1350px] overflow-hidden bg-[#071735] px-14 py-12 font-sans text-white"
-          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(135deg, rgba(4,12,38,.82), rgba(7,23,53,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+          className="relative w-[1080px] min-h-[1350px] overflow-hidden bg-[#06183a] px-14 py-12 font-sans text-white"
+          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(135deg, rgba(3,16,46,.82), rgba(4,24,58,.92)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 10% 20%, rgba(212,160,23,.32), transparent 24%), radial-gradient(circle at 92% 70%, rgba(212,160,23,.24), transparent 22%), linear-gradient(145deg, #03102c, #063b78 52%, #020817)" }}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(212,160,23,.34),transparent_22%),radial-gradient(circle_at_84%_35%,rgba(59,130,246,.30),transparent_26%),linear-gradient(160deg,rgba(255,255,255,.08),transparent_35%)]" />
-          <div className="absolute -left-24 bottom-20 h-56 w-56 rotate-45 border-[28px] border-[#D4A017]/30" />
+          <div className="absolute inset-8 rounded-[32px] border-4 border-white/85" />
+          <div className="absolute inset-12 rounded-[24px] border border-[#D4A017]/55" />
           <div className="absolute right-10 top-10 rounded-2xl border border-white/20 bg-black/25 px-5 py-3 text-right">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#D4A017]">Game Legal Tournament</p>
             <p className="text-xl font-black uppercase">{configuracion.tournament_year}</p>
@@ -1803,7 +1803,7 @@ export default function PartidosPage() {
           <div className="relative z-10 flex items-start justify-between gap-8">
             <div className="max-w-[760px]">
               <p className="mb-4 inline-block rounded-full border border-[#D4A017]/60 bg-[#D4A017]/15 px-5 py-2 text-[12px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Cronograma oficial</p>
-              <h1 className="text-7xl font-black uppercase leading-none tracking-wide drop-shadow-[0_5px_0_rgba(0,0,0,.65)]">{tituloPosterJornada}</h1>
+              <h1 className="text-7xl font-black uppercase leading-none tracking-wide text-white drop-shadow-[0_5px_0_rgba(0,0,0,.65)]">{tituloPosterJornada}</h1>
               <p className="mt-4 text-2xl font-black uppercase tracking-widest text-white/90">{partidosPoster[0]?.stage || "Programacion"}</p>
               <p className="mt-2 text-lg font-black uppercase tracking-widest text-[#D4A017]">{fechasPosterTexto || "Fechas por confirmar"}</p>
             </div>
@@ -1822,22 +1822,21 @@ export default function PartidosPage() {
                   </h2>
                   <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {partidosPorDiaPoster[dia].map(p => (
-                    <div key={p.id} className="relative grid grid-cols-[116px_1fr_116px_1fr_116px] items-center overflow-visible rounded-[30px] border border-white/15 bg-gradient-to-r from-white/95 via-white/90 to-white/95 px-4 py-3 text-[#072047] shadow-[0_18px_35px_rgba(0,0,0,.35)]">
+                    <div key={p.id} className="relative grid grid-cols-[108px_1fr_104px_1fr_108px] items-center overflow-visible rounded-[18px] border border-white/80 bg-white px-4 py-3 text-[#072047] shadow-[0_18px_35px_rgba(0,0,0,.35)]">
                       <div className="flex justify-center">
                         {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}
                       </div>
                       <div className="min-w-0 text-right">
-                        <p className="truncate text-2xl font-black uppercase tracking-wide">{p.home?.name || "Local"}</p>
+                        <p className="truncate text-[28px] font-black uppercase tracking-wide">{p.home?.name || "Local"}</p>
                       </div>
-                      <div className="relative mx-auto flex h-20 w-24 flex-col items-center justify-center">
-                        <div className="absolute inset-x-0 top-0 mx-auto h-20 w-24 bg-gradient-to-b from-[#09285f] to-[#06183a]" style={{ clipPath: "polygon(50% 0, 100% 42%, 74% 100%, 26% 100%, 0 42%)" }} />
+                      <div className="relative mx-auto flex h-20 w-24 flex-col items-center justify-center rounded-xl bg-[#06183a]">
                         <span className="relative z-10 text-2xl font-black text-[#D4A017]">VS</span>
                         <span className="relative z-10 mt-1 rounded-full bg-[#D4A017] px-3 py-0.5 text-[11px] font-black text-black">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-2xl font-black uppercase tracking-wide">{p.away?.name || "Visitante"}</p>
+                        <p className="truncate text-[28px] font-black uppercase tracking-wide">{p.away?.name || "Visitante"}</p>
                       </div>
                       <div className="flex justify-center">
                         {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}

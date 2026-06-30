@@ -395,23 +395,23 @@ export default function SorteoPage() {
             {appUrl && torneoSlug && <QRCodeCanvas value={`${appUrl}/torneo/${torneoSlug}#posiciones`} size={90} level="H" fgColor="#D4A017" bgColor="#1C1C1C" />}
             <span className="text-[9px] text-[#111827] font-black uppercase mt-1">Tabla en vivo</span>
           </div>
-          <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#2b2412] to-[#0a0a0a] text-[#E7C36B] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(212,160,23,.35)]">G·L</div>
+          <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-white text-[#111827] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(212,160,23,.22)]">G·L</div>
           <h1 className="text-4xl font-black text-[#111827] tracking-widest uppercase">{nombreTorneo}</h1>
           <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Conformación Oficial de Grupos</p>
         </div>
 
         <div className={`relative grid flex-1 content-center ${posterDenso ? "gap-2" : posterCompacto ? "gap-3" : "gap-4"}`} style={{ gridTemplateColumns: `repeat(${columnasPoster}, minmax(0, 1fr))` }}>
           {equiposPorGrupo.map(grupo => (
-            <div key={grupo.letra} className="min-w-0 bg-white/92 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(15,23,42,.22)] backdrop-blur-sm">
-              <div className={`bg-gradient-to-r from-white via-[#fff8df] to-white border-b border-[#D4A017]/50 text-center ${posterDenso ? "py-1.5" : posterCompacto ? "py-2" : "py-3"}`}>
-                <h3 className={`text-[#E7C36B] font-black tracking-[0.18em] ${posterDenso ? "text-xs" : "text-base"}`}>GRUPO {grupo.letra}</h3>
+            <div key={grupo.letra} className="min-w-0 bg-white rounded-xl border border-black/10 overflow-hidden shadow-[0_16px_35px_rgba(15,23,42,.24)]">
+              <div className={`bg-[#0b0b0b] border-b border-[#D4A017]/50 text-center ${posterDenso ? "py-1.5" : posterCompacto ? "py-2" : "py-3"}`}>
+                <h3 className={`text-white font-black tracking-[0.12em] ${posterDenso ? "text-sm" : "text-base"}`}>GRUPO {grupo.letra}</h3>
               </div>
               <div className={posterDenso ? "p-1.5" : posterCompacto ? "p-2" : "p-3"}>
                 {grupo.equipos.length === 0 ? (
                   <p className="text-gray-600 text-xs text-center italic py-4">Grupo Vacío</p>
                 ) : (
                   grupo.equipos.map(equipo => (
-                    <div key={equipo.id} className={`relative flex items-center min-w-0 border-b border-white/10 last:border-0 ${posterDenso ? "gap-1.5 px-1 py-1" : posterCompacto ? "gap-2 px-1.5 py-1.5" : "gap-3 p-2"}`}>
+                    <div key={equipo.id} className={`relative flex items-center min-w-0 border-b border-slate-200 last:border-0 ${posterDenso ? "gap-2 px-2 py-1.5" : posterCompacto ? "gap-2.5 px-2.5 py-2" : "gap-3 p-2.5"}`}>
                       <div className="shrink-0 flex items-center justify-center" style={{ width: tamanoEscudo, height: tamanoEscudo }}>
                         {equipo.shield_url ? (
                           // crossOrigin="anonymous" es vital para que html2canvas pueda capturar imágenes de Supabase
@@ -420,7 +420,7 @@ export default function SorteoPage() {
                           <div className="w-full h-full bg-[#2E2E2E] rounded-full flex items-center justify-center text-[9px]">🛡️</div>
                         )}
                       </div>
-                      <span className={`min-w-0 flex-1 text-[#111827] font-black uppercase leading-tight break-words ${posterDenso ? "text-[8px]" : posterCompacto ? "text-[9px]" : "text-xs"}`}>{equipo.name}</span>
+                      <span className={`min-w-0 flex-1 text-[#111827] font-black uppercase leading-tight break-words ${posterDenso ? "text-[11px]" : posterCompacto ? "text-xs" : "text-sm"}`}>{equipo.name}</span>
                       {/* En la foto no queremos que salga el botón de borrar, pero se mantiene interactivo aquí */}
                       <button data-html2canvas-ignore onClick={() => cambiarGrupoManual(equipo.id, "Libre")} className="absolute right-1 top-1 text-red-500 hover:text-red-400 text-[8px]">✖</button>
                     </div>
