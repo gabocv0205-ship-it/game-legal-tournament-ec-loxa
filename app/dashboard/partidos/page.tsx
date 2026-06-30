@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
-import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -417,7 +417,12 @@ export default function PartidosPage() {
       const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
       if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados según las reglas del torneo.`);
       const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
-      const fixtures = createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
+      if (configuracion.knockout_pairing_mode === "manual" && !winners.length) {
+        throw new Error("La configuracion del torneo esta en cruces manuales. Usa el modo Manual para agregar cada cruce de esta fase.");
+      }
+      const fixtures = configuracion.knockout_pairing_mode === "group_cross" && !winners.length
+        ? createGroupSequenceKnockoutFixtures(groups, torneoId, faseGenerar, autoJornada, legs).slice(0, legs === 2 ? count : count / 2)
+        : createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
@@ -1028,8 +1033,14 @@ export default function PartidosPage() {
       return alertas.length ? alertas : ["Sin pendientes financieros registrados antes del partido."];
     };
     const crearObservacionesAutomaticas = () => {
+      const reglaCambios = configuracion.substitution_rule === "unlimited"
+        ? "Cambios ilimitados."
+        : configuracion.substitution_rule === "reentry"
+          ? "Cambios con reingreso permitido."
+          : `Cambios limitados a ${configuracion.substitutes_count} suplente(s).`;
       return [
         `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
+        `Regla de sustituciones: ${reglaCambios}`,
         `Regla disciplinaria: ${configuracion.yellow_cards_for_suspension} amarilla(s) generan suspension; roja directa suspende ${configuracion.red_suspension_matches} partido(s).`,
         ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""}`),
       ];
@@ -1219,6 +1230,9 @@ export default function PartidosPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="flex-1">
               <label className="text-xs font-black uppercase tracking-widest text-[#D4A017]">Observaciones del encuentro</label>
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                Sustituciones: {configuracion.substitution_rule === "unlimited" ? "cambios ilimitados" : configuracion.substitution_rule === "reentry" ? "cambios con reingreso" : `limitadas a ${configuracion.substitutes_count} suplente(s)`}
+              </p>
               <textarea value={observacionesPartido} onChange={e => setObservacionesPartido(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white outline-none focus:border-[#D4A017]" placeholder="Comentarios adicionales del partido..." />
             </div>
             <button onClick={guardarObservacionesPartido} disabled={loading} className="rounded-xl border border-[#D4A017]/50 px-4 py-3 text-xs font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">
@@ -1436,6 +1450,16 @@ export default function PartidosPage() {
             </div>
             
             <form onSubmit={generarLlavesInteligentes} className="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+               <div className="md:col-span-4 rounded-xl border border-yellow-500/25 bg-yellow-500/10 p-4">
+                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-yellow-300">Regla activa de cruces</p>
+                 <p className="mt-1 text-sm font-bold text-yellow-50">
+                   {configuracion.knockout_pairing_mode === "group_cross"
+                     ? "Secuencia de grupos: primero del Grupo A vs segundo del Grupo B, y viceversa."
+                     : configuracion.knockout_pairing_mode === "manual"
+                       ? "Cruces manuales: arma cada partido desde el modo Manual y el sistema validara duplicados."
+                       : "Tabla general: mejor clasificado general vs ultimo clasificado general."}
+                 </p>
+               </div>
                <div className="md:col-span-2">
                  <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Formato de Llave</label>
                  <select value={formatoEliminatoria} onChange={e => setFormatoEliminatoria(e.target.value)} className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded outline-none">

@@ -312,6 +312,11 @@ export default function PortalTorneoDinamico() {
             <p style={{ color: 'var(--gray)', fontSize: '18px', maxWidth: '550px', marginBottom: '40px', lineHeight: '1.6' }}>
               El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
+            {torneoActual?.poster_url && (
+              <div style={{ width: 'min(100%, 360px)', height: '190px', marginBottom: '28px', borderRadius: '18px', overflow: 'hidden', border: '1px solid rgba(212,160,23,.35)', boxShadow: '0 20px 60px rgba(0,0,0,.45)' }}>
+                <Image src={torneoActual.poster_url} alt={`Poster de ${torneoActual?.name || 'torneo'}`} width={720} height={380} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
               <Link href="/" className="btn-secondary">
                 <i className="fa fa-arrow-left"></i> Volver al Directorio

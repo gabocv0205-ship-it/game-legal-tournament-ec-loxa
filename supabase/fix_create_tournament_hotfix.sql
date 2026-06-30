@@ -41,6 +41,8 @@ alter table public.tournaments
   add column if not exists repechage_slots integer default 0,
   add column if not exists knockout_legs integer default 1,
   add column if not exists final_legs integer default 1,
+  add column if not exists knockout_pairing_mode text default 'general_table',
+  add column if not exists substitution_rule text default 'limited',
   add column if not exists court_count integer default 1,
   add column if not exists start_date date,
   add column if not exists estimated_end_date date,

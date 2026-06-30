@@ -18,6 +18,8 @@ export type TournamentConfig = {
   yellow_suspension_matches: number;
   red_suspension_matches: number;
   max_players_per_team: number;
+  knockout_pairing_mode: "general_table" | "group_cross" | "manual";
+  substitution_rule: "limited" | "unlimited" | "reentry";
 };
 
 export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
@@ -40,11 +42,19 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   yellow_suspension_matches: 1,
   red_suspension_matches: 1,
   max_players_per_team: 25,
+  knockout_pairing_mode: "general_table",
+  substitution_rule: "limited",
 };
 
 export function normalizeTournamentConfig(source: any): TournamentConfig {
   const number = (key: keyof TournamentConfig, minimum = 1) =>
     Math.max(minimum, Number(source?.[key] ?? DEFAULT_TOURNAMENT_CONFIG[key]));
+  const knockoutMode = ["general_table", "group_cross", "manual"].includes(String(source?.knockout_pairing_mode))
+    ? source.knockout_pairing_mode
+    : DEFAULT_TOURNAMENT_CONFIG.knockout_pairing_mode;
+  const substitutionRule = ["limited", "unlimited", "reentry"].includes(String(source?.substitution_rule))
+    ? source.substitution_rule
+    : DEFAULT_TOURNAMENT_CONFIG.substitution_rule;
 
   return {
     format: source?.format || DEFAULT_TOURNAMENT_CONFIG.format,
@@ -66,6 +76,8 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     yellow_suspension_matches: number("yellow_suspension_matches"),
     red_suspension_matches: number("red_suspension_matches"),
     max_players_per_team: number("max_players_per_team"),
+    knockout_pairing_mode: knockoutMode,
+    substitution_rule: substitutionRule,
   };
 }
 
@@ -156,6 +168,7 @@ export function calculateStandings(teams: any[], matches: any[], events: any[] =
     group.forEach((team) => { team.gd = team.gf - team.gc; });
     group.sort(sortStandings);
     group.forEach((team, index) => {
+      team.groupRank = index + 1;
       if (index < rules.qualifiers_per_group) team.classificationStatus = "qualified";
       else if (rules.repechage_enabled && index < rules.qualifiers_per_group + rules.repechage_slots) team.classificationStatus = "repechage";
     });
@@ -275,6 +288,49 @@ export function createKnockoutFixtures(qualified: any[], tournamentId: string, s
     if (legs === 2) fixtures.push({ tournament_id: tournamentId, home_team_id: worst.id, away_team_id: best.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` });
   }
   return fixtures;
+}
+
+export function createGroupSequenceKnockoutFixtures(groups: Record<string, any[]>, tournamentId: string, stage: string, matchday: number, legs: number) {
+  const groupNames = Object.keys(groups).sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+  const used = new Set<string>();
+  const pairs: any[] = [];
+
+  for (let groupIndex = 0; groupIndex < groupNames.length; groupIndex += 2) {
+    const groupA = groups[groupIndex >= groupNames.length ? groupNames[0] : groupNames[groupIndex]];
+    const groupB = groups[groupIndex + 1 >= groupNames.length ? groupNames[0] : groupNames[groupIndex + 1]];
+    if (!groupA || !groupB || groupA === groupB) continue;
+    const qualifiedA = groupA.filter(team => team.classificationStatus === "qualified").sort((a, b) => Number(a.groupRank || 99) - Number(b.groupRank || 99));
+    const qualifiedB = groupB.filter(team => team.classificationStatus === "qualified").sort((a, b) => Number(a.groupRank || 99) - Number(b.groupRank || 99));
+    const maxRank = Math.max(qualifiedA.length, qualifiedB.length);
+    for (let rank = 0; rank < maxRank; rank++) {
+      const reverseRank = maxRank - rank - 1;
+      const first = qualifiedA[rank];
+      const second = qualifiedB[reverseRank];
+      if (first && second && !used.has(first.id) && !used.has(second.id)) {
+        pairs.push([first, second]);
+        used.add(first.id); used.add(second.id);
+      }
+      const third = qualifiedB[rank];
+      const fourth = qualifiedA[reverseRank];
+      if (third && fourth && !used.has(third.id) && !used.has(fourth.id)) {
+        pairs.push([third, fourth]);
+        used.add(third.id); used.add(fourth.id);
+      }
+    }
+  }
+
+  const remaining = Object.values(groups)
+    .flat()
+    .filter(team => team.classificationStatus === "qualified" && !used.has(team.id))
+    .sort(sortStandings);
+  while (remaining.length >= 2) pairs.push([remaining.shift(), remaining.pop()]);
+
+  return pairs.flatMap(([home, away]) => {
+    const fixture = { tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage };
+    return legs === 2
+      ? [fixture, { tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` }]
+      : [fixture];
+  });
 }
 
 export function getStageWinners(matches: any[], teams: any[], stage: string) {

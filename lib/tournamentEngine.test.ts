@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFinancialBalance,
   calculateStandings,
+  createGroupSequenceKnockoutFixtures,
   createKnockoutFixtures,
   createMatchdayFixtures,
   getStageWinners,
@@ -96,6 +97,22 @@ describe("motor deportivo", () => {
     const fixtures = createKnockoutFixtures(teams, "t1", "Semifinal", 5, 1);
     expect(fixtures).toHaveLength(2);
     expect(fixtures[0]).toMatchObject({ home_team_id: "a", away_team_id: "d", stage: "Semifinal" });
+  });
+
+  it("genera cruces por secuencia de grupos tipo Libertadores", () => {
+    const groups = calculateStandings([
+      { id: "a1", name: "A1", group_name: "A" },
+      { id: "a2", name: "A2", group_name: "A" },
+      { id: "b1", name: "B1", group_name: "B" },
+      { id: "b2", name: "B2", group_name: "B" },
+    ], [
+      { status: "finished", home_team_id: "a1", away_team_id: "a2", home_goals: 3, away_goals: 0 },
+      { status: "finished", home_team_id: "b1", away_team_id: "b2", home_goals: 3, away_goals: 0 },
+    ], [], { qualifiers_per_group: 2 });
+    const fixtures = createGroupSequenceKnockoutFixtures(groups, "t1", "Semifinal", 5, 1);
+    expect(fixtures).toHaveLength(2);
+    expect(fixtures[0]).toMatchObject({ home_team_id: "a1", away_team_id: "b2" });
+    expect(fixtures[1]).toMatchObject({ home_team_id: "b1", away_team_id: "a2" });
   });
 
   it("avanza al ganador de una llave empatada resuelta por penales", () => {

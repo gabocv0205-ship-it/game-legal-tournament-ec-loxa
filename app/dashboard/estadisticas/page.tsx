@@ -405,6 +405,13 @@ export default function EstadisticasPage() {
                     <div className="flex justify-between items-center"><span className="flex items-center gap-2">{match.home?.shield_url && <Image src={match.home.shield_url} alt="" width={20} height={20} unoptimized />}{match.home?.name}</span><b>{match.status === 'finished' ? match.home_goals : '-'}</b></div>
                     <div className="border-t border-[#2E2E2E] my-2" />
                     <div className="flex justify-between items-center"><span className="flex items-center gap-2">{match.away?.shield_url && <Image src={match.away.shield_url} alt="" width={20} height={20} unoptimized />}{match.away?.name}</span><b>{match.status === 'finished' ? match.away_goals : '-'}</b></div>
+                    <div className="mt-3 rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      {match.status === "finished"
+                        ? Number(match.home_goals || 0) === Number(match.away_goals || 0)
+                          ? "Empate / revisar penales"
+                          : `Avanza ${Number(match.home_goals || 0) > Number(match.away_goals || 0) ? match.home?.name : match.away?.name}`
+                        : "Pendiente"}
+                    </div>
                   </div>
                 ))}
               </div>

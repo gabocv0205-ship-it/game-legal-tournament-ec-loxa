@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -252,6 +253,15 @@ export default function GestorTorneos() {
                 </div>
 
                 <div className="relative z-10 flex-1 mt-2">
+                  <div className="mb-4 h-36 overflow-hidden rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a]">
+                    {t.poster_url || t.banner_url ? (
+                      <Image src={t.poster_url || t.banner_url} alt={`Poster de ${t.name}`} width={420} height={240} unoptimized className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#082017] via-[#141414] to-[#2b2108] text-4xl font-black text-[#D4A017]">
+                        <Icon path={Icons.trophy} size={42} />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-start justify-between mb-4 pr-16">
                     <div className="w-12 h-12 bg-[#1C1C1C] border border-[#D4A017]/30 rounded-full flex items-center justify-center text-[#D4A017] shadow-inner">
                       <Icon path={Icons.trophy} size={24} />
