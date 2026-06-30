@@ -107,6 +107,26 @@ export default function ConfiguracionPage() {
     }
   };
 
+  const aplicarFormatoCompeticion = (value: string) => {
+    setFormato(value);
+    if (value === "sudamericana") {
+      setEquiposPorGrupo(4);
+      setClasificadosPorGrupo(2);
+      setPartidosEliminatoria(2);
+      setPartidosFinal(1);
+      setRepechaje(false);
+      setCuposRepechaje(0);
+    } else if (value === "libertadores" || value === "champions" || value === "europa_league") {
+      setEquiposPorGrupo(4);
+      setClasificadosPorGrupo(2);
+      setPartidosEliminatoria(2);
+    } else if (value === "liguilla" || value === "todos_contra_todos") {
+      setNumGrupos(1);
+      setClasificadosPorGrupo(2);
+      setPartidosEliminatoria(1);
+    }
+  };
+
   const guardarConfiguracion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!torneoId) return alert("No hay un torneo activo seleccionado.");
@@ -214,7 +234,7 @@ export default function ConfiguracionPage() {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Formato de Competición</label>
-              <select value={formato} onChange={e => setFormato(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all cursor-pointer">
+              <select value={formato} onChange={e => aplicarFormatoCompeticion(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all cursor-pointer">
                 <option value="mundial">Copa Mundial</option>
                 <option value="libertadores">Copa Libertadores</option>
                 <option value="sudamericana">Copa Sudamericana</option>

@@ -199,6 +199,7 @@ export default function PartidosPage() {
       setAuspiciantesTorneo(Array.isArray(tourney.tournament_sponsors) ? tourney.tournament_sponsors.filter(Boolean) : []);
       const rules = normalizeTournamentConfig(tourney);
       setConfiguracion(rules);
+      setIdaYVuelta(["sudamericana", "libertadores", "champions", "europa_league"].includes(rules.format));
       setAutoDuracion(rules.match_duration_minutes);
       setFondoPosterUrl(tourney.match_poster_background_url || "");
     }
@@ -893,6 +894,10 @@ export default function PartidosPage() {
     const maximoPlantilla = Number(configuracion.max_players_per_team || cupoConfigurado);
     const cupoPartido = Math.max(1, Math.min(cupoConfigurado || maximoPlantilla || 1, maximoPlantilla || cupoConfigurado || 1));
     const altoFilaMm = cupoPartido > 22 ? 3.4 : cupoPartido > 18 ? 3.9 : cupoPartido > 14 ? 4.5 : 5.2;
+    const altoFilaTablaMm = cupoPartido > 22 ? 3.9 : cupoPartido > 18 ? 4.35 : cupoPartido > 14 ? 4.9 : 5.6;
+    const crearFilasJugadores = () => Array.from({ length: cupoPartido }, () => `<tr>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+        </tr>`).join("");
     const crearCasillas = () => Array.from({ length: cupoPartido }, (_, index) => `<article class="player-card">
           <div class="card-index">${index + 1}</div>
           <div class="field id"><b>Identificacion</b><span></span></div>
@@ -952,7 +957,7 @@ export default function PartidosPage() {
         ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""}`),
       ];
     };
-    const crearEquipo = (teamId: string, teamName: string) => {
+    const crearEquipo = (teamId: string, teamName: string, etiqueta: "local" | "visitante", rival: string) => {
       const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
       const suspendidosTexto = suspendidosEquipo.length
         ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
@@ -964,6 +969,29 @@ export default function PartidosPage() {
         <div class="observ-mini"><b>Observaciones y pendientes</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(4)}</div></div>
         <div class="team-footer"><div><b>Firma representante del equipo</b></div></div></section>`;
     };
+    const crearMediaPlanilla = (teamId: string, teamName: string, etiqueta: "local" | "visitante", rival: string) => {
+      const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
+      const suspendidosTexto = suspendidosEquipo.length
+        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
+        : esEstandar ? "________________________________________________" : "Ninguno";
+      const pendientesFinancieros = crearPendientesFinancieros(teamId);
+      const equipoTitulo = etiqueta === "local" ? "Equipo local" : "Equipo visitante";
+      return `<section class="team-half">
+        <header class="half-header">
+          <div class="half-top"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO - Planilla oficial de control deportivo</span></div><b>Partido oficial</b><em>${escapeHtml(configuracion.tournament_year)}</em></div>
+          <div class="green-line"></div>
+          <div class="versus"><span>Equipo local: ${etiqueta === "local" ? escapeHtml(teamName) : escapeHtml(rival)}</span><b>VS</b><span>Equipo visitante: ${etiqueta === "visitante" ? escapeHtml(teamName) : escapeHtml(rival)}</span></div>
+          <div class="rules">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
+          <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
+          <div class="score-row"><strong>${equipoTitulo}: ${escapeHtml(teamName)}</strong><span>Marcador: ______</span></div>
+        </header>
+        <div class="team-name"><small>Equipo</small><strong>${equipoTitulo}: ${escapeHtml(teamName)}</strong><span>Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</span></div>
+        <table class="players-table"><thead><tr><th>Identificacion</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Sust.</th><th>Ingreso por</th></tr></thead><tbody>${crearFilasJugadores()}</tbody></table>
+        <div class="suspended"><b>No convocados automaticamente por suspension:</b><span>${suspendidosTexto}</span></div>
+        <div class="observ-mini"><b>Observaciones del equipo / sistema / adicionales</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(3)}</div></div>
+        <div class="team-footer"><div><b>Firma representante del equipo</b></div></div>
+      </section>`;
+    };
     const observacionesAutomaticas = crearObservacionesAutomaticas();
     const observacionesManual = String(partido.notes || "").trim();
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
@@ -974,12 +1002,13 @@ export default function PartidosPage() {
       table{display:none}.player-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7mm;margin-top:.8mm;min-height:0}.player-card{display:grid;grid-template-columns:4.5mm 1fr 11mm;grid-template-areas:"idx id shirt" "idx name name" "idx mini mini" "idx sub entered";gap:.45mm;border:1px solid #64748b;background:#fff;padding:.55mm;min-height:${cupoPartido > 18 ? 5.5 : 6.4}mm;page-break-inside:avoid;break-inside:avoid}.card-index{grid-area:idx;display:flex;align-items:center;justify-content:center;background:#0f5132;color:#fff;font-size:6px;font-weight:900}.field{min-width:0}.field b,.mini-fields b{display:block;font-size:4.2px;line-height:1;text-transform:uppercase;color:#475569}.field span,.mini-fields span{display:block;height:2mm;border-bottom:1px solid #94a3b8}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{grid-area:sub}.field.entered{grid-area:entered}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:.4mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:.9mm;font-size:5.5px;margin-top:.8mm;min-height:4.4mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:1mm;font-size:5.6px;min-height:13mm;margin-top:.8mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.4mm}.observ-mini ul{margin:0 0 .4mm 0;padding-left:2.5mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:3px;font-size:6.2px;margin-top:auto;padding-top:1mm}.team-footer div{border:1px solid #111827;min-height:6mm;padding:2px;text-align:center}.observations{display:none}
       .review-grid{display:none}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:4px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:none}
       @media print{html,body{width:210mm;height:297mm}.sheet{width:198mm;height:285mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,table{page-break-inside:avoid;break-inside:avoid}}
+      @page{size:A4 landscape;margin:5mm}html,body{width:297mm;height:210mm}.sheet{width:287mm;height:200mm;padding:3mm;border:1.6px solid #111827;display:block;position:relative;overflow:hidden}.sheet:before{content:"";position:absolute;top:2mm;bottom:2mm;left:50%;border-left:1px dashed #94a3b8}.sheet>.brand,.sheet>h1,.sheet>.subtitle,.sheet>.meta,.sheet>.score-band,.review-grid,.signatures{display:none}.teams{display:grid;grid-template-columns:1fr 1fr;gap:6mm;height:100%;min-height:0}.team-half{border:0;padding:0;display:flex;flex-direction:column;min-width:0;height:100%}.half-header{display:block}.half-top{display:grid;grid-template-columns:1fr auto auto;align-items:start;gap:7mm}.half-top strong{display:block;font-size:13px;line-height:1.08;letter-spacing:.9px;text-transform:uppercase;color:#111827}.half-top span{display:block;margin-top:3mm;font-size:5.8px;text-transform:uppercase;color:#475569}.half-top b{justify-self:center;border:1.5px solid #0f5132;border-radius:999px;color:#0f5132;padding:2px 8px;font-size:6.4px;text-transform:uppercase}.half-top em{font-style:normal;font-weight:900;color:#0f5132;font-size:12px}.green-line{height:1.4px;background:#0f5132;margin:4mm 0 3mm}.versus{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:3mm;text-align:center;text-transform:uppercase;font-size:8px;font-weight:900}.versus span{border-bottom:1px solid #6b7280;min-height:4mm}.versus b{font-size:9px}.rules{text-align:center;font-size:5.8px;color:#475569;text-transform:uppercase;margin:1mm 0 2mm}.meta{display:grid;grid-template-columns:1fr 1fr 1fr 1.15fr;gap:0;border:1px solid #94a3b8;background:#f8fafc;padding:0}.meta span{border-right:1px solid #94a3b8;border-bottom:0;padding:2mm 1mm;font-size:5.8px}.meta span:last-child{border-right:0}.score-row{display:grid;grid-template-columns:1fr auto;align-items:center;border:1.4px solid #111827;border-top:0;padding:2.5mm 3mm;text-transform:uppercase}.score-row strong{font-size:9px}.score-row span{font-size:6.5px;font-weight:900}.team-name{display:grid;grid-template-columns:1fr auto;gap:1mm;align-items:end;margin:2.2mm 0 1.2mm}.team-name small{grid-column:1/-1;color:#6b7280;font-size:5.5px;text-transform:uppercase}.team-name strong{font-size:9px;text-transform:uppercase;color:#4b5563}.team-name span{font-size:5.8px;font-weight:900;text-transform:uppercase;color:#475569}.players-table{display:table;width:100%;border-collapse:collapse;table-layout:fixed}.players-table th{background:#f3f4f6;color:#111827;font-size:5.3px;text-transform:uppercase;height:5.2mm;border:1px solid #94a3b8}.players-table td{height:${altoFilaTablaMm}mm;border:1px solid #94a3b8}.players-table th:nth-child(1){width:16%}.players-table th:nth-child(2){width:5.5%}.players-table th:nth-child(3){width:27%}.players-table th:nth-child(4){width:5.2%}.players-table th:nth-child(5){width:7%}.players-table th:nth-child(6),.players-table th:nth-child(7){width:5%}.players-table th:nth-child(8){width:10.5%}.players-table th:nth-child(9){width:19%}.suspended{display:flex;gap:2mm;border:1px solid #dc2626;border-left:3mm solid #b91c1c;background:#fff;font-size:5.7px;padding:1.5mm;margin-top:1mm;min-height:6mm}.suspended b{white-space:nowrap}.observ-mini{border:1px solid #0f5132;margin-top:2mm;padding:1.5mm;font-size:5.8px;min-height:14mm}.observ-mini b{color:#0f5132;text-transform:uppercase}.observ-mini ul{margin:.5mm 0 0;padding-left:3mm;max-height:7mm;overflow:hidden}.observ-mini li{margin:0}.lines span{display:block;height:2.5mm;border-bottom:1px solid #cbd5e1}.team-footer{margin-top:auto;display:block;padding-top:2mm}.team-footer div{height:11mm;border:1px solid #6b7280;padding:2mm;font-size:6px;text-align:left}.cut-line{display:none}@media print{html,body{width:297mm;height:210mm}.sheet{width:287mm;height:200mm;margin:0;page-break-inside:avoid;break-inside:avoid}.team-half,.players-table{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
       <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
       <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
       <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
       <div class="score-band"><div class="score-team">${escapeHtml(partido.home?.name)}</div><div class="score-box"><div class="score-cell"></div><span>MARCADOR</span><div class="score-cell"></div></div><div class="score-team">${escapeHtml(partido.away?.name)}</div></div>
-      <div class="teams">${crearEquipo(partido.home_team_id, partido.home?.name)}<div class="cut-line"><span>CORTAR AQUÍ - ENTREGAR UNA PARTE A CADA DIRIGENTE</span></div>${crearEquipo(partido.away_team_id, partido.away?.name)}</div>
+      <div class="teams">${crearMediaPlanilla(partido.home_team_id, partido.home?.name, "local", partido.away?.name)}<div class="cut-line"></div>${crearMediaPlanilla(partido.away_team_id, partido.away?.name, "visitante", partido.home?.name)}</div>
       <div class="review-grid">
         <div class="ruled-box"><strong>Observaciones del sistema y adicionales</strong><ul class="auto-list">${observacionesAutomaticas.map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<div class="manual-note"><b>Observacion manual:</b> ${escapeHtml(observacionesManual)}</div>` : ""}<div class="lines">${crearLineas(3)}</div></div>
         <div class="pending"><strong>Observaciones adicionales del usuario</strong>
