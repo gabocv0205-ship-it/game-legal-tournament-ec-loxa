@@ -199,7 +199,7 @@ export default function EstadisticasPage() {
       }));
       const ancho = poster.scrollWidth;
       const alto = poster.scrollHeight;
-      const canvas = await html2canvas(poster, { backgroundColor: "#06132f", scale: 2, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
+      const canvas = await html2canvas(poster, { backgroundColor: "#06132f", scale: 3, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
       const socialCanvas = document.createElement("canvas");
       socialCanvas.width = 1080; socialCanvas.height = 1350;
       const context = socialCanvas.getContext("2d");
@@ -233,7 +233,7 @@ export default function EstadisticasPage() {
           image.onerror = resolve;
         });
       }));
-      const canvas = await html2canvas(poster, { backgroundColor: "#07122d", scale: 2, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
+      const canvas = await html2canvas(poster, { backgroundColor: "#07122d", scale: 3, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `Goleadores-${nombreTorneo}-${anioTorneo}.png`;

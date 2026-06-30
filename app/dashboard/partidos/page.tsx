@@ -60,6 +60,7 @@ export default function PartidosPage() {
   const [jornadaManual, setJornadaManual] = useState<number>(1);
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
+  const [grupoManual, setGrupoManual] = useState("Todos");
   const [manualEsVuelta, setManualEsVuelta] = useState(false);
   const [observacionesManual, setObservacionesManual] = useState("");
   const [manualPendientes, setManualPendientes] = useState<ManualMatchDraft[]>([]);
@@ -901,7 +902,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       posterNode.style.display = "block";
-      const canvas = await html2canvas(posterNode, { backgroundColor: "#071735", scale: 2, useCORS: true });
+      const canvas = await html2canvas(posterNode, { backgroundColor: "#071735", scale: 3, useCORS: true });
       posterNode.style.display = "none";
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
@@ -1005,7 +1006,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const anchoCompleto = bracketPosterRef.current.scrollWidth;
-      const canvas = await html2canvas(bracketPosterRef.current, { backgroundColor: "#07122d", scale: 2, useCORS: true, width: anchoCompleto, windowWidth: anchoCompleto });
+      const canvas = await html2canvas(bracketPosterRef.current, { backgroundColor: "#07122d", scale: 3, useCORS: true, width: anchoCompleto, windowWidth: anchoCompleto });
       const socialCanvas = document.createElement("canvas");
       socialCanvas.width = 1080; socialCanvas.height = 1080;
       const context = socialCanvas.getContext("2d");
@@ -1138,7 +1139,6 @@ export default function PartidosPage() {
           <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
           <div class="score-row"><strong>${equipoTitulo}: ${escapeHtml(teamName)}</strong><span>Marcador: ______</span></div>
         </header>
-        <div class="team-name"><small>Equipo</small><strong>${equipoTitulo}: ${escapeHtml(teamName)}</strong><span>Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</span></div>
         <table class="players-table"><thead><tr><th>Identificacion</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Sust.</th><th>Ingreso por</th></tr></thead><tbody>${crearFilasJugadores()}</tbody></table>
         <div class="suspended"><b>No convocados automaticamente por suspension:</b><span>${suspendidosTexto}</span></div>
         <div class="observ-mini"><b>Observaciones del equipo / sistema / adicionales</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(3)}</div></div>
@@ -1223,6 +1223,10 @@ export default function PartidosPage() {
   const diasPoster = Object.keys(partidosPorDiaPoster).sort();
   const tituloPosterJornada = filtroJornada ? `FECHA ${filtroJornada}` : "JORNADA OFICIAL";
   const fechasPosterTexto = diasPoster.map(dia => new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })).join(" / ");
+  const gruposManual = Array.from(new Set(equipos.map(equipo => equipo.group_name || "General"))).sort();
+  const equiposManual = faseBase(faseManual) === "Fase de Grupos" && grupoManual !== "Todos"
+    ? equipos.filter(equipo => (equipo.group_name || "General") === grupoManual)
+    : equipos;
   const jornadasCulminadas = Array.from(new Map(
     partidos
       .filter(partido => partido.status === "finished")
@@ -1418,9 +1422,10 @@ export default function PartidosPage() {
               <p className="mt-1 text-sm font-bold text-blue-100">Agrega cada cruce con su propia fecha, hora y cancha. Todos quedan dentro de la misma jornada, aunque se jueguen sabado, domingo u otros dias. El automatico sigue disponible cuando quieres que el sistema arme los cruces.</p>
               <button type="button" onClick={() => setModoProgramacion("automatico")} className="mt-3 rounded-lg border border-[#D4A017]/50 bg-[#D4A017]/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">Usar generador automatico</button>
             </div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Grupo</label><select value={grupoManual} onChange={e => { setGrupoManual(e.target.value); setLocalId(""); setVisitanteId(""); }} disabled={faseBase(faseManual) !== "Fase de Grupos"} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded disabled:opacity-60"><option value="Todos">Todos</option>{gruposManual.map(grupo => <option key={grupo} value={grupo}>Grupo {grupo}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name} · Grupo {eq.group_name || "General"}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name} · Grupo {eq.group_name || "General"}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => { setFaseManual(e.target.value); setLocalId(""); setVisitanteId(""); }} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <label className="flex items-center gap-3 rounded border border-[#2E2E2E] bg-[#1C1C1C] p-3 text-xs font-bold uppercase text-gray-300">
               <input type="checkbox" checked={manualEsVuelta} onChange={e => setManualEsVuelta(e.target.checked)} className="h-4 w-4 accent-[#D4A017]" />
               Partido de vuelta

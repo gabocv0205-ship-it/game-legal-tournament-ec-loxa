@@ -204,8 +204,8 @@ export default function SorteoPage() {
         });
       }));
       const canvas = await html2canvas(poster, {
-        backgroundColor: "#0a0a0a",
-        scale: 1,
+        backgroundColor: "#edf4ee",
+        scale: 2,
         useCORS: true,
         width: 1080,
         height: 1080,
@@ -217,7 +217,7 @@ export default function SorteoPage() {
       socialCanvas.width = 1080; socialCanvas.height = 1080;
       const context = socialCanvas.getContext("2d");
       if (!context) throw new Error("No se pudo preparar el póster");
-      context.fillStyle = "#0a0a0a"; context.fillRect(0, 0, 1080, 1080);
+      context.fillStyle = "#edf4ee"; context.fillRect(0, 0, 1080, 1080);
       context.drawImage(canvas, 0, 0, 1080, 1080);
       const image = socialCanvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -248,7 +248,7 @@ export default function SorteoPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#2E2E2E] pb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#C99A1A]/40 pb-6">
         <div>
           <h2 className="text-3xl font-black text-white uppercase tracking-wider">Sorteo y Fase de Grupos</h2>
           <p className="text-gray-400 font-bold text-sm mt-1">Total de Clubes Inscritos: <span className="text-[#D4A017]">{equipos.length}</span></p>
@@ -386,25 +386,24 @@ export default function SorteoPage() {
       {/* ZONA DE CAPTURA DE IMAGEN 
         Todo lo que esté dentro de este div (ref={capturaRef}) saldrá en la foto final.
       */}
-      <div ref={capturaRef} className="p-8 bg-[#0a0a0a] rounded-xl relative overflow-hidden border-8 border-[#D4A017] flex flex-col" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(10,10,10,.78), rgba(10,10,10,.9)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 25%, rgba(212,160,23,.18), transparent 34%), linear-gradient(145deg, #080808, #17130a 50%, #080808)" }}>
-        <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full border-[18px] border-[#D4A017]/10" />
-        <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full border-[22px] border-[#D4A017]/10" />
-        <div className="absolute inset-4 rounded-2xl border border-[#D4A017]/20 pointer-events-none" />
+      <div ref={capturaRef} className="p-8 bg-[#edf4ee] rounded-xl relative overflow-hidden border-[10px] border-[#C99A1A] flex flex-col shadow-2xl" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(237,244,238,.86), rgba(237,244,238,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 18%, rgba(212,160,23,.18), transparent 28%), linear-gradient(145deg, #f7fbf8, #dbe7df 52%, #f8fbf8)" }}>
+        <div className="absolute inset-5 rounded-[28px] border-4 border-[#0B1620] pointer-events-none" />
+        <div className="absolute inset-8 rounded-[22px] border border-[#C99A1A]/45 pointer-events-none" />
         {/* Título solo visible en la imagen o al descargar */}
-        <div className="relative text-center mb-7 pb-5 border-b border-[#2E2E2E]">
-          <div className="absolute right-0 top-0 bg-[#1C1C1C] p-2 rounded-xl flex flex-col items-center shadow-2xl border border-[#D4A017]">
+        <div className="relative text-center mb-7 pb-5 border-b border-[#C99A1A]/40">
+          <div className="absolute right-0 top-0 bg-white/90 p-2 rounded-xl flex flex-col items-center shadow-2xl border border-[#D4A017]">
             {appUrl && torneoSlug && <QRCodeCanvas value={`${appUrl}/torneo/${torneoSlug}#posiciones`} size={90} level="H" fgColor="#D4A017" bgColor="#1C1C1C" />}
-            <span className="text-[9px] text-white font-black uppercase mt-1">Tabla en vivo</span>
+            <span className="text-[9px] text-[#111827] font-black uppercase mt-1">Tabla en vivo</span>
           </div>
           <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#2b2412] to-[#0a0a0a] text-[#E7C36B] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(212,160,23,.35)]">G·L</div>
-          <h1 className="text-3xl font-black text-white tracking-widest uppercase">{nombreTorneo}</h1>
+          <h1 className="text-4xl font-black text-[#111827] tracking-widest uppercase">{nombreTorneo}</h1>
           <p className="text-[#D4A017] font-bold text-sm tracking-widest uppercase mt-1">Conformación Oficial de Grupos</p>
         </div>
 
         <div className={`relative grid flex-1 content-center ${posterDenso ? "gap-2" : posterCompacto ? "gap-3" : "gap-4"}`} style={{ gridTemplateColumns: `repeat(${columnasPoster}, minmax(0, 1fr))` }}>
           {equiposPorGrupo.map(grupo => (
-            <div key={grupo.letra} className="min-w-0 bg-[#141414]/90 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(0,0,0,.38)] backdrop-blur-sm">
-              <div className={`bg-gradient-to-r from-[#141414] via-[#2b2412] to-[#141414] border-b border-[#D4A017]/50 text-center ${posterDenso ? "py-1.5" : posterCompacto ? "py-2" : "py-3"}`}>
+            <div key={grupo.letra} className="min-w-0 bg-white/92 rounded-xl border border-[#D4A017]/55 overflow-hidden shadow-[0_12px_35px_rgba(15,23,42,.22)] backdrop-blur-sm">
+              <div className={`bg-gradient-to-r from-white via-[#fff8df] to-white border-b border-[#D4A017]/50 text-center ${posterDenso ? "py-1.5" : posterCompacto ? "py-2" : "py-3"}`}>
                 <h3 className={`text-[#E7C36B] font-black tracking-[0.18em] ${posterDenso ? "text-xs" : "text-base"}`}>GRUPO {grupo.letra}</h3>
               </div>
               <div className={posterDenso ? "p-1.5" : posterCompacto ? "p-2" : "p-3"}>
@@ -421,7 +420,7 @@ export default function SorteoPage() {
                           <div className="w-full h-full bg-[#2E2E2E] rounded-full flex items-center justify-center text-[9px]">🛡️</div>
                         )}
                       </div>
-                      <span className={`min-w-0 flex-1 text-white font-black uppercase leading-tight break-words ${posterDenso ? "text-[8px]" : posterCompacto ? "text-[9px]" : "text-xs"}`}>{equipo.name}</span>
+                      <span className={`min-w-0 flex-1 text-[#111827] font-black uppercase leading-tight break-words ${posterDenso ? "text-[8px]" : posterCompacto ? "text-[9px]" : "text-xs"}`}>{equipo.name}</span>
                       {/* En la foto no queremos que salga el botón de borrar, pero se mantiene interactivo aquí */}
                       <button data-html2canvas-ignore onClick={() => cambiarGrupoManual(equipo.id, "Libre")} className="absolute right-1 top-1 text-red-500 hover:text-red-400 text-[8px]">✖</button>
                     </div>
