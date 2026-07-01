@@ -1122,10 +1122,9 @@ export default function PartidosPage() {
     const cupoConfigurado = Number(configuracion.football_modality || 0) + Number(configuracion.substitutes_count || 0);
     const maximoPlantilla = Number(configuracion.max_players_per_team || cupoConfigurado);
     const cupoPartido = Math.max(1, Math.min(cupoConfigurado || maximoPlantilla || 1, maximoPlantilla || cupoConfigurado || 1));
-    const altoFilaMm = cupoPartido > 22 ? 3.3 : cupoPartido > 18 ? 3.7 : cupoPartido > 14 ? 4.1 : 4.7;
+    const altoFilaMm = cupoPartido > 22 ? 3.1 : cupoPartido > 18 ? 3.5 : cupoPartido > 14 ? 4 : 4.6;
     const crearFilasJugadores = () => Array.from({ length: cupoPartido }, (_, index) => `<tr>
           <td class="idx">${index + 1}</td>
-          <td></td>
           <td></td>
           <td></td>
           <td></td>
@@ -1196,58 +1195,24 @@ export default function PartidosPage() {
         ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}${player.suspension_reason ? ` - ${player.suspension_reason}` : ""}${player.suspension_available_matchday ? ` - vuelve fecha ${player.suspension_available_matchday}` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
       const pendientesFinancieros = crearPendientesFinancieros(teamId);
-      return `<section class="team-half"><div class="team-head"><div><span>${escapeHtml(sideLabel)}</span><h2>Nomina de jugadores</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
-        <table class="players-table"><thead><tr><th>N°</th><th>Identificacion</th><th>Nombres y apellidos</th><th>Cam.</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Firma</th></tr></thead><tbody>${crearFilasJugadores()}</tbody></table>
-        <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
-        <div class="observ-mini"><b>Observaciones y pendientes</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(4)}</div></div>
-        <div class="team-footer"><div><b>Firma representante del equipo</b></div></div></section>`;
-    };
-    /* const crearMediaPlanilla = (teamId: string, teamName: string, etiqueta: "local" | "visitante", rival: string) => {
-      const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
-      const suspendidosTexto = suspendidosEquipo.length
-        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}${player.suspension_reason ? ` - ${player.suspension_reason}` : ""}${player.suspension_available_matchday ? ` - vuelve fecha ${player.suspension_available_matchday}` : ""}`)).join(", ")
-        : esEstandar ? "________________________________________________" : "Ninguno";
-      const pendientesFinancieros = crearPendientesFinancieros(teamId);
-      const equipoTitulo = etiqueta === "local" ? "Equipo local" : "Equipo visitante";
       return `<section class="team-half">
-        <header class="half-header">
-          <div class="half-top"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO - Planilla oficial de control deportivo</span></div><b>Partido oficial</b><em>${escapeHtml(configuracion.tournament_year)}</em></div>
-          <div class="green-line"></div>
-          <div class="versus"><span>Equipo local: ${etiqueta === "local" ? escapeHtml(teamName) : escapeHtml(rival)}</span><b>VS</b><span>Equipo visitante: ${etiqueta === "visitante" ? escapeHtml(teamName) : escapeHtml(rival)}</span></div>
-          <div class="rules">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
-          <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
-          <div class="score-row"><strong>${equipoTitulo}: ${escapeHtml(teamName)}</strong><span>Marcador: ______</span></div>
-        </header>
-        <table class="players-table"><thead><tr><th>Identificacion</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Sust.</th><th>Ingreso por</th></tr></thead><tbody>${crearFilasJugadores()}</tbody></table>
-        <div class="suspended"><b>No convocados automaticamente por suspension:</b><span>${suspendidosTexto}</span></div>
-        <div class="observ-mini"><b>Observaciones del equipo / sistema / adicionales</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(3)}</div></div>
-        <div class="team-footer"><div><b>Firma representante del equipo</b></div></div>
+        <div class="half-top"><strong>${escapeHtml(torneoNombre)}</strong><span>${escapeHtml(configuracion.tournament_year)}</span></div>
+        <div class="match-title">${escapeHtml(partido.home?.name)} <b>VS</b> ${escapeHtml(partido.away?.name)}</div>
+        <div class="match-meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
+        <div class="team-name-row"><span>${escapeHtml(sideLabel)}</span><b>Equipo:</b><i></i></div>
+        <div class="team-rules">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
+        <table class="players-table"><thead><tr><th>N°</th><th>Identificacion</th><th>Nombres y apellidos</th><th>Cam.</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th></tr></thead><tbody>${crearFilasJugadores()}</tbody></table>
+        <div class="suspended"><b>No convocados automaticamente por suspension:</b> ${suspendidosTexto}</div>
+        <div class="observ-mini"><b>Observaciones y pendientes</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(3)}</div></div>
+        <div class="team-footer"><div><b>Firma del dirigente</b></div><div><b>Firma arbitro/vocal</b></div></div>
       </section>`;
-    }; */
+    };
     const observacionesAutomaticas = crearObservacionesAutomaticas();
     const observacionesManual = String(partido.notes || "").trim();
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
-      @page{size:A4 portrait;margin:4mm}*{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:202mm;height:289mm;padding:3mm;border:2px solid #111827;display:flex;flex-direction:column;gap:1.3mm;overflow:hidden;position:relative}.sheet:before{display:none}
-      .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:2px solid #0f5132;padding-bottom:3px}.brand strong{display:block;font-size:14px;letter-spacing:1.2px;text-transform:uppercase}.brand span{font-size:7px;text-transform:uppercase;color:#4b5563;letter-spacing:.6px}.badge{justify-self:center;border:1px solid #0f5132;color:#0f5132;border-radius:999px;padding:3px 8px;font-size:8px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:15px;font-weight:900;color:#0f5132}
-      h1{text-align:center;font-size:12px;text-transform:uppercase;margin:1px 0 0}.subtitle{text-align:center;font-size:7px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:3px;font-size:7px;background:#f3f4f6;border:1px solid #cbd5e1;padding:3px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:1px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc}.score-team{padding:3px;text-align:center;font-size:8px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:6px;padding:3px 6px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:13mm;height:7mm;border:2px solid #111827}.score-box span{font-size:7px;font-weight:900;color:#4b5563}
-      .teams{display:grid;grid-template-columns:1fr;gap:2mm;flex:1;min-height:0}.team-half{min-height:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;border:1px solid #cbd5e1;padding:1.4mm}.cut-line{display:none}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:2px 5px 0;font-size:6px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:9px;text-transform:uppercase;padding:0 5px 2px;margin:0}.team-meta{font-size:6px;font-weight:900;text-transform:uppercase;padding:4px;text-align:right;color:#d1fae5}
-      .players-table{width:100%;border-collapse:collapse;margin-top:.8mm;table-layout:fixed;font-size:5.7px}.players-table th,.players-table td{border:1px solid #64748b;padding:.4mm;text-align:center;height:${altoFilaMm}mm;line-height:1.05}.players-table th{background:#e5e7eb;color:#111827;text-transform:uppercase;font-weight:900}.players-table th:nth-child(1),.players-table td:nth-child(1){width:5.5mm}.players-table th:nth-child(2),.players-table td:nth-child(2){width:24mm}.players-table th:nth-child(4),.players-table td:nth-child(4){width:8mm}.players-table th:nth-child(5),.players-table td:nth-child(5),.players-table th:nth-child(6),.players-table td:nth-child(6),.players-table th:nth-child(7),.players-table td:nth-child(7),.players-table th:nth-child(8),.players-table td:nth-child(8){width:7mm}.players-table th:nth-child(9),.players-table td:nth-child(9){width:18mm}.players-table .idx{background:#f8fafc;font-weight:900;color:#0f5132}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:.8mm;font-size:5.8px;margin-top:.8mm;min-height:4mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:.8mm;font-size:5.8px;min-height:11mm;margin-top:.8mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.3mm}.observ-mini ul{margin:0 0 .3mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:3px;font-size:6px;margin-top:auto;padding-top:.8mm}.team-footer div{border:1px solid #111827;min-height:5mm;padding:2px;text-align:center}.observations{display:none}
-      .review-grid{display:none}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:4px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:none}
-      @media print{html,body{width:210mm;height:297mm}.sheet{width:202mm;height:289mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,.players-table{page-break-inside:avoid;break-inside:avoid}}
-    </style></head><body><section class="sheet">
-      <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
-      <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
-      <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
-      <div class="score-band"><div class="score-team">Local</div><div class="score-box"><div class="score-cell"></div><span>MARCADOR</span><div class="score-cell"></div></div><div class="score-team">Visitante</div></div>
-      <div class="teams">${crearEquipo(partido.home_team_id, "Equipo local")}<div class="cut-line"><span>CORTAR AQUI - ENTREGAR UNA PARTE A CADA DIRIGENTE</span></div>${crearEquipo(partido.away_team_id, "Equipo visitante")}</div>
-      <div class="review-grid">
-        <div class="ruled-box"><strong>Observaciones del sistema y adicionales</strong><ul class="auto-list">${observacionesAutomaticas.map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<div class="manual-note"><b>Observacion manual:</b> ${escapeHtml(observacionesManual)}</div>` : ""}<div class="lines">${crearLineas(3)}</div></div>
-        <div class="pending"><strong>Observaciones adicionales del usuario</strong>
-          <div class="lines">${crearLineas(6)}</div>
-        </div>
-      </div>
-      <div class="signatures"><div>DT local</div><div>DT visitante</div><div>Arbitro</div><div>Vocal</div></div>
-    </section></body></html>`;
+      @page{size:A4 landscape;margin:4mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff}.sheet{width:289mm;height:202mm;padding:3mm;border:2px solid #111827;display:grid;grid-template-columns:1fr 0 1fr;gap:3mm;overflow:hidden}.cut-line{border-left:1.5px dashed #111827;height:100%}.team-half{min-width:0;height:100%;display:flex;flex-direction:column;border:1px solid #111827;padding:2mm;page-break-inside:avoid;break-inside:avoid}.half-top{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #0f5132;padding-bottom:1mm}.half-top strong{font-size:10px;text-transform:uppercase;letter-spacing:.7px}.half-top span{font-size:8px;font-weight:900;color:#0f5132}.match-title{text-align:center;font-size:9px;font-weight:900;text-transform:uppercase;padding:1mm 0}.match-title b{color:#0f5132;margin:0 2mm}.match-meta{display:grid;grid-template-columns:.55fr 1fr 1.3fr;gap:1mm;font-size:6.4px;background:#f3f4f6;border:1px solid #cbd5e1;padding:1mm}.match-meta span{min-width:0;border-bottom:1px solid #9ca3af}.team-name-row{display:grid;grid-template-columns:auto auto 1fr;align-items:end;gap:1.2mm;margin-top:1mm;font-size:8px}.team-name-row span{border:1px solid #0f5132;background:#0f5132;color:#fff;padding:.8mm 1.4mm;font-weight:900;text-transform:uppercase}.team-name-row b{text-transform:uppercase}.team-name-row i{display:block;height:5mm;border-bottom:1.5px solid #111827}.team-rules{font-size:6.4px;text-align:center;text-transform:uppercase;font-weight:900;color:#475569;padding:.8mm 0}.players-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:5.6px}.players-table th,.players-table td{border:1px solid #64748b;padding:.35mm;text-align:center;height:${altoFilaMm}mm;line-height:1}.players-table th{background:#e5e7eb;color:#111827;text-transform:uppercase;font-weight:900}.players-table th:nth-child(1),.players-table td:nth-child(1){width:5mm}.players-table th:nth-child(2),.players-table td:nth-child(2){width:23mm}.players-table th:nth-child(4),.players-table td:nth-child(4){width:7mm}.players-table th:nth-child(5),.players-table td:nth-child(5),.players-table th:nth-child(6),.players-table td:nth-child(6),.players-table th:nth-child(7),.players-table td:nth-child(7),.players-table th:nth-child(8),.players-table td:nth-child(8){width:6.5mm}.players-table .idx{background:#f8fafc;font-weight:900;color:#0f5132}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:.8mm;font-size:5.7px;margin-top:.8mm;min-height:4mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:.8mm;font-size:5.6px;min-height:12mm;margin-top:.8mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.3mm}.observ-mini ul{margin:0 0 .3mm 0;padding-left:3mm}.observ-mini p{margin:0}.lines span{display:block;height:3px;border-bottom:1px solid #cbd5e1}.team-footer{display:grid;grid-template-columns:1fr 1fr;gap:3mm;font-size:6px;margin-top:auto;padding-top:1mm}.team-footer div{border-top:1px solid #111827;min-height:5mm;padding-top:1mm;text-align:center}
+      @media print{html,body{width:297mm;height:210mm}.sheet{width:289mm;height:202mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.team-half,.players-table{page-break-inside:avoid;break-inside:avoid}}
+    </style></head><body><section class="sheet">${crearEquipo(partido.home_team_id, "Equipo local")}<div class="cut-line"></div>${crearEquipo(partido.away_team_id, "Equipo visitante")}</section></body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
@@ -1807,51 +1772,56 @@ export default function PartidosPage() {
             <p className="text-gray-500 text-center py-8">No hay partidos para la fecha seleccionada.</p>
           ) : (
             partidosFiltrados.map(p => (
-              <div key={p.id} className="flex flex-col md:flex-row items-center justify-between bg-[#141414] border border-[#2E2E2E] p-4 rounded-xl gap-4 hover:border-[#D4A017] transition-all relative overflow-hidden">
+              <div key={p.id} className="grid grid-cols-1 gap-4 rounded-2xl border border-[#2E2E2E] bg-[#141414] p-4 transition-all hover:border-[#D4A017] md:grid-cols-[minmax(0,1fr)_124px_minmax(0,1fr)_minmax(180px,auto)] md:items-center relative overflow-hidden">
                 {p.stage !== 'Fase de Grupos' && (
                   <div className="absolute top-0 left-0 bg-[#D4A017] text-black text-[9px] font-black uppercase px-3 py-1 rounded-br-lg shadow-lg z-10">
                     {p.stage}
                   </div>
                 )}
                 
-                <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0 relative z-20">
+                <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#0f0f0f] p-3 md:text-right">
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Equipo local</p>
                   <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" })} • {p.court || "Cancha 1"}</p>
                   {p.notes && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#D4A017]">Obs: {p.notes}</p>}
-                  <span className="uppercase tracking-wide">{p.home?.name}</span>
+                  <p className="mt-1 break-words text-base font-black uppercase leading-tight text-white md:text-lg">{p.home?.name}</p>
                 </div>
-                <div className="flex flex-col items-center px-4 w-48 relative z-20">
-                  <span className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[11px] text-[#D4A017] font-black uppercase tracking-widest mb-2">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' })}</span>
-                  <div className="bg-[#0a0a0a] border border-[#2E2E2E] px-4 py-2 rounded-lg font-mono font-black text-xl text-[#D4A017] w-full text-center">
+                <div className="relative z-20 flex flex-row items-center justify-center gap-3 md:flex-col md:gap-2">
+                  <span className="rounded-full border border-[#D4A017]/40 bg-[#0a0a0a] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#D4A017]">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' })}</span>
+                  <div className="w-28 rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] px-4 py-2 text-center font-mono text-xl font-black text-[#D4A017]">
                     {p.status === 'finished' ? `${p.home_goals} - ${p.away_goals}` : "VS"}
                   </div>
+                  <span className="max-w-[120px] truncate text-[10px] font-bold uppercase text-gray-500">{p.court || "Cancha 1"}</span>
                 </div>
-                <div className="flex-1 text-left font-bold text-white text-lg relative z-20 uppercase tracking-wide">{p.away?.name}</div>
-                <div className="md:ml-4 relative z-20 flex flex-col md:flex-row gap-2">
+                <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#0f0f0f] p-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Equipo visitante</p>
+                  <p className="mt-1 break-words text-base font-black uppercase leading-tight text-white md:text-lg">{p.away?.name}</p>
+                </div>
+                <div className="relative z-20 grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-wrap md:justify-end">
                   
                   {p.status !== 'finished' && (
-                    <button onClick={() => enviarRecordatorioWhatsApp(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-black border border-[#25D366]/50">
+                    <button onClick={() => enviarRecordatorioWhatsApp(p)} className="rounded-lg border border-[#25D366]/50 bg-[#25D366]/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-[#25D366] transition-all hover:bg-[#25D366] hover:text-black">
                       📲 Notificar
                     </button>
                   )}
                   {p.status !== 'finished' && (
-                    <button onClick={() => abrirEditorPartido(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-blue-950 text-blue-300 hover:bg-blue-800 border border-blue-700">
+                    <button onClick={() => abrirEditorPartido(p)} className="rounded-lg border border-blue-700 bg-blue-950 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-300 transition-all hover:bg-blue-800">
                       Editar
                     </button>
                   )}
-                  <button onClick={() => imprimirPlanilla(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600">
+                  <button onClick={() => imprimirPlanilla(p)} className="rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-gray-700">
                     Planilla abierta
                   </button>
                   {p.status === "finished" && p.stage !== "Fase de Grupos" && (
-                    <button onClick={() => registrarPenales(p)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-blue-950 text-blue-300 hover:bg-blue-800 border border-blue-700">
+                    <button onClick={() => registrarPenales(p)} className="rounded-lg border border-blue-700 bg-blue-950 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-300 transition-all hover:bg-blue-800">
                       Penales
                     </button>
                   )}
 
-                  <button onClick={() => abrirPartido(p)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
+                  <button onClick={() => abrirPartido(p)} className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
                     {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
                   </button>
                   {p.status !== 'finished' && (
-                    <button onClick={() => eliminarPartido(p.id)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-900/50">
+                    <button onClick={() => eliminarPartido(p.id)} className="rounded-lg border border-red-900/50 bg-red-900/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 transition-all hover:bg-red-600 hover:text-white">
                       Eliminar
                     </button>
                   )}
@@ -1961,10 +1931,10 @@ export default function PartidosPage() {
                       <div className="min-w-0 text-right">
                         <p className="break-words text-[24px] font-black uppercase leading-tight">{p.home?.name || "Local"}</p>
                       </div>
-                      <div className="relative mx-auto flex h-24 w-36 flex-col items-center justify-center rounded-2xl border border-white/20 bg-[#06183a] px-2 shadow-[inset_0_0_18px_rgba(255,255,255,.08),0_10px_24px_rgba(0,0,0,.25)]">
-                        <span className="relative z-10 text-[11px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Hora</span>
-                        <span className="relative z-10 mt-1 rounded-lg bg-white px-3 py-1 text-3xl font-black leading-none text-[#06183a] shadow-sm">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
-                        <span className="relative z-10 mt-2 text-[11px] font-black uppercase tracking-[0.25em] text-white">VS</span>
+                      <div className="relative mx-auto flex h-20 w-32 flex-col items-center justify-center rounded-2xl border border-white/20 bg-[#06183a] px-2 shadow-[inset_0_0_18px_rgba(255,255,255,.08),0_10px_24px_rgba(0,0,0,.25)]">
+                        <span className="relative z-10 text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Hora</span>
+                        <span className="relative z-10 mt-1 rounded-lg bg-white px-2.5 py-1 text-2xl font-black leading-none text-[#06183a] shadow-sm">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="relative z-10 mt-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-white">VS</span>
                       </div>
                       <div className="min-w-0">
                         <p className="break-words text-[24px] font-black uppercase leading-tight">{p.away?.name || "Visitante"}</p>
