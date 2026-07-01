@@ -300,7 +300,7 @@ export default function SorteoPage() {
                 >
                   {equipo.shield_url ? <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={34} height={34} unoptimized className="h-9 w-9 object-contain" /> : <div className="h-9 w-9 rounded-full bg-[#2E2E2E]" />}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-black uppercase text-white">{equipo.name}</span>
+                    <span className="block break-words text-sm font-black uppercase text-white">{equipo.name}</span>
                     <span className="text-[10px] font-black uppercase tracking-widest text-[#D4A017]">{seleccionado ? "Cabeza seleccionado" : "Marcar como cabeza"}</span>
                   </span>
                 </button>
@@ -320,7 +320,7 @@ export default function SorteoPage() {
                     <span className="text-2xl font-black text-black">{letra}</span>
                   </div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#E7C36B]">Grupo {letra}</p>
-                  <p className="mt-1 truncate text-xs font-bold text-gray-300">{cabeza?.name || "Cabeza por definir"}</p>
+                  <p className="mt-1 break-words text-xs font-bold text-gray-300">{cabeza?.name || "Cabeza por definir"}</p>
                 </div>
               );
             })}

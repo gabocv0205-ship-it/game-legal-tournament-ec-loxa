@@ -839,6 +839,50 @@ export default function PartidosPage() {
     if (!window.confirm("¿Borrar evento?")) return; await supabase.from("match_events").delete().eq("id", id); cargarEventos(partidoActivo.id);
   };
 
+  const alternarParticipacion = async (jugador: any) => {
+    if (!partidoActivo || !jugador) return;
+    if (isOffline) return alert("La convocatoria de jugadores requiere conexion para evitar duplicados.");
+    const participacion = eventos.find(evento => evento.event_type === "participacion" && evento.player_id === jugador.id);
+    setLoading(true);
+    try {
+      if (participacion) {
+        const { error } = await supabase.from("match_events").delete().eq("id", participacion.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("match_events").insert([{
+          match_id: partidoActivo.id,
+          player_id: jugador.id,
+          team_id: jugador.team_id,
+          event_type: "participacion",
+          minute: null,
+        }]);
+        if (error) throw error;
+      }
+      await cargarEventos(partidoActivo.id);
+    } catch (error: any) {
+      alert("No se pudo actualizar la participacion: " + (error.message || "operacion bloqueada"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const iconoEvento = (tipo: string) => {
+    if (tipo === "gol") return "G";
+    if (tipo === "amarilla") return "TA";
+    if (tipo === "roja") return "TR";
+    if (tipo === "mvp") return "MVP";
+    return "J";
+  };
+
+  const etiquetaEvento = (tipo: string) => {
+    if (tipo === "gol") return "Gol";
+    if (tipo === "amarilla") return "Tarjeta amarilla";
+    if (tipo === "roja") return "Tarjeta roja";
+    if (tipo === "mvp") return "MVP";
+    if (tipo === "participacion") return "Jugo el partido";
+    return tipo;
+  };
+
   const finalizarPartido = async () => {
     if (isOffline) return alert("⚠️ Contingencia: No puedes finalizar y cerrar el acta oficial en Modo Offline. Tus datos están guardados, espera a conectarte a internet para sellar el partido.");
     if (!window.confirm("¿Finalizar? Una vez cerrado no podrás modificar los eventos del partido. Además, se asomarán las deudas por tarjetas en el libro mayor de los equipos.")) return;
@@ -1254,6 +1298,11 @@ export default function PartidosPage() {
   if (partidoActivo) {
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
+    const participaciones = eventos.filter(e => e.event_type === "participacion");
+    const eventosDeJuego = eventos.filter(e => e.event_type !== "participacion");
+    const participantesIds = new Set(participaciones.map(e => e.player_id));
+    const jugadoresLocal = jugadores.filter(j => j.team_id === partidoActivo.home_team_id);
+    const jugadoresVisitante = jugadores.filter(j => j.team_id === partidoActivo.away_team_id);
     return (
       <div className="space-y-6">
         
@@ -1311,14 +1360,60 @@ export default function PartidosPage() {
           </div>
         </div>
 
+        <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-5">
+          <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A017]">Jugadores que disputaron el partido</p>
+              <h4 className="text-xl font-black uppercase text-white">Control de participacion</h4>
+            </div>
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase text-emerald-300">
+              {participaciones.length} registrado(s)
+            </span>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {[
+              { title: partidoActivo.home?.name || "Local", players: jugadoresLocal },
+              { title: partidoActivo.away?.name || "Visitante", players: jugadoresVisitante },
+            ].map(group => (
+              <div key={group.title} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3">
+                <p className="mb-3 text-xs font-black uppercase text-white">{group.title}</p>
+                <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
+                  {group.players.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-[#2E2E2E] p-3 text-xs font-bold text-gray-500">No hay jugadores habilitados para este equipo.</p>
+                  ) : group.players.map(jugador => {
+                    const marcado = participantesIds.has(jugador.id);
+                    return (
+                      <button
+                        key={jugador.id}
+                        type="button"
+                        onClick={() => alternarParticipacion(jugador)}
+                        disabled={loading || partidoActivo.status === "finished"}
+                        className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-all ${marcado ? "border-emerald-500/70 bg-emerald-500/15 text-white" : "border-[#2E2E2E] bg-[#141414] text-white hover:border-[#D4A017]/50"} disabled:cursor-not-allowed disabled:opacity-70`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block break-words text-xs font-black uppercase">{jugador.full_name}</span>
+                          {jugador.cedula && <span className="mt-0.5 block text-[10px] font-bold uppercase text-gray-500">ID {jugador.cedula}</span>}
+                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase ${marcado ? "bg-emerald-400 text-black" : "bg-[#2E2E2E] text-gray-400"}`}>
+                          {marcado ? "Jugo" : "No"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {partidoActivo.status !== 'finished' && (
             <div className="lg:col-span-1 bg-[#141414] border border-[#2E2E2E] rounded-2xl p-6 h-fit">
               <form onSubmit={registrarEvento} className="space-y-4">
                 <select value={eventoJugador} onChange={e => setEventoJugador(e.target.value)} required className="w-full p-2 mt-1 rounded bg-[#1c1c1c] border border-[#2e2e2e] text-white">
                     <option value="" disabled>Selecciona el jugador</option>
-                    <optgroup label={partidoActivo.home?.name}>{jugadores.filter(j => j.team_id === partidoActivo.home_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
-                    <optgroup label={partidoActivo.away?.name}>{jugadores.filter(j => j.team_id === partidoActivo.away_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
+                    <optgroup label={partidoActivo.home?.name}>{jugadoresLocal.map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
+                    <optgroup label={partidoActivo.away?.name}>{jugadoresVisitante.map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
                 </select>
                 <div className="grid grid-cols-2 gap-3">
                   <select value={eventoTipo} onChange={e => setEventoTipo(e.target.value)} className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded"><option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option></select>
@@ -1333,7 +1428,7 @@ export default function PartidosPage() {
           <div className="lg:col-span-2 bg-[#1C1C1C] border border-[#2E2E2E] rounded-2xl p-6">
             <h4 className="text-white font-black uppercase tracking-widest text-sm mb-4">Minuto a Minuto</h4>
             <div className="space-y-3">
-              {eventos.map(ev => (
+              {eventosDeJuego.map(ev => (
                 <div key={ev.id} className="flex items-center justify-between bg-[#141414] p-3 rounded-xl border border-[#2E2E2E]">
                   {editandoEventoId === ev.id ? (
                       <div className="flex items-center gap-4 w-full">
@@ -1612,7 +1707,7 @@ export default function PartidosPage() {
                               {[["home", partido.home, partido.home_goals], ["away", partido.away, partido.away_goals]].map(([lado, equipo, goles]: any) => (
                                 <div key={lado} className="flex items-center gap-2 py-1">
                                   {equipo?.shield_url ? <Image src={equipo.shield_url} alt="" width={22} height={22} unoptimized crossOrigin="anonymous" className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 rounded-full bg-blue-300/20" />}
-                                  <span className="flex-1 text-white text-[10px] font-black uppercase truncate">{equipo?.name || "Por definir"}</span>
+                                  <span className="flex-1 break-words text-white text-[10px] font-black uppercase leading-tight">{equipo?.name || "Por definir"}</span>
                                   <span className="text-[#D4A017] font-black text-xs">{partido.status === "finished" ? goles : "-"}</span>
                                 </div>
                               ))}
@@ -1830,14 +1925,14 @@ export default function PartidosPage() {
                         {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}
                       </div>
                       <div className="min-w-0 text-right">
-                        <p className="truncate text-[28px] font-black uppercase">{p.home?.name || "Local"}</p>
+                        <p className="break-words text-[26px] font-black uppercase leading-tight">{p.home?.name || "Local"}</p>
                       </div>
                       <div className="relative mx-auto flex h-20 w-24 flex-col items-center justify-center rounded-xl bg-[#06183a]">
                         <span className="relative z-10 text-2xl font-black text-[#D4A017]">VS</span>
                         <span className="relative z-10 mt-1 rounded-full bg-[#D4A017] px-3 py-0.5 text-[11px] font-black text-black">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-[28px] font-black uppercase">{p.away?.name || "Visitante"}</p>
+                        <p className="break-words text-[26px] font-black uppercase leading-tight">{p.away?.name || "Visitante"}</p>
                       </div>
                       <div className="flex justify-center">
                         {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}

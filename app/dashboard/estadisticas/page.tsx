@@ -10,6 +10,7 @@ export default function EstadisticasPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [tabla, setTabla] = useState<any[]>([]);
   const [goleadores, setGoleadores] = useState<any[]>([]);
+  const [estadisticasJugadores, setEstadisticasJugadores] = useState<any[]>([]);
   const [sanciones, setSanciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [llaves, setLlaves] = useState<any[]>([]);
@@ -42,6 +43,7 @@ export default function EstadisticasPage() {
         setTorneoId(null);
         setTabla([]);
         setGoleadores([]);
+        setEstadisticasJugadores([]);
         setSanciones([]);
         setLlaves([]);
         setLoading(false);
@@ -132,6 +134,33 @@ export default function EstadisticasPage() {
          golesObj[pId].goles++;
       });
       setGoleadores(Object.values(golesObj).sort((a, b) => b.goles - a.goles).slice(0, 15));
+
+      const jugadoresObj: Record<string, any> = {};
+      events.forEach(e => {
+        const pId = e.player_id;
+        if (!pId) return;
+        if (!jugadoresObj[pId]) {
+          jugadoresObj[pId] = {
+            id: pId,
+            name: e.players?.full_name || "Desconocido",
+            team: e.teams?.name || "Sin Equipo",
+            partidos: new Set<string>(),
+            goles: 0,
+            amarillas: 0,
+            rojas: 0,
+          };
+        }
+        if (["participacion", "gol", "amarilla", "roja", "mvp"].includes(e.event_type)) {
+          jugadoresObj[pId].partidos.add(e.match_id);
+        }
+        if (e.event_type === "gol") jugadoresObj[pId].goles += 1;
+        if (e.event_type === "amarilla") jugadoresObj[pId].amarillas += 1;
+        if (e.event_type === "roja") jugadoresObj[pId].rojas += 1;
+      });
+      setEstadisticasJugadores(Object.values(jugadoresObj)
+        .map((player: any) => ({ ...player, pj: player.partidos.size, partidos: undefined }))
+        .sort((a: any, b: any) => b.pj - a.pj || b.goles - a.goles || a.name.localeCompare(b.name))
+      );
 
       // ==========================================
       // CÁLCULO DE SANCIONES Y SUSPENSIONES
@@ -336,8 +365,8 @@ export default function EstadisticasPage() {
                 <div key={g.id} className={`grid grid-cols-[72px_1fr_132px] items-center gap-5 rounded-3xl border px-6 py-5 shadow-[0_16px_36px_rgba(0,0,0,.28)] ${index === 0 ? "border-[#D4A017] bg-white" : "border-white/80 bg-white/92"}`}>
                   <div className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black ${index === 0 ? "bg-[#D4A017] text-black" : "bg-[#0b1f43] text-white"}`}>{index + 1}</div>
                   <div className="min-w-0">
-                    <p className="truncate text-[30px] font-black uppercase tracking-wide text-[#111827]">{g.name}</p>
-                    <p className="mt-1 truncate text-lg font-black uppercase text-[#0b4f38]">Equipo: {g.team}</p>
+                    <p className="break-words text-[27px] font-black uppercase leading-tight text-[#111827]">{g.name}</p>
+                    <p className="mt-1 break-words text-lg font-black uppercase leading-tight text-[#0b4f38]">Equipo: {g.team}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-6xl font-black text-[#0b1f43]">{g.goles}</p>
@@ -374,7 +403,7 @@ export default function EstadisticasPage() {
                   <div key={team.id} className={`grid grid-cols-[24px_34px_1fr_30px_34px_38px] items-center gap-2 border-b border-slate-200 py-2.5 last:border-0 border-l-4 pl-2 ${team.classificationStatus === "qualified" ? "border-l-emerald-500" : team.classificationStatus === "repechage" ? "border-l-amber-400" : "border-l-slate-300"}`}>
                     <span className="text-sm font-black text-slate-500 text-center">{index + 1}</span>
                     {team.shield ? <Image src={team.shield} alt="" width={30} height={30} unoptimized crossOrigin="anonymous" className="w-8 h-8 object-contain" /> : <div className="w-8 h-8 rounded-full bg-slate-200" />}
-                    <span className="truncate text-sm text-[#111827] font-black uppercase">{team.name}</span>
+                    <span className="break-words text-[13px] text-[#111827] font-black uppercase leading-tight">{team.name}</span>
                     <span className="text-sm text-slate-700 font-black text-center">{team.pj}</span>
                     <span className="text-sm text-slate-700 font-black text-center">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
                     <span className="text-base text-[#9B7411] font-black text-center">{team.pts}</span>
@@ -497,6 +526,40 @@ export default function EstadisticasPage() {
                   </tr>
                 ))
               )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="lg:col-span-2 bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-xl">
+          <div className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4">
+            <h3 className="text-white font-black uppercase tracking-widest text-sm">Rendimiento individual de jugadores</h3>
+            <p className="mt-1 text-xs font-bold text-gray-500">PJ se calcula con los jugadores marcados como participantes en cada partido.</p>
+          </div>
+          <table className="w-full text-left text-sm text-white">
+            <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[10px] tracking-widest">
+              <tr>
+                <th className="px-6 py-3">Jugador</th>
+                <th className="px-3 py-3 text-center">PJ</th>
+                <th className="px-3 py-3 text-center">Goles</th>
+                <th className="px-3 py-3 text-center">TA</th>
+                <th className="px-3 py-3 text-center">TR</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#2E2E2E]">
+              {estadisticasJugadores.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500 italic">Aun no hay participaciones ni eventos registrados.</td></tr>
+              ) : estadisticasJugadores.map(player => (
+                <tr key={player.id} className="hover:bg-[#141414]">
+                  <td className="px-6 py-3">
+                    <p className="break-words font-bold uppercase tracking-wide">{player.name}</p>
+                    <p className="mt-0.5 break-words text-[10px] uppercase tracking-wider text-[#D4A017]">{player.team}</p>
+                  </td>
+                  <td className="px-3 py-3 text-center font-black text-white">{player.pj}</td>
+                  <td className="px-3 py-3 text-center font-black text-white">{player.goles}</td>
+                  <td className="px-3 py-3 text-center font-black text-yellow-500">{player.amarillas}</td>
+                  <td className="px-3 py-3 text-center font-black text-red-500">{player.rojas}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
