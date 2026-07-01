@@ -1122,20 +1122,18 @@ export default function PartidosPage() {
     const cupoConfigurado = Number(configuracion.football_modality || 0) + Number(configuracion.substitutes_count || 0);
     const maximoPlantilla = Number(configuracion.max_players_per_team || cupoConfigurado);
     const cupoPartido = Math.max(1, Math.min(cupoConfigurado || maximoPlantilla || 1, maximoPlantilla || cupoConfigurado || 1));
-    const crearCasillas = () => Array.from({ length: cupoPartido }, (_, index) => `<article class="player-card">
-          <div class="card-index">${index + 1}</div>
-          <div class="field id"><b>Identificacion</b><span></span></div>
-          <div class="field shirt"><b>N° camiseta</b><span></span></div>
-          <div class="field name"><b>Nombres y apellidos</b><span></span></div>
-          <div class="mini-fields">
-            <div><b>T/S</b><span></span></div>
-            <div><b>Goles</b><span></span></div>
-            <div><b>TA</b><span></span></div>
-            <div><b>TR</b><span></span></div>
-          </div>
-          <div class="field substitution"><b>Sustitucion</b><span></span></div>
-          <div class="field entered"><b>Ingreso por</b><span></span></div>
-        </article>`).join("");
+    const altoFilaMm = cupoPartido > 22 ? 3.3 : cupoPartido > 18 ? 3.7 : cupoPartido > 14 ? 4.1 : 4.7;
+    const crearFilasJugadores = () => Array.from({ length: cupoPartido }, (_, index) => `<tr>
+          <td class="idx">${index + 1}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>`).join("");
     const normalizarTexto = (value: any) => String(value || "").toLowerCase().trim();
     const esDescuento = (entry: any) =>
       normalizarTexto(entry.category || entry.concept).includes("descuento") ||
@@ -1199,7 +1197,7 @@ export default function PartidosPage() {
         : esEstandar ? "________________________________________________" : "Ninguno";
       const pendientesFinancieros = crearPendientesFinancieros(teamId);
       return `<section class="team-half"><div class="team-head"><div><span>${escapeHtml(sideLabel)}</span><h2>Nomina de jugadores</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
-        <div class="player-grid">${crearCasillas()}</div>
+        <table class="players-table"><thead><tr><th>N°</th><th>Identificacion</th><th>Nombres y apellidos</th><th>Cam.</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Firma</th></tr></thead><tbody>${crearFilasJugadores()}</tbody></table>
         <div class="suspended"><b>No convocados automáticamente por suspensión:</b> ${suspendidosTexto}</div>
         <div class="observ-mini"><b>Observaciones y pendientes</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(4)}</div></div>
         <div class="team-footer"><div><b>Firma representante del equipo</b></div></div></section>`;
@@ -1233,9 +1231,9 @@ export default function PartidosPage() {
       .brand{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:2px solid #0f5132;padding-bottom:3px}.brand strong{display:block;font-size:14px;letter-spacing:1.2px;text-transform:uppercase}.brand span{font-size:7px;text-transform:uppercase;color:#4b5563;letter-spacing:.6px}.badge{justify-self:center;border:1px solid #0f5132;color:#0f5132;border-radius:999px;padding:3px 8px;font-size:8px;font-weight:900;text-transform:uppercase}.year{justify-self:end;font-size:15px;font-weight:900;color:#0f5132}
       h1{text-align:center;font-size:12px;text-transform:uppercase;margin:1px 0 0}.subtitle{text-align:center;font-size:7px;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}.meta{display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:3px;font-size:7px;background:#f3f4f6;border:1px solid #cbd5e1;padding:3px}.meta span{min-width:0;border-bottom:1px solid #9ca3af;padding-bottom:1px}.score-band{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border:1px solid #111827;background:#f8fafc}.score-team{padding:3px;text-align:center;font-size:8px;font-weight:900;text-transform:uppercase}.score-box{display:flex;align-items:center;gap:6px;padding:3px 6px;border-left:1px solid #111827;border-right:1px solid #111827;background:#fff}.score-cell{width:13mm;height:7mm;border:2px solid #111827}.score-box span{font-size:7px;font-weight:900;color:#4b5563}
       .teams{display:grid;grid-template-columns:1fr;gap:2mm;flex:1;min-height:0}.team-half{min-height:0;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;border:1px solid #cbd5e1;padding:1.4mm}.cut-line{display:none}.team-head{display:grid;grid-template-columns:1fr auto;align-items:center;background:#111827;color:#fff;border:1px solid #111827}.team-head span{display:block;padding:2px 5px 0;font-size:6px;text-transform:uppercase;color:#d1fae5}.team-head h2{font-size:9px;text-transform:uppercase;padding:0 5px 2px;margin:0}.team-meta{font-size:6px;font-weight:900;text-transform:uppercase;padding:4px;text-align:right;color:#d1fae5}
-      table{display:none}.player-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8mm;margin-top:.8mm;min-height:0}.player-card{display:grid;grid-template-columns:5mm 1fr 13mm;grid-template-areas:"idx id shirt" "idx name name" "idx mini mini";gap:.5mm;border:1px solid #64748b;background:#fff;padding:.6mm;min-height:${cupoPartido > 18 ? 6.4 : 7.3}mm;page-break-inside:avoid;break-inside:avoid}.card-index{grid-area:idx;display:flex;align-items:center;justify-content:center;background:#0f5132;color:#fff;font-size:6px;font-weight:900}.field{min-width:0}.field b,.mini-fields b{display:block;font-size:4.4px;line-height:1;text-transform:uppercase;color:#475569}.field span,.mini-fields span{display:block;height:2.3mm;border-bottom:1px solid #94a3b8}.field.id{grid-area:id}.field.shirt{grid-area:shirt}.field.name{grid-area:name}.field.substitution{display:none}.field.entered{display:none}.mini-fields{grid-area:mini;display:grid;grid-template-columns:repeat(4,1fr);gap:.5mm}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:.8mm;font-size:5.8px;margin-top:.8mm;min-height:4mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:.8mm;font-size:5.8px;min-height:11mm;margin-top:.8mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.3mm}.observ-mini ul{margin:0 0 .3mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:3px;font-size:6px;margin-top:auto;padding-top:.8mm}.team-footer div{border:1px solid #111827;min-height:5mm;padding:2px;text-align:center}.observations{display:none}
+      .players-table{width:100%;border-collapse:collapse;margin-top:.8mm;table-layout:fixed;font-size:5.7px}.players-table th,.players-table td{border:1px solid #64748b;padding:.4mm;text-align:center;height:${altoFilaMm}mm;line-height:1.05}.players-table th{background:#e5e7eb;color:#111827;text-transform:uppercase;font-weight:900}.players-table th:nth-child(1),.players-table td:nth-child(1){width:5.5mm}.players-table th:nth-child(2),.players-table td:nth-child(2){width:24mm}.players-table th:nth-child(4),.players-table td:nth-child(4){width:8mm}.players-table th:nth-child(5),.players-table td:nth-child(5),.players-table th:nth-child(6),.players-table td:nth-child(6),.players-table th:nth-child(7),.players-table td:nth-child(7),.players-table th:nth-child(8),.players-table td:nth-child(8){width:7mm}.players-table th:nth-child(9),.players-table td:nth-child(9){width:18mm}.players-table .idx{background:#f8fafc;font-weight:900;color:#0f5132}.suspended{border:1px solid #f1b0a7;border-left:3px solid #b42318;background:#fff5f5;padding:.8mm;font-size:5.8px;margin-top:.8mm;min-height:4mm;page-break-inside:avoid;break-inside:avoid}.observ-mini{border:1px solid #111827;padding:.8mm;font-size:5.8px;min-height:11mm;margin-top:.8mm}.observ-mini b{display:block;text-transform:uppercase;margin-bottom:.3mm}.observ-mini ul{margin:0 0 .3mm 0;padding-left:3mm}.observ-mini p{margin:0}.team-footer{display:grid;grid-template-columns:1fr;gap:3px;font-size:6px;margin-top:auto;padding-top:.8mm}.team-footer div{border:1px solid #111827;min-height:5mm;padding:2px;text-align:center}.observations{display:none}
       .review-grid{display:none}.ruled-box{border:1px solid #111827;padding:4px;min-height:20mm;font-size:7.5px}.ruled-box strong{display:block;text-transform:uppercase;margin-bottom:2px}.auto-list{margin:0 0 2px 0;padding-left:11px}.auto-list li{margin-bottom:1px}.manual-note{border:1px dashed #9ca3af;background:#f8fafc;padding:2px;margin-bottom:2px}.lines span{display:block;height:4px;border-bottom:1px solid #cbd5e1}.pending{border:1px solid #0f5132;background:#f7fbf9;padding:4px;font-size:7.5px}.pending strong{display:block;text-transform:uppercase;margin-bottom:2px;color:#0f5132}.signatures{display:none}
-      @media print{html,body{width:210mm;height:297mm}.sheet{width:202mm;height:289mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,table{page-break-inside:avoid;break-inside:avoid}}
+      @media print{html,body{width:210mm;height:297mm}.sheet{width:202mm;height:289mm;margin:0;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.brand,.meta,.score-band,.team-half,.review-grid,.signatures,.players-table{page-break-inside:avoid;break-inside:avoid}}
     </style></head><body><section class="sheet">
       <div class="brand"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO · Planilla oficial de control deportivo</span></div><div class="badge">Partido oficial</div><div class="year">${escapeHtml(configuracion.tournament_year)}</div></div>
       <h1>${escapeHtml(partido.home?.name)} vs ${escapeHtml(partido.away?.name)}</h1><div class="subtitle">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
@@ -1963,10 +1961,10 @@ export default function PartidosPage() {
                       <div className="min-w-0 text-right">
                         <p className="break-words text-[24px] font-black uppercase leading-tight">{p.home?.name || "Local"}</p>
                       </div>
-                      <div className="relative mx-auto flex h-24 w-36 flex-col items-center justify-center rounded-2xl border-2 border-[#D4A017] bg-[#06183a] px-2 shadow-inner">
-                        <span className="relative z-10 text-[13px] font-black uppercase tracking-[0.22em] text-white/80">Hora</span>
-                        <span className="relative z-10 mt-1 text-3xl font-black leading-none text-[#D4A017]">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
-                        <span className="relative z-10 mt-1 text-[11px] font-black uppercase tracking-[0.25em] text-white">VS</span>
+                      <div className="relative mx-auto flex h-24 w-36 flex-col items-center justify-center rounded-2xl border border-white/20 bg-[#06183a] px-2 shadow-[inset_0_0_18px_rgba(255,255,255,.08),0_10px_24px_rgba(0,0,0,.25)]">
+                        <span className="relative z-10 text-[11px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Hora</span>
+                        <span className="relative z-10 mt-1 rounded-lg bg-white px-3 py-1 text-3xl font-black leading-none text-[#06183a] shadow-sm">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="relative z-10 mt-2 text-[11px] font-black uppercase tracking-[0.25em] text-white">VS</span>
                       </div>
                       <div className="min-w-0">
                         <p className="break-words text-[24px] font-black uppercase leading-tight">{p.away?.name || "Visitante"}</p>
