@@ -208,6 +208,8 @@ export default function EstadisticasPage() {
     (groups[team.group || "General"] ||= []).push(team);
     return groups;
   }, {});
+  const gruposOrdenados = Object.entries(posicionesPorGrupo)
+    .sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" }));
 
   const descargarPosiciones = async () => {
     if (!posterPosicionesRef.current) return;
@@ -263,7 +265,7 @@ export default function EstadisticasPage() {
           image.onerror = resolve;
         });
       }));
-      const canvas = await html2canvas(poster, { backgroundColor: "#07122d", scale: 3, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
+      const canvas = await html2canvas(poster, { backgroundColor: "#f6f8f5", scale: 3, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `Goleadores-${nombreTorneo}-${anioTorneo}.png`;
@@ -322,7 +324,7 @@ export default function EstadisticasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
-              {Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+              {gruposOrdenados.map(([grupo, equipos]) => (
                 <React.Fragment key={grupo}>
                   <tr className="bg-[#0f0f0f]">
                     <td colSpan={11} className="px-4 py-3 text-left text-[#D4A017] font-black uppercase tracking-[0.25em] text-xs">
@@ -351,31 +353,31 @@ export default function EstadisticasPage() {
               ))}
             </tbody>
           </table>
-          <div ref={posterGoleadoresRef} className="fixed -left-[9999px] top-0 w-[1080px] h-[1350px] overflow-hidden bg-[#07122d] p-16" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(160deg, rgba(3,9,28,.86), rgba(6,35,73,.88), rgba(3,9,28,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 10% 15%, rgba(212,160,23,.34), transparent 23%), radial-gradient(circle at 90% 30%, rgba(37,99,235,.42), transparent 28%), linear-gradient(160deg, #03102c, #073b71 54%, #020817)", fontFamily: posterFontFamily }}>
-            <div className="absolute inset-10 rounded-[28px] border-4 border-white/90" />
-            <div className="absolute inset-14 rounded-[22px] border border-[#D4A017]/55" />
-            <div className="relative z-10 text-center">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-[#D4A017] bg-white text-4xl font-black text-[#111827]">GL</div>
-              <p className="mt-8 text-[20px] font-black uppercase text-[#D4A017]">Tabla de goleadores</p>
-              <h3 className="mt-4 text-5xl font-black uppercase leading-tight text-white">{nombreTorneo}</h3>
-              <p className="mt-3 text-xl font-black uppercase text-emerald-200">{anioTorneo}</p>
+          <div ref={posterGoleadoresRef} className="fixed -left-[9999px] top-0 w-[1080px] h-[1350px] overflow-hidden bg-[#f6f8f5] p-14 text-[#102016]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(246,248,245,.93), rgba(246,248,245,.98)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "linear-gradient(180deg, #ffffff 0%, #edf4ee 100%)", fontFamily: posterFontFamily }}>
+            <div className="absolute inset-8 rounded-[28px] border-[6px] border-[#12311f]" />
+            <div className="absolute inset-14 rounded-[20px] border border-[#C99A1A]/55" />
+            <div className="relative z-10 border-b-4 border-[#C99A1A] pb-8 text-center">
+              <p className="text-[22px] font-black uppercase tracking-[0.35em] text-[#9B7411]">Tabla de goleadores</p>
+              <h3 className="mx-auto mt-4 max-w-[860px] text-5xl font-black uppercase leading-tight text-[#102016]">{nombreTorneo}</h3>
+              <p className="mt-3 text-lg font-black uppercase tracking-[0.22em] text-[#0b5b37]">Temporada {anioTorneo}</p>
             </div>
-            <div className="relative z-10 mt-14 space-y-4">
+            <div className="relative z-10 mt-10 overflow-hidden rounded-[24px] border-2 border-[#12311f] bg-white shadow-[0_24px_55px_rgba(15,23,42,.18)]">
+              <div className="grid grid-cols-[72px_1fr_260px_120px] bg-[#12311f] px-6 py-4 text-[14px] font-black uppercase tracking-[0.18em] text-white">
+                <span>Pos</span>
+                <span>Jugador</span>
+                <span>Equipo</span>
+                <span className="text-right">Goles</span>
+              </div>
               {(goleadores.length ? goleadores : [{ id: "empty", name: "Sin goles registrados", team: "Esperando resultados", goles: 0 }]).slice(0, 10).map((g, index) => (
-                <div key={g.id} className={`grid grid-cols-[72px_1fr_132px] items-center gap-5 rounded-3xl border px-6 py-5 shadow-[0_16px_36px_rgba(0,0,0,.28)] ${index === 0 ? "border-[#D4A017] bg-white" : "border-white/80 bg-white/92"}`}>
-                  <div className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black ${index === 0 ? "bg-[#D4A017] text-black" : "bg-[#0b1f43] text-white"}`}>{index + 1}</div>
-                  <div className="min-w-0">
-                    <p className="break-words text-[27px] font-black uppercase leading-tight text-[#111827]">{g.name}</p>
-                    <p className="mt-1 break-words text-lg font-black uppercase leading-tight text-[#0b4f38]">Equipo: {g.team}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-6xl font-black text-[#0b1f43]">{g.goles}</p>
-                    <p className="text-sm font-black uppercase text-[#0b4f38]">goles</p>
-                  </div>
+                <div key={g.id} className={`grid grid-cols-[72px_1fr_260px_120px] items-center gap-4 border-b border-[#d9e4d9] px-6 py-5 last:border-0 ${index === 0 ? "bg-[#fff8df]" : index % 2 ? "bg-[#f8fbf7]" : "bg-white"}`}>
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-full text-xl font-black ${index === 0 ? "bg-[#C99A1A] text-black" : "bg-[#12311f] text-white"}`}>{index + 1}</div>
+                  <p className="break-words text-[28px] font-black uppercase leading-tight text-[#102016]">{g.name}</p>
+                  <p className="break-words text-[20px] font-black uppercase leading-tight text-[#0b5b37]">{g.team}</p>
+                  <p className="text-right text-5xl font-black text-[#102016]">{g.goles}</p>
                 </div>
               ))}
             </div>
-            <div className="absolute bottom-12 left-16 right-16 flex items-center justify-between border-t border-[#D4A017]/30 pt-6 text-[13px] font-black uppercase text-[#D4A017]">
+            <div className="absolute bottom-12 left-16 right-16 flex items-center justify-between border-t border-[#C99A1A]/45 pt-6 text-[13px] font-black uppercase tracking-[0.2em] text-[#9B7411]">
               <span>Game Legal Tournament</span>
               <span>Ranking oficial</span>
             </div>
@@ -386,13 +388,13 @@ export default function EstadisticasPage() {
       <div ref={posterPosicionesRef} className="relative overflow-hidden rounded-2xl border-[10px] border-[#C99A1A] p-10 bg-[#f4f7f2] text-[#111827]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(244,247,242,.9), rgba(244,247,242,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 12% 18%, rgba(212,160,23,.2), transparent 24%), radial-gradient(circle at 88% 84%, rgba(5,96,78,.18), transparent 24%), linear-gradient(145deg, #f8fbf7, #dde9e1 55%, #f8fbf7)", fontFamily: posterFontFamily }}>
         <div className="absolute inset-5 rounded-[26px] border-4 border-[#0B1620] pointer-events-none" />
         <div className="relative text-center mb-8">
-          <div className="mx-auto w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-white text-[#111827] flex items-center justify-center text-xl font-black shadow-[0_0_24px_rgba(15,23,42,.18)]">G-L</div>
+          <p className="text-[14px] font-black uppercase tracking-[0.35em] text-[#9B7411]">Clasificacion oficial</p>
           <h3 className="text-4xl text-[#111827] font-black uppercase leading-tight mt-3">{nombreTorneo}</h3>
           <p className="text-[#9B7411] font-black uppercase text-base mt-1">Tabla de posiciones - {anioTorneo}</p>
           <div className="mt-5 mx-auto h-px max-w-2xl bg-[#C99A1A]/60" />
         </div>
         <div className={`relative grid gap-5 ${Object.keys(posicionesPorGrupo).length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
-          {Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+          {gruposOrdenados.map(([grupo, equipos]) => (
             <div key={grupo} className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-[0_14px_34px_rgba(15,23,42,.20)]">
               <div className="bg-[#0b0b0b] border-b border-[#D4A017]/50 px-3 py-2.5 flex justify-between">
                 <span className="text-white text-base font-black uppercase">Grupo {grupo}</span>

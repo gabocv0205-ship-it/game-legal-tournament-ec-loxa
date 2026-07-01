@@ -315,9 +315,10 @@ export default function ConfiguracionPage() {
                 <option value="reentry">Cambios con reingreso</option>
               </select>
             </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cancha de la final</label>
-              <input type="text" value={canchaFinal} onChange={e => setCanchaFinal(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none" placeholder="Ej: Estadio Reina del Cisne" />
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sedes y canchas disponibles</label>
+              <textarea value={canchaFinal} onChange={e => setCanchaFinal(e.target.value)} rows={3} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none" placeholder={"Ej: Estadio Monumental\nEstadio Casa Blanca\n\nO: Centro Deportivo La Sede"} />
+              <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Una sede por linea para estadios diferentes. Si es una sola sede con varias canchas, usa el numero de canchas disponibles.</p>
             </div>
             <NumberField label="Año del torneo" value={anioTorneo} onChange={setAnioTorneo} min={2000} />
             <NumberField label="Duración por partido (min)" value={duracionPartido} onChange={setDuracionPartido} min={15} />

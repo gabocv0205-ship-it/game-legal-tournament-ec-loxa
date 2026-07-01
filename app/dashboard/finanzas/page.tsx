@@ -128,7 +128,6 @@ export default function LibroMayorFinanzas() {
           .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
         const pagadoTotal = Math.max(0, pagosLibro + pagosSinLibro);
         const descuentoTotal = Math.max(0, descuentosLibro + descuentosSinLibro);
-        const descuentoLegacy = Math.max(0, descuentosSinLibro);
 
         // --- B) Calcular Deuda Generada ---
         const deudaInscripcion = tieneLibro ? cargosNetos(["inscripcion"]) : c_insc;
@@ -145,7 +144,7 @@ export default function LibroMayorFinanzas() {
 
         // --- C) Saldo Final ---
         const totalDeudaGenerada = deudaInscripcion + deudaArbitraje + deudaMultas;
-        const saldoPendiente = totalDeudaGenerada - pagadoTotal - descuentoLegacy;
+        const saldoPendiente = totalDeudaGenerada - pagadoTotal - descuentoTotal;
 
         return { 
           ...t, 
@@ -395,50 +394,52 @@ export default function LibroMayorFinanzas() {
 
       <div className="bg-[#1C1C1C] rounded-2xl shadow-xl border border-[#2E2E2E] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-white whitespace-nowrap">
-            <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[10px] tracking-widest border-b border-[#2E2E2E]">
+          <table className="w-full table-fixed text-left text-[11px] text-white">
+            <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[9px] tracking-widest border-b border-[#2E2E2E]">
               <tr>
-                <th className="p-4">Club</th>
+                <th className="px-3 py-3 w-[17%]">Club</th>
                 <th className="p-4 text-center">Inscripción</th>
-                <th className="p-4 text-center">Arbitrajes (Partidos)</th>
-                <th className="p-4 text-center">Multas (Tarjetas)</th>
-                <th className="p-4 text-center bg-red-900/10">Deuda Generada</th>
-                <th className="p-4 text-center bg-green-900/10">Total Pagado</th>
-                <th className="p-4 text-center bg-emerald-900/10">Descuentos</th>
-                <th className="p-4 text-center font-black">Saldo Pendiente</th>
+                <th className="px-2 py-3 text-center">Arbitraje</th>
+                <th className="px-2 py-3 text-center">Tarjetas</th>
+                <th className="px-2 py-3 text-center bg-red-900/10">Generada</th>
+                <th className="px-2 py-3 text-center bg-green-900/10">Pagado</th>
+                <th className="px-2 py-3 text-center bg-emerald-900/10">Desc.</th>
+                <th className="px-2 py-3 text-center font-black">Saldo</th>
                 <th className="p-4 text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
               {equiposFiltrados.map(eq => (
                 <tr key={eq.id} className="hover:bg-[#141414] transition-colors cursor-pointer" onClick={() => abrirDetalleEquipo(eq)}>
-                  <td className="p-4 font-bold flex items-center gap-3">
+                  <td className="px-3 py-3 font-bold">
+                    <div className="flex min-w-0 items-center gap-2">
                     {eq.shield_url ? <Image src={eq.shield_url} alt={`Escudo de ${eq.name}`} width={24} height={24} unoptimized className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 bg-[#2e2e2e] rounded-full"></div>}
-                    {eq.name}
+                    <span className="min-w-0 break-words leading-tight">{eq.name}</span>
+                    </div>
                   </td>
-                  <td className="p-4 text-center text-gray-300 font-mono">${eq.deudaInscripcion.toFixed(2)}</td>
-                  <td className="p-4 text-center text-gray-300 font-mono">
-                    ${eq.deudaArbitraje.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.partidosJugados} jugados / {eq.partidosProgramados} prog.)</span>
+                  <td className="px-2 py-3 text-center text-gray-300 font-mono">${eq.deudaInscripcion.toFixed(2)}</td>
+                  <td className="px-2 py-3 text-center text-gray-300 font-mono">
+                    ${eq.deudaArbitraje.toFixed(2)} <span className="block text-[8px] text-gray-500">{eq.partidosJugados}J/{eq.partidosProgramados}P</span>
                   </td>
-                  <td className="p-4 text-center text-gray-300 font-mono">
-                    ${eq.deudaMultas.toFixed(2)} <span className="text-[9px] text-gray-500">({eq.amarillas}A / {eq.rojas}R)</span>
+                  <td className="px-2 py-3 text-center text-gray-300 font-mono">
+                    ${eq.deudaMultas.toFixed(2)} <span className="block text-[8px] text-gray-500">{eq.amarillas}A/{eq.rojas}R</span>
                   </td>
-                  <td className="p-4 text-center text-red-400 font-mono bg-red-900/10">${eq.totalDeudaGenerada.toFixed(2)}</td>
-                  <td className="p-4 text-center text-green-400 font-mono bg-green-900/10">${eq.pagadoTotal.toFixed(2)}</td>
-                  <td className="p-4 text-center text-emerald-300 font-mono bg-emerald-900/10">${Number(eq.descuentoTotal || 0).toFixed(2)}</td>
-                  <td className="p-4 text-center">
+                  <td className="px-2 py-3 text-center text-red-400 font-mono bg-red-900/10">${eq.totalDeudaGenerada.toFixed(2)}</td>
+                  <td className="px-2 py-3 text-center text-green-400 font-mono bg-green-900/10">${eq.pagadoTotal.toFixed(2)}</td>
+                  <td className="px-2 py-3 text-center text-emerald-300 font-mono bg-emerald-900/10">${Number(eq.descuentoTotal || 0).toFixed(2)}</td>
+                  <td className="px-2 py-3 text-center">
                     {eq.saldoPendiente > 0 ? (
                       <span className={`${eq.pagadoTotal > 0 ? 'bg-yellow-600' : 'bg-red-600'} text-white px-3 py-1 rounded font-black font-mono`}>${eq.saldoPendiente.toFixed(2)} · {eq.pagadoTotal > 0 ? 'Parcial' : 'En mora'}</span>
                     ) : (
                       <span className="bg-green-600 text-white px-3 py-1 rounded font-black uppercase text-[10px] tracking-widest">Al Día</span>
                     )}
                   </td>
-                  <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="bg-emerald-950 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-700 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                  <td className="px-3 py-3 text-right">
+                    <div className="flex flex-col justify-end gap-1 xl:flex-row">
+                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="bg-emerald-400 hover:bg-emerald-600 text-black hover:text-white border border-emerald-600 px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">
                         Descuento
                       </button>
-                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                      <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="bg-[#141414] hover:bg-[#D4A017] hover:text-black text-white border border-[#2E2E2E] px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">
                         Abonar
                       </button>
                     </div>
@@ -488,7 +489,7 @@ export default function LibroMayorFinanzas() {
             </div>
             <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2">
               <button onClick={() => { setMostrarDetalle(false); abrirModalPago(equipoSeleccionado); }} className="py-3 bg-[#D4A017] text-black font-black uppercase rounded-xl">Registrar nuevo pago</button>
-              <button onClick={() => { setMostrarDetalle(false); abrirModalPago(equipoSeleccionado, "descuento"); }} className="py-3 bg-[#1C1C1C] border border-[#D4A017]/40 text-[#D4A017] font-black uppercase rounded-xl">Aplicar descuento</button>
+              <button onClick={() => { setMostrarDetalle(false); abrirModalPago(equipoSeleccionado, "descuento"); }} className="py-3 bg-emerald-400 border border-emerald-600 text-black hover:bg-emerald-600 hover:text-white font-black uppercase rounded-xl">Aplicar descuento</button>
             </div>
             {cargandoDetalle ? <p className="text-gray-500">Cargando historial...</p> : detallePagos.length === 0 ? <p className="text-gray-500">No existen pagos registrados.</p> : detallePagos.map(pago => (
               <div key={pago.id} className="mb-3 bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-4">

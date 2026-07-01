@@ -347,7 +347,7 @@ export default function SorteoPage() {
           <div className={`relative flex h-36 w-36 items-center justify-center rounded-full border-4 border-[#D4A017] bg-[radial-gradient(circle,#3b2d0b,#050505_65%)] shadow-[0_0_45px_rgba(212,160,23,.35)] ${sorteoEnVivo ? "animate-spin" : ""}`}>
             <div className="absolute inset-5 rounded-full border border-white/10" />
             <div className="absolute h-2 w-28 rounded-full bg-[#D4A017]/80 blur-[1px]" />
-            <span className="relative z-10 text-3xl font-black text-[#E7C36B]">GÂ·L</span>
+            <span className="relative z-10 text-xl font-black uppercase tracking-[0.22em] text-[#E7C36B]">Sorteo</span>
           </div>
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Modo Sorteo Mundial</p>
@@ -396,9 +396,9 @@ export default function SorteoPage() {
             {appUrl && torneoSlug && <QRCodeCanvas value={`${appUrl}/torneo/${torneoSlug}#posiciones`} size={90} level="H" fgColor="#D4A017" bgColor="#1C1C1C" />}
             <span className="text-[9px] text-[#111827] font-black uppercase mt-1">Tabla en vivo</span>
           </div>
-          <div className="mx-auto mb-3 w-16 h-16 rounded-2xl border-2 border-[#D4A017] bg-white text-[#111827] flex items-center justify-center text-xl font-black shadow-[0_0_30px_rgba(212,160,23,.22)]">G·L</div>
-          <h1 className="text-5xl font-black text-[#111827] uppercase leading-tight">{nombreTorneo}</h1>
-          <p className="text-[#9B7411] font-black text-base uppercase mt-1">Conformacion oficial de grupos</p>
+          <p className="text-[13px] font-black uppercase tracking-[0.35em] text-[#9B7411]">Conformacion oficial de grupos</p>
+          <h1 className="mt-3 text-5xl font-black text-[#111827] uppercase leading-tight">{nombreTorneo}</h1>
+          <p className="text-[#0b5b37] font-black text-base uppercase mt-1">Equipos y grupos del torneo</p>
         </div>
 
         <div className={`relative grid flex-1 content-center ${posterDenso ? "gap-4" : posterCompacto ? "gap-5" : "gap-6"}`} style={{ gridTemplateColumns: `repeat(${columnasPoster}, minmax(0, 1fr))` }}>
@@ -452,7 +452,7 @@ export default function SorteoPage() {
             <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
               <div className="flex flex-col items-center justify-center rounded-3xl border border-[#D4A017]/40 bg-gradient-to-b from-[#111827] to-black p-8 text-center">
                 <div className={`mb-8 flex h-60 w-60 items-center justify-center rounded-full border-4 border-[#D4A017] bg-[radial-gradient(circle,#3b2d0b,#050505_65%)] shadow-[0_0_80px_rgba(212,160,23,.4)] ${sorteoEnVivo ? "animate-spin" : ""}`}>
-                  <span className="text-5xl font-black text-[#E7C36B]">GÂ·L</span>
+                  <span className="text-3xl font-black uppercase tracking-[0.25em] text-[#E7C36B]">Sorteo</span>
                 </div>
                 <button onClick={sorteoAutomatico} disabled={loading} className="w-full rounded-2xl bg-[#D4A017] px-6 py-4 text-sm font-black uppercase tracking-[0.25em] text-black hover:bg-yellow-400">
                   Iniciar sorteo

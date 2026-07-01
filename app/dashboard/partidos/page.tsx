@@ -250,6 +250,19 @@ export default function PartidosPage() {
   const faseBase = (fase: string) => String(fase || "").replace(/\s+\(Vuelta\)$/i, "");
   const equipoActivo = (equipo: any) => !["suspended", "eliminated"].includes(String(equipo?.competition_status || "active"));
   const equiposActivos = () => equipos.filter(equipoActivo);
+  const sedesConfiguradas = () => String(configuracion.final_venue || "")
+    .split(/\r?\n|;/)
+    .map(sede => sede.trim())
+    .filter(Boolean);
+  const canchasProgramacion = () => {
+    const sedes = sedesConfiguradas();
+    if (sedes.length > 1) return sedes;
+    const sedeBase = sedes[0] || "";
+    return Array.from({ length: Math.max(1, configuracion.court_count) }, (_, index) =>
+      sedeBase ? `${sedeBase} - Cancha ${index + 1}` : `Cancha ${index + 1}`
+    );
+  };
+  const sedePrincipalProgramacion = () => canchasProgramacion()[0] || "Cancha por confirmar";
   const maxCrucesPorFase = (fase: string) => {
     const base = faseBase(fase);
     if (base === "Fase de Grupos") return idaYVuelta ? 2 : 1;
@@ -315,13 +328,14 @@ export default function PartidosPage() {
 
   const distribuirPartidosEnHorarios = (fixtures: any[]) => {
     const slots = crearSlotsJornada();
-    const capacidad = slots.length * Math.max(1, configuracion.court_count);
+    const canchas = canchasProgramacion();
+    const capacidad = slots.length * canchas.length;
     if (fixtures.length > capacidad) {
       throw new Error(`El rango horario configurado es insuficiente. Hay ${capacidad} cupo(s) disponible(s) y ${fixtures.length} partido(s) por programar.`);
     }
     const programados = fixtures.map((fixture, index) => {
-      const slot = slots[Math.floor(index / configuracion.court_count)];
-      const cancha = `Cancha ${(index % configuracion.court_count) + 1}`;
+      const slot = slots[Math.floor(index / canchas.length)];
+      const cancha = canchas[index % canchas.length];
       return { ...fixture, court: cancha, match_date: slot.toISOString() };
     });
     const revisados: any[] = [];
@@ -413,7 +427,7 @@ export default function PartidosPage() {
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
-      alert(`Fecha ${autoJornada} generada por grupos, sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
+      alert(`Fecha ${autoJornada} generada por grupos, sin cruces duplicados y distribuida en ${canchasProgramacion().length} sede/cancha(s).`);
       cargarDatos();
     } catch (error: any) {
       alert(error.message);
@@ -447,7 +461,7 @@ export default function PartidosPage() {
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
-        .map(match => faseGenerar === "Final" && configuracion.final_venue ? { ...match, court: configuracion.final_venue } : match);
+        .map(match => faseGenerar === "Final" ? { ...match, court: sedePrincipalProgramacion() } : match);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       alert(`${faseGenerar} generada automáticamente con los equipos clasificados.`);
@@ -738,7 +752,7 @@ export default function PartidosPage() {
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
-        .map(match => faseGenerar === "Final" && configuracion.final_venue ? { ...match, court: configuracion.final_venue } : match);
+        .map(match => faseGenerar === "Final" ? { ...match, court: sedePrincipalProgramacion() } : match);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       await supabase.from("draw_history").insert([{
@@ -1527,7 +1541,8 @@ export default function PartidosPage() {
               Partido de vuelta
             </label>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><MapPin size={14} /> Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><MapPin size={14} /> Sede / Cancha</label><input list="opciones-sede-cancha" type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Estadio Monumental" /></div>
+            <datalist id="opciones-sede-cancha">{canchasProgramacion().map(cancha => <option key={cancha} value={cancha} />)}</datalist>
             <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><CalendarDays size={14} /> Fecha</label><input type="date" value={obtenerDiaDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "dia", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><Clock3 size={14} /> Hora</label><input type="time" value={obtenerHoraDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "hora", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div className="md:col-span-4"><label className="text-xs font-bold text-gray-500 uppercase">Observaciones</label><textarea value={observacionesManual} onChange={e => setObservacionesManual(e.target.value)} rows={2} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Comentarios opcionales del encuentro..." /></div>
@@ -1691,7 +1706,7 @@ export default function PartidosPage() {
                 <div className="text-center mb-7">
                   <p className="text-blue-300 text-[10px] uppercase tracking-[0.35em] font-black">Cuadro eliminatorio oficial</p>
                   <h3 className="text-white text-2xl font-black uppercase mt-2">{torneoNombre} · {configuracion.tournament_year}</h3>
-                  <p className="text-[#D4A017] text-xs font-bold uppercase mt-1">Final · {configuracion.final_venue || "Cancha por confirmar"}</p>
+                  <p className="text-[#D4A017] text-xs font-bold uppercase mt-1">Final · {sedePrincipalProgramacion()}</p>
                   <button data-html2canvas-ignore onClick={descargarCuadroEliminatorio} disabled={loading} className="mt-4 px-5 py-2 rounded-lg bg-blue-500 text-white font-black uppercase text-[10px] hover:bg-blue-400">Descargar póster del cuadro</button>
                 </div>
                 <div className="flex min-w-max items-stretch justify-center gap-8 pb-3">
@@ -1781,12 +1796,12 @@ export default function PartidosPage() {
                 )}
                 
                 <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0 relative z-20">
-                  <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {p.court || "Cancha 1"}</p>
+                  <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" })} • {p.court || "Cancha 1"}</p>
                   {p.notes && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#D4A017]">Obs: {p.notes}</p>}
                   <span className="uppercase tracking-wide">{p.home?.name}</span>
                 </div>
                 <div className="flex flex-col items-center px-4 w-48 relative z-20">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">{new Date(p.match_date).toLocaleString('es-EC', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}</span>
+                  <span className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[11px] text-[#D4A017] font-black uppercase tracking-widest mb-2">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' })}</span>
                   <div className="bg-[#0a0a0a] border border-[#2E2E2E] px-4 py-2 rounded-lg font-mono font-black text-xl text-[#D4A017] w-full text-center">
                     {p.status === 'finished' ? `${p.home_goals} - ${p.away_goals}` : "VS"}
                   </div>
@@ -1860,7 +1875,7 @@ export default function PartidosPage() {
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Cancha</label>
-                <input type="text" value={editCancha} onChange={e => setEditCancha(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+                <input list="opciones-sede-cancha" type="text" value={editCancha} onChange={e => setEditCancha(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Instancia</label>
@@ -1920,22 +1935,23 @@ export default function PartidosPage() {
                 </div>
                 <div className="space-y-5">
                   {partidosPorDiaPoster[dia].map(p => (
-                    <div key={p.id} className="relative grid grid-cols-[108px_1fr_104px_1fr_108px] items-center overflow-visible rounded-[18px] border border-white/80 bg-white px-4 py-3 text-[#072047] shadow-[0_18px_35px_rgba(0,0,0,.35)]">
+                    <div key={p.id} className="relative grid grid-cols-[96px_1fr_148px_1fr_96px] items-center overflow-visible rounded-[18px] border border-white/80 bg-white px-4 py-4 text-[#072047] shadow-[0_18px_35px_rgba(0,0,0,.35)]">
                       <div className="flex justify-center">
-                        {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}
+                        {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={72} height={72} unoptimized crossOrigin="anonymous" className="h-[72px] w-[72px] object-contain drop-shadow-lg" /> : <div className="h-[72px] w-[72px] rounded-full bg-[#dbeafe]" />}
                       </div>
                       <div className="min-w-0 text-right">
-                        <p className="break-words text-[26px] font-black uppercase leading-tight">{p.home?.name || "Local"}</p>
+                        <p className="break-words text-[24px] font-black uppercase leading-tight">{p.home?.name || "Local"}</p>
                       </div>
-                      <div className="relative mx-auto flex h-20 w-24 flex-col items-center justify-center rounded-xl bg-[#06183a]">
-                        <span className="relative z-10 text-2xl font-black text-[#D4A017]">VS</span>
-                        <span className="relative z-10 mt-1 rounded-full bg-[#D4A017] px-3 py-0.5 text-[11px] font-black text-black">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                      <div className="relative mx-auto flex h-24 w-36 flex-col items-center justify-center rounded-2xl border-2 border-[#D4A017] bg-[#06183a] px-2 shadow-inner">
+                        <span className="relative z-10 text-[13px] font-black uppercase tracking-[0.22em] text-white/80">Hora</span>
+                        <span className="relative z-10 mt-1 text-3xl font-black leading-none text-[#D4A017]">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="relative z-10 mt-1 text-[11px] font-black uppercase tracking-[0.25em] text-white">VS</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="break-words text-[26px] font-black uppercase leading-tight">{p.away?.name || "Visitante"}</p>
+                        <p className="break-words text-[24px] font-black uppercase leading-tight">{p.away?.name || "Visitante"}</p>
                       </div>
                       <div className="flex justify-center">
-                        {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={82} height={82} unoptimized crossOrigin="anonymous" className="h-20 w-20 object-contain drop-shadow-lg" /> : <div className="h-20 w-20 rounded-full bg-[#dbeafe]" />}
+                        {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={72} height={72} unoptimized crossOrigin="anonymous" className="h-[72px] w-[72px] object-contain drop-shadow-lg" /> : <div className="h-[72px] w-[72px] rounded-full bg-[#dbeafe]" />}
                       </div>
                       <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-[#D4A017]/60 bg-[#06183a] px-5 py-1 text-[12px] font-black uppercase tracking-widest text-white shadow-lg">
                         {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" })} - {p.court || "Cancha por confirmar"}
@@ -1949,7 +1965,7 @@ export default function PartidosPage() {
           <div className="relative z-10 mt-12 grid grid-cols-[1fr_auto] items-end gap-6">
             <div>
               <p className="text-4xl font-black italic tracking-wide text-white drop-shadow-[0_4px_0_rgba(0,0,0,.65)]">{torneoNombre}</p>
-              <p className="mt-2 text-xl font-black uppercase tracking-[0.2em] text-[#D4A017]">{configuracion.final_venue || "Cancha por confirmar"}</p>
+              <p className="mt-2 text-xl font-black uppercase tracking-[0.2em] text-[#D4A017]">{sedePrincipalProgramacion()}</p>
             </div>
             <div className="rounded-2xl border border-white/15 bg-black/30 px-5 py-4 text-right">
               <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Organizacion</p>

@@ -166,6 +166,8 @@ export default function PortalTorneoDinamico() {
     (groups[team.group || "General"] ||= []).push(team);
     return groups;
   }, {});
+  const gruposOrdenados = Object.entries(posicionesPorGrupo)
+    .sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" }));
   const auspiciantesTorneo = Array.isArray(torneoActual?.tournament_sponsors) && torneoActual.tournament_sponsors.length
     ? torneoActual.tournament_sponsors
     : [
@@ -460,7 +462,7 @@ export default function PortalTorneoDinamico() {
                             {tabla.length === 0 ? (
                               <tr><td colSpan={10} className="py-12 text-center text-gray-500 font-medium">Aún no existen registros en este grupo.</td></tr>
                             ) : (
-                              Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+                              gruposOrdenados.map(([grupo, equipos]) => (
                                 <React.Fragment key={grupo}>
                                   <tr className="bg-[#101010]">
                                     <td colSpan={10} className="py-3 px-6 text-[#D4A017] text-[11px] font-black uppercase tracking-[0.25em]">Grupo {grupo}</td>
