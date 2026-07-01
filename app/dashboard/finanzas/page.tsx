@@ -405,7 +405,7 @@ export default function LibroMayorFinanzas() {
             const estado = eq.saldoPendiente > 0 ? (eq.pagadoTotal > 0 ? "Parcial" : "En mora") : "Al dia";
             return (
               <article key={eq.id} className="cursor-pointer bg-[#1C1C1C] p-3 transition-colors hover:bg-[#141414] sm:p-4" onClick={() => abrirDetalleEquipo(eq)}>
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(190px,1.35fr)_minmax(0,3.9fr)_minmax(190px,1.15fr)] xl:items-center">
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(170px,1fr)_minmax(0,4.4fr)_minmax(210px,0.9fr)] xl:items-center 2xl:grid-cols-[minmax(190px,1.15fr)_minmax(0,4.9fr)_minmax(250px,0.95fr)]">
                   <div className="flex min-w-0 items-center gap-3">
                     {eq.shield_url ? <Image src={eq.shield_url} alt={`Escudo de ${eq.name}`} width={34} height={34} unoptimized className="h-9 w-9 shrink-0 object-contain" /> : <div className="h-9 w-9 shrink-0 rounded-full bg-[#2e2e2e]"></div>}
                     <div className="min-w-0">
@@ -413,7 +413,7 @@ export default function LibroMayorFinanzas() {
                       <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{eq.partidosJugados} jugado(s) / {eq.partidosProgramados} programado(s)</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 md:grid-cols-4 2xl:grid-cols-7">
+                  <div className="grid grid-cols-2 gap-1.5 md:grid-cols-4 xl:grid-cols-7">
                     <FinanceCell label="Inscripcion" value={money(eq.deudaInscripcion)} />
                     <FinanceCell label="Arbitraje" value={money(eq.deudaArbitraje)} detail={`${eq.partidosJugados}J / ${eq.partidosProgramados}P`} />
                     <FinanceCell label="Tarjetas" value={money(eq.deudaMultas)} detail={`${eq.amarillas}A / ${eq.rojas}R`} />
@@ -422,14 +422,14 @@ export default function LibroMayorFinanzas() {
                     <FinanceCell label="Descuento" value={money(eq.descuentoTotal)} tone="emerald" />
                     <FinanceCell label="Saldo" value={money(eq.saldoPendiente)} tone={eq.saldoPendiente > 0 ? "red" : "green"} />
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row xl:flex-col 2xl:flex-row">
-                    <span className={`inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-center text-[10px] font-black uppercase tracking-widest ${eq.saldoPendiente > 0 ? (eq.pagadoTotal > 0 ? "border border-yellow-500/35 bg-yellow-500/15 text-yellow-300" : "border border-red-500/35 bg-red-500/15 text-red-300") : "border border-green-500/35 bg-green-500/15 text-green-300"}`}>
+                  <div className="grid grid-cols-3 gap-1.5 xl:grid-cols-1 2xl:grid-cols-3">
+                    <span className={`inline-flex min-h-8 items-center justify-center whitespace-nowrap rounded-md px-1.5 text-center text-[8px] font-black uppercase leading-none tracking-[0.06em] ${eq.saldoPendiente > 0 ? (eq.pagadoTotal > 0 ? "border border-yellow-500/35 bg-yellow-500/15 text-yellow-300" : "border border-red-500/35 bg-red-500/15 text-red-300") : "border border-green-500/35 bg-green-500/15 text-green-300"}`}>
                       {estado}
                     </span>
-                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="min-h-9 flex-1 rounded-lg border border-emerald-500/60 bg-emerald-400 px-3 text-[10px] font-black uppercase tracking-widest text-black transition-all hover:bg-emerald-600 hover:text-white">
+                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="min-h-8 rounded-md border border-emerald-500/60 bg-emerald-400 px-1.5 text-[8px] font-black uppercase leading-none tracking-[0.06em] text-black transition-all hover:bg-emerald-600 hover:text-white">
                       Descuento
                     </button>
-                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="min-h-9 flex-1 rounded-lg border border-[#2E2E2E] bg-[#141414] px-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-[#D4A017] hover:text-black">
+                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="min-h-8 rounded-md border border-[#2E2E2E] bg-[#141414] px-1.5 text-[8px] font-black uppercase leading-none tracking-[0.06em] text-white transition-all hover:bg-[#D4A017] hover:text-black">
                       Abonar
                     </button>
                   </div>
@@ -440,6 +440,7 @@ export default function LibroMayorFinanzas() {
         </div>
       </div>
 
+      {false && (
       <div className="hidden bg-[#1C1C1C] rounded-2xl shadow-xl border border-[#2E2E2E] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full table-fixed text-left text-[11px] text-white">
@@ -498,6 +499,7 @@ export default function LibroMayorFinanzas() {
           </table>
         </div>
       </div>
+      )}
 
       <div className="bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden">
         <h3 className="p-4 text-[#D4A017] font-black uppercase text-xs tracking-widest border-b border-[#2E2E2E]">Últimos pagos registrados</h3>
@@ -621,10 +623,10 @@ function FinanceCell({ label, value, detail, tone = "neutral" }: any) {
   };
 
   return (
-    <div className={`min-w-0 rounded-lg border p-2 ${tones[tone] || tones.neutral}`}>
-      <p className="truncate text-[8px] font-black uppercase tracking-widest text-gray-500">{label}</p>
-      <p className="mt-1 break-words font-mono text-sm font-black leading-tight">{value}</p>
-      {detail && <p className="mt-1 truncate text-[9px] font-bold uppercase tracking-wider text-gray-500">{detail}</p>}
+    <div className={`min-w-0 overflow-hidden rounded-lg border px-2 py-1.5 ${tones[tone] || tones.neutral}`}>
+      <p className="truncate text-[7.5px] font-black uppercase tracking-[0.08em] text-gray-500">{label}</p>
+      <p className="mt-1 break-words font-mono text-[13px] font-black leading-tight">{value}</p>
+      {detail && <p className="mt-0.5 truncate text-[8px] font-bold uppercase tracking-[0.06em] text-gray-500">{detail}</p>}
     </div>
   );
 }
