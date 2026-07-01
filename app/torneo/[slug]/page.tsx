@@ -166,6 +166,8 @@ export default function PortalTorneoDinamico() {
     (groups[team.group || "General"] ||= []).push(team);
     return groups;
   }, {});
+  const gruposOrdenados = Object.entries(posicionesPorGrupo)
+    .sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" }));
   const auspiciantesTorneo = Array.isArray(torneoActual?.tournament_sponsors) && torneoActual.tournament_sponsors.length
     ? torneoActual.tournament_sponsors
     : [
@@ -312,6 +314,11 @@ export default function PortalTorneoDinamico() {
             <p style={{ color: 'var(--gray)', fontSize: '18px', maxWidth: '550px', marginBottom: '40px', lineHeight: '1.6' }}>
               El torneo de fútbol amateur más prestigioso. Vive cada partido, analiza tus estadísticas en tiempo real y escribe tu nombre en la historia deportiva.
             </p>
+            {torneoActual?.poster_url && (
+              <div style={{ width: 'min(100%, 360px)', height: '190px', marginBottom: '28px', borderRadius: '18px', overflow: 'hidden', border: '1px solid rgba(212,160,23,.35)', boxShadow: '0 20px 60px rgba(0,0,0,.45)' }}>
+                <Image src={torneoActual.poster_url} alt={`Poster de ${torneoActual?.name || 'torneo'}`} width={720} height={380} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
               <Link href="/" className="btn-secondary">
                 <i className="fa fa-arrow-left"></i> Volver al Directorio
@@ -455,7 +462,7 @@ export default function PortalTorneoDinamico() {
                             {tabla.length === 0 ? (
                               <tr><td colSpan={10} className="py-12 text-center text-gray-500 font-medium">Aún no existen registros en este grupo.</td></tr>
                             ) : (
-                              Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+                              gruposOrdenados.map(([grupo, equipos]) => (
                                 <React.Fragment key={grupo}>
                                   <tr className="bg-[#101010]">
                                     <td colSpan={10} className="py-3 px-6 text-[#D4A017] text-[11px] font-black uppercase tracking-[0.25em]">Grupo {grupo}</td>

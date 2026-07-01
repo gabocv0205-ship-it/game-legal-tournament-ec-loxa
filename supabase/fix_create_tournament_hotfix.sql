@@ -41,6 +41,10 @@ alter table public.tournaments
   add column if not exists repechage_slots integer default 0,
   add column if not exists knockout_legs integer default 1,
   add column if not exists final_legs integer default 1,
+  add column if not exists knockout_pairing_mode text default 'general_table',
+  add column if not exists substitution_rule text default 'limited',
+  add column if not exists double_yellow_suspension_matches integer default 1,
+  add column if not exists reset_yellows_on_knockout boolean default true,
   add column if not exists court_count integer default 1,
   add column if not exists start_date date,
   add column if not exists estimated_end_date date,
@@ -58,6 +62,25 @@ alter table public.tournaments
   add column if not exists yellow_cards_for_suspension integer default 3,
   add column if not exists yellow_suspension_matches integer default 1,
   add column if not exists red_suspension_matches integer default 1;
+
+do $$
+begin
+  if to_regclass('public.players') is not null then
+    alter table public.players
+      add column if not exists eligibility_status text default 'active',
+      add column if not exists eligibility_reason text,
+      add column if not exists eligibility_updated_at timestamptz,
+      add column if not exists eligibility_updated_by uuid references public.profiles(id) on delete set null;
+  end if;
+
+  if to_regclass('public.teams') is not null then
+    alter table public.teams
+      add column if not exists competition_status text default 'active',
+      add column if not exists competition_status_reason text,
+      add column if not exists competition_status_updated_at timestamptz,
+      add column if not exists competition_status_updated_by uuid references public.profiles(id) on delete set null;
+  end if;
+end $$;
 
 create table if not exists public.tournament_members (
   id uuid primary key default gen_random_uuid(),

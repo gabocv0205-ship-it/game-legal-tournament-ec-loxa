@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFinancialBalance,
   calculateStandings,
+  createDrawKnockoutFixtures,
+  createGroupSequenceKnockoutFixtures,
   createKnockoutFixtures,
   createMatchdayFixtures,
+  getSuspensionInfoForMatch,
   getStageWinners,
+  getSuspendedPlayerIdsForMatch,
   normalizeTournamentConfig,
   scheduleFixtures,
   validateManualMatch,
@@ -53,15 +57,21 @@ describe("motor deportivo", () => {
     expect(groups.B.find(team => team.id === "b1").pj).toBe(0);
   });
 
-  it("genera fixtures solo dentro de cada grupo y soporta ida y vuelta", () => {
+  it("genera fixtures solo dentro de cada grupo y separa ida y vuelta por jornada", () => {
     const fixtures = createMatchdayFixtures(groupedTeams, [], "t1", 1, "Fase de Grupos", { legs: 2 });
-    expect(fixtures).toHaveLength(4);
+    expect(fixtures).toHaveLength(2);
     expect(fixtures.every(match => {
       const home = groupedTeams.find(team => team.id === match.home_team_id);
       const away = groupedTeams.find(team => team.id === match.away_team_id);
       return home?.group_name === away?.group_name;
     })).toBe(true);
-    expect(fixtures.filter(match => [match.home_team_id, match.away_team_id].sort().join(":") === "a1:a2")).toHaveLength(2);
+    const vueltas = createMatchdayFixtures(groupedTeams, fixtures, "t1", 2, "Fase de Grupos", { legs: 2 });
+    expect(vueltas).toHaveLength(2);
+    expect(vueltas.every(match => match.stage === "Fase de Grupos (Vuelta)")).toBe(true);
+    expect(vueltas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ home_team_id: fixtures[0].away_team_id, away_team_id: fixtures[0].home_team_id }),
+      expect.objectContaining({ home_team_id: fixtures[1].away_team_id, away_team_id: fixtures[1].home_team_id }),
+    ]));
   });
 
   it("distribuye horarios entre canchas", () => {
@@ -78,10 +88,92 @@ describe("motor deportivo", () => {
     expect(validateManualMatch({ home_team_id: "a", away_team_id: "c", court: "Cancha 2", match_date: "2026-07-01T09:20:00.000Z", stage: "Fase de Grupos" }, matches, 60)).toContain("equipo");
   });
 
+  it("no permite repetir manualmente un cruce ya jugado", () => {
+    const matches = [{ id: "m1", home_team_id: "a", away_team_id: "b", court: "Cancha 1", match_date: "2026-07-01T09:00:00.000Z", status: "finished", stage: "Fase de Grupos" }];
+    const conflict = validateManualMatch({ home_team_id: "b", away_team_id: "a", court: "Cancha 2", match_date: "2026-07-08T09:00:00.000Z", stage: "Fase de Grupos" }, matches, 60);
+    expect(conflict).toContain("programado o jugado");
+  });
+
+  it("permite vuelta invertida y bloquea tercer cruce cuando hay ida y vuelta", () => {
+    const ida = [{ id: "m1", home_team_id: "a", away_team_id: "b", court: "Cancha 1", match_date: "2026-07-01T09:00:00.000Z", status: "finished", stage: "Fase de Grupos" }];
+    expect(validateManualMatch({ home_team_id: "b", away_team_id: "a", court: "Cancha 2", match_date: "2026-07-08T09:00:00.000Z", stage: "Fase de Grupos (Vuelta)" }, ida, 60, { maxLegs: 2 })).toBeNull();
+    const idaYVuelta = [...ida, { id: "m2", home_team_id: "b", away_team_id: "a", court: "Cancha 2", match_date: "2026-07-08T09:00:00.000Z", status: "finished", stage: "Fase de Grupos (Vuelta)" }];
+    expect(validateManualMatch({ home_team_id: "a", away_team_id: "b", court: "Cancha 3", match_date: "2026-07-15T09:00:00.000Z", stage: "Fase de Grupos" }, idaYVuelta, 60, { maxLegs: 2 })).toContain("misma localia");
+    expect(validateManualMatch({ home_team_id: "b", away_team_id: "a", court: "Cancha 3", match_date: "2026-07-15T09:00:00.000Z", stage: "Fase de Grupos (Vuelta)" }, idaYVuelta, 60, { maxLegs: 2 })).toContain("misma localia");
+  });
+
   it("genera cruces eliminatorios mejor contra peor", () => {
     const fixtures = createKnockoutFixtures(teams, "t1", "Semifinal", 5, 1);
     expect(fixtures).toHaveLength(2);
     expect(fixtures[0]).toMatchObject({ home_team_id: "a", away_team_id: "d", stage: "Semifinal" });
+  });
+
+  it("genera cruces por secuencia de grupos tipo Libertadores", () => {
+    const groups = calculateStandings([
+      { id: "a1", name: "A1", group_name: "A" },
+      { id: "a2", name: "A2", group_name: "A" },
+      { id: "b1", name: "B1", group_name: "B" },
+      { id: "b2", name: "B2", group_name: "B" },
+    ], [
+      { status: "finished", home_team_id: "a1", away_team_id: "a2", home_goals: 3, away_goals: 0 },
+      { status: "finished", home_team_id: "b1", away_team_id: "b2", home_goals: 3, away_goals: 0 },
+    ], [], { qualifiers_per_group: 2 });
+    const fixtures = createGroupSequenceKnockoutFixtures(groups, "t1", "Semifinal", 5, 1);
+    expect(fixtures).toHaveLength(2);
+    expect(fixtures[0]).toMatchObject({ home_team_id: "a1", away_team_id: "b2" });
+    expect(fixtures[1]).toMatchObject({ home_team_id: "b1", away_team_id: "a2" });
+  });
+
+  it("sortea llaves sin duplicar equipos", () => {
+    const fixtures = createDrawKnockoutFixtures(teams, "t1", "Semifinal", 5, 1, 123);
+    const usados = fixtures.flatMap(match => [match.home_team_id, match.away_team_id]);
+    expect(fixtures).toHaveLength(2);
+    expect(new Set(usados).size).toBe(4);
+  });
+
+  it("aplica doble amarilla y limpia amarillas de grupos en eliminatorias", () => {
+    const matches = [
+      { id: "m1", status: "finished", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "b", match_date: "2026-07-01T09:00:00.000Z" },
+      { id: "m2", status: "scheduled", stage: "Cuartos de Final", home_team_id: "a", away_team_id: "c", match_date: "2026-07-08T09:00:00.000Z" },
+    ];
+    const unaAmarilla = [{ match_id: "m1", player_id: "p1", team_id: "a", event_type: "amarilla" }];
+    expect(getSuspendedPlayerIdsForMatch(unaAmarilla, matches, { yellow_cards_for_suspension: 1, reset_yellows_on_knockout: true }, matches[1]).has("p1")).toBe(false);
+    const dobleAmarilla = [
+      { match_id: "m1", player_id: "p1", team_id: "a", event_type: "amarilla" },
+      { match_id: "m1", player_id: "p1", team_id: "a", event_type: "amarilla" },
+    ];
+    expect(getSuspendedPlayerIdsForMatch(dobleAmarilla, matches, { reset_yellows_on_knockout: true, double_yellow_suspension_matches: 1 }, matches[1]).has("p1")).toBe(true);
+  });
+
+  it("suspende una sola fecha futura por doble amarilla y habilita despues", () => {
+    const matches = [
+      { id: "m1", status: "finished", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "b", matchday: 1, match_date: "2026-07-01T09:00:00.000Z" },
+      { id: "m2", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "c", matchday: 2, match_date: "2026-07-08T09:00:00.000Z" },
+      { id: "m3", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "d", matchday: 3, match_date: "2026-07-15T09:00:00.000Z" },
+    ];
+    const events = [
+      { match_id: "m1", player_id: "calva", team_id: "a", event_type: "amarilla" },
+      { match_id: "m1", player_id: "calva", team_id: "a", event_type: "amarilla" },
+    ];
+    const fecha2 = getSuspensionInfoForMatch(events, matches, { double_yellow_suspension_matches: 1 }, matches[1]);
+    const fecha3 = getSuspensionInfoForMatch(events, matches, { double_yellow_suspension_matches: 1 }, matches[2]);
+    expect(fecha2.get("calva")?.reason).toContain("Doble amarilla");
+    expect(fecha2.get("calva")?.availableMatchday).toBe(3);
+    expect(fecha3.has("calva")).toBe(false);
+  });
+
+  it("suspende dos fechas futuras por roja directa y habilita en la cuarta", () => {
+    const matches = [
+      { id: "m1", status: "finished", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "b", matchday: 1, match_date: "2026-07-01T09:00:00.000Z" },
+      { id: "m2", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "c", matchday: 2, match_date: "2026-07-08T09:00:00.000Z" },
+      { id: "m3", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "d", matchday: 3, match_date: "2026-07-15T09:00:00.000Z" },
+      { id: "m4", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "e", matchday: 4, match_date: "2026-07-22T09:00:00.000Z" },
+    ];
+    const events = [{ match_id: "m1", player_id: "calva", team_id: "a", event_type: "roja" }];
+    const config = { red_suspension_matches: 2 };
+    expect(getSuspensionInfoForMatch(events, matches, config, matches[1]).get("calva")?.reason).toContain("Roja directa");
+    expect(getSuspendedPlayerIdsForMatch(events, matches, config, matches[2]).has("calva")).toBe(true);
+    expect(getSuspendedPlayerIdsForMatch(events, matches, config, matches[3]).has("calva")).toBe(false);
   });
 
   it("avanza al ganador de una llave empatada resuelta por penales", () => {

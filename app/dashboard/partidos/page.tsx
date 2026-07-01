@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
-import { calculateStandings, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspensionInfoForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -14,6 +14,20 @@ type JornadaWindow = {
   day: string;
   startTime: string;
   endTime: string;
+};
+
+type ManualMatchDraft = {
+  id: string;
+  tournament_id: string;
+  home_team_id: string;
+  away_team_id: string;
+  match_date: string;
+  matchday: number;
+  court: string;
+  stage: string;
+  notes: string | null;
+  home_name: string;
+  away_name: string;
 };
 
 export default function PartidosPage() {
@@ -46,7 +60,10 @@ export default function PartidosPage() {
   const [jornadaManual, setJornadaManual] = useState<number>(1);
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
+  const [grupoManual, setGrupoManual] = useState("Todos");
+  const [manualEsVuelta, setManualEsVuelta] = useState(false);
   const [observacionesManual, setObservacionesManual] = useState("");
+  const [manualPendientes, setManualPendientes] = useState<ManualMatchDraft[]>([]);
   const [partidoEditando, setPartidoEditando] = useState<any>(null);
   const [editLocalId, setEditLocalId] = useState("");
   const [editVisitanteId, setEditVisitanteId] = useState("");
@@ -73,10 +90,12 @@ export default function PartidosPage() {
 
   const [filtroJornada, setFiltroJornada] = useState<number | "">("");
   const capturaRef = useRef<HTMLDivElement>(null);
+  const jornadaPosterRef = useRef<HTMLDivElement>(null);
   const bracketPosterRef = useRef<HTMLDivElement>(null);
   const [appUrl, setAppUrl] = useState("");
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [usarFondoPersonalizado, setUsarFondoPersonalizado] = useState(true);
+  const posterFontFamily = '"Segoe UI", Arial, Helvetica, sans-serif';
 
   const [partidoActivo, setPartidoActivo] = useState<any>(null);
   const [jugadores, setJugadores] = useState<any[]>([]);
@@ -111,6 +130,7 @@ export default function PartidosPage() {
     setAutoDia(ahora.dia);
     setAutoDias(dias => dias.length ? dias : [ahora.dia]);
     setAutoHoraInicio(ahora.hora);
+    setAutoVentanas(ventanas => ventanas.length ? ventanas : [{ day: ahora.dia, startTime: ahora.hora, endTime: "17:00" }]);
   };
 
   const fechaHoraEcuadorAISO = (value: string) => {
@@ -167,6 +187,7 @@ export default function PartidosPage() {
       setAutoDia(valor => valor || ahora.dia);
       setAutoDias(valor => valor.length ? valor : [ahora.dia]);
       setAutoHoraInicio(valor => valor || ahora.hora);
+      setAutoVentanas(valor => valor.length ? valor : [{ day: ahora.dia, startTime: "09:30", endTime: "17:00" }]);
     }
   }, []);
 
@@ -197,22 +218,57 @@ export default function PartidosPage() {
       setAuspiciantesTorneo(Array.isArray(tourney.tournament_sponsors) ? tourney.tournament_sponsors.filter(Boolean) : []);
       const rules = normalizeTournamentConfig(tourney);
       setConfiguracion(rules);
+      setIdaYVuelta(["sudamericana", "libertadores", "champions", "europa_league"].includes(rules.format));
       setAutoDuracion(rules.match_duration_minutes);
       setFondoPosterUrl(tourney.match_poster_background_url || "");
     }
 
-    const { data: teamsData } = await supabase.from("teams").select("id, name, group_name").eq("tournament_id", activeId).order("name");
-    if (teamsData) setEquipos(teamsData);
+    const teamsAdvanced = await supabase.from("teams").select("id, name, group_name, competition_status, competition_status_reason").eq("tournament_id", activeId).order("name");
+    if (teamsAdvanced.error) {
+      const { data: teamsBasic } = await supabase.from("teams").select("id, name, group_name").eq("tournament_id", activeId).order("name");
+      setEquipos((teamsBasic || []).map(team => ({ ...team, competition_status: "active", competition_status_reason: null })));
+    } else {
+      setEquipos(teamsAdvanced.data || []);
+    }
 
-    const { data: matchesData } = await supabase.from("matches")
-      .select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)")
+    const matchesAdvanced = await supabase.from("matches")
+      .select("*, home:home_team_id(name, shield_url, competition_status, competition_status_reason), away:away_team_id(name, shield_url, competition_status, competition_status_reason)")
       .eq("tournament_id", activeId).order("match_date", { ascending: true });
-    if (matchesData) setPartidos(matchesData);
+    if (matchesAdvanced.error) {
+      const { data: matchesBasic } = await supabase.from("matches")
+        .select("*, home:home_team_id(name, shield_url), away:away_team_id(name, shield_url)")
+        .eq("tournament_id", activeId).order("match_date", { ascending: true });
+      setPartidos(matchesBasic || []);
+    } else {
+      setPartidos(matchesAdvanced.data || []);
+    }
   };
 
   const mismaJornada = (partido: any, jornada: number, fase: string) => Number(partido.matchday) === Number(jornada) && partido.stage === fase;
   const jornadaTienePartidos = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase));
   const jornadaCulminada = (jornada: number, fase: string) => partidos.some(partido => mismaJornada(partido, jornada, fase) && partido.status === "finished");
+  const faseBase = (fase: string) => String(fase || "").replace(/\s+\(Vuelta\)$/i, "");
+  const equipoActivo = (equipo: any) => !["suspended", "eliminated"].includes(String(equipo?.competition_status || "active"));
+  const equiposActivos = () => equipos.filter(equipoActivo);
+  const sedesConfiguradas = () => String(configuracion.final_venue || "")
+    .split(/\r?\n|;/)
+    .map(sede => sede.trim())
+    .filter(Boolean);
+  const canchasProgramacion = () => {
+    const sedes = sedesConfiguradas();
+    if (sedes.length > 1) return sedes;
+    const sedeBase = sedes[0] || "";
+    return Array.from({ length: Math.max(1, configuracion.court_count) }, (_, index) =>
+      sedeBase ? `${sedeBase} - Cancha ${index + 1}` : `Cancha ${index + 1}`
+    );
+  };
+  const sedePrincipalProgramacion = () => canchasProgramacion()[0] || "Cancha por confirmar";
+  const maxCrucesPorFase = (fase: string) => {
+    const base = faseBase(fase);
+    if (base === "Fase de Grupos") return idaYVuelta ? 2 : 1;
+    if (base === "Final") return configuracion.final_legs;
+    return configuracion.knockout_legs;
+  };
   const validarJornadaGenerable = (jornada: number, fase: string) => {
     if (jornadaCulminada(jornada, fase)) return `La fecha ${jornada} de ${fase} ya esta culminada y no puede volver a generarse.`;
     if (jornadaTienePartidos(jornada, fase)) return `La fecha ${jornada} de ${fase} ya tiene partidos guardados. Puedes editarlos, no volver a generarlos.`;
@@ -272,18 +328,19 @@ export default function PartidosPage() {
 
   const distribuirPartidosEnHorarios = (fixtures: any[]) => {
     const slots = crearSlotsJornada();
-    const capacidad = slots.length * Math.max(1, configuracion.court_count);
+    const canchas = canchasProgramacion();
+    const capacidad = slots.length * canchas.length;
     if (fixtures.length > capacidad) {
       throw new Error(`El rango horario configurado es insuficiente. Hay ${capacidad} cupo(s) disponible(s) y ${fixtures.length} partido(s) por programar.`);
     }
     const programados = fixtures.map((fixture, index) => {
-      const slot = slots[Math.floor(index / configuracion.court_count)];
-      const cancha = `Cancha ${(index % configuracion.court_count) + 1}`;
+      const slot = slots[Math.floor(index / canchas.length)];
+      const cancha = canchas[index % canchas.length];
       return { ...fixture, court: cancha, match_date: slot.toISOString() };
     });
     const revisados: any[] = [];
     for (const partido of programados) {
-      const conflict = validateManualMatch(partido, [...partidos, ...revisados], configuracion.match_duration_minutes);
+      const conflict = validateManualMatch(partido, [...partidos, ...revisados], configuracion.match_duration_minutes, { maxLegs: maxCrucesPorFase(partido.stage) });
       if (conflict) throw new Error(conflict);
       revisados.push(partido);
     }
@@ -294,8 +351,13 @@ export default function PartidosPage() {
     e.preventDefault();
     if (localId === visitanteId) return alert("Un equipo no puede jugar contra sí mismo.");
     if (!torneoId) return alert("No hay torneo activo.");
-    if (jornadaCulminada(jornadaManual, faseManual)) return alert(`La fecha ${jornadaManual} de ${faseManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
-    if (faseManual === "Fase de Grupos") {
+    const localEstado = equipos.find(equipo => equipo.id === localId);
+    const visitanteEstado = equipos.find(equipo => equipo.id === visitanteId);
+    if (!equipoActivo(localEstado) || !equipoActivo(visitanteEstado)) return alert("Uno de los equipos esta suspendido o eliminado. Reactivalo antes de programar un nuevo partido.");
+    const fasePartidoManual = manualEsVuelta ? `${faseBase(faseManual)} (Vuelta)` : faseBase(faseManual);
+    if (manualEsVuelta && maxCrucesPorFase(faseManual) < 2) return alert("Este torneo no esta configurado para ida y vuelta en esta fase.");
+    if (jornadaCulminada(jornadaManual, fasePartidoManual)) return alert(`La fecha ${jornadaManual} de ${fasePartidoManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
+    if (faseBase(fasePartidoManual) === "Fase de Grupos") {
       const local = equipos.find(equipo => equipo.id === localId);
       const visitante = equipos.find(equipo => equipo.id === visitanteId);
       if ((local?.group_name || "General") !== (visitante?.group_name || "General")) {
@@ -303,19 +365,50 @@ export default function PartidosPage() {
       }
     }
     const fechaISO = fechaHoraEcuadorAISO(fecha);
-    const conflict = validateManualMatch({
-      home_team_id: localId, away_team_id: visitanteId, match_date: fechaISO, court: canchaManual, stage: faseManual
-    }, partidos, configuracion.match_duration_minutes);
+    const primeraPendiente = manualPendientes[0];
+    if (primeraPendiente && (Number(primeraPendiente.matchday) !== Number(jornadaManual) || faseBase(primeraPendiente.stage) !== faseBase(fasePartidoManual))) {
+      return alert("La jornada manual pendiente debe mantener el mismo numero de fecha e instancia. Guarda o limpia la lista antes de cambiar de jornada.");
+    }
+    const local = equipos.find(equipo => equipo.id === localId);
+    const visitante = equipos.find(equipo => equipo.id === visitanteId);
+    const draft: ManualMatchDraft = {
+      id: `manual-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      tournament_id: torneoId,
+      home_team_id: localId,
+      away_team_id: visitanteId,
+      match_date: fechaISO,
+      matchday: Number(jornadaManual),
+      court: canchaManual.trim() || "Cancha 1",
+      stage: fasePartidoManual,
+      notes: observacionesManual.trim() || null,
+      home_name: local?.name || "Local",
+      away_name: visitante?.name || "Visitante"
+    };
+    const conflict = validateManualMatch(draft, [...partidos, ...manualPendientes], configuracion.match_duration_minutes, { maxLegs: maxCrucesPorFase(fasePartidoManual) });
     if (conflict) return alert(conflict);
+    setManualPendientes(pendientes => [...pendientes, draft].sort((a, b) => String(a.match_date).localeCompare(String(b.match_date))));
+    setLocalId("");
+    setVisitanteId("");
+    setObservacionesManual("");
+    setManualEsVuelta(false);
+  };
+
+  const quitarPartidoManualPendiente = (id: string) => {
+    setManualPendientes(pendientes => pendientes.filter(partido => partido.id !== id));
+  };
+
+  const guardarJornadaManual = async () => {
+    if (!torneoId) return alert("No hay torneo activo.");
+    if (!manualPendientes.length) return alert("Agrega al menos un partido a la jornada manual.");
     setLoading(true);
     try {
-      const { error } = await supabase.from("matches").insert([{
-        tournament_id: torneoId, home_team_id: localId, away_team_id: visitanteId,
-        match_date: fechaISO, matchday: jornadaManual, court: canchaManual, stage: faseManual,
-        notes: observacionesManual.trim() || null
-      }]);
+      const matchesToInsert = manualPendientes.map(({ id, home_name, away_name, ...partido }) => partido);
+      const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
-      setLocalId(""); setVisitanteId(""); setFecha(""); setObservacionesManual(""); cargarDatos();
+      setManualPendientes([]);
+      setLocalId(""); setVisitanteId(""); setFecha(""); setObservacionesManual(""); setManualEsVuelta(false);
+      alert(`Jornada manual guardada con ${matchesToInsert.length} partido(s).`);
+      cargarDatos();
     } catch (error: any) { alert("Error: " + error.message); } finally { setLoading(false); }
   };
 
@@ -327,12 +420,14 @@ export default function PartidosPage() {
       if (autoFase !== "Fase de Grupos") throw new Error("Para eliminatorias usa el generador inteligente de llaves.");
       const bloqueo = validarJornadaGenerable(autoJornada, autoFase);
       if (bloqueo) throw new Error(bloqueo);
-      const fixtures = createMatchdayFixtures(equipos, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
+      const equiposDisponibles = equiposActivos();
+      if (equiposDisponibles.length < 2) throw new Error("No hay suficientes equipos activos para generar partidos. Revisa que los equipos esten registrados y habilitados.");
+      const fixtures = createMatchdayFixtures(equiposDisponibles, partidos, torneoId, autoJornada, autoFase, { legs: idaYVuelta ? 2 : 1 });
       if (!fixtures.length) throw new Error("Esta jornada ya fue generada o no existen cruces válidos pendientes.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
-      alert(`Fecha ${autoJornada} generada por grupos, sin cruces duplicados y distribuida en ${configuracion.court_count} cancha(s).`);
+      alert(`Fecha ${autoJornada} generada por grupos, sin cruces duplicados y distribuida en ${canchasProgramacion().length} sede/cancha(s).`);
       cargarDatos();
     } catch (error: any) {
       alert(error.message);
@@ -352,16 +447,21 @@ export default function PartidosPage() {
       const count = required[faseGenerar] || 0;
       const previousStage: Record<string, string> = { "Octavos de Final": "16vos de Final", "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
       const previous = previousStage[faseGenerar];
-      const winners = previous ? getStageWinners(partidos, equipos, previous) : [];
-      const groups = calculateStandings(equipos, partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
+      const winners = previous ? getStageWinners(partidos, equiposActivos(), previous) : [];
+      const groups = calculateStandings(equiposActivos(), partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
       const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
       if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados según las reglas del torneo.`);
       const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
-      const fixtures = createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
+      if (configuracion.knockout_pairing_mode === "manual" && !winners.length) {
+        throw new Error("La configuracion del torneo esta en cruces manuales. Usa el modo Manual para agregar cada cruce de esta fase.");
+      }
+      const fixtures = configuracion.knockout_pairing_mode === "group_cross" && !winners.length
+        ? createGroupSequenceKnockoutFixtures(groups, torneoId, faseGenerar, autoJornada, legs).slice(0, legs === 2 ? count : count / 2)
+        : createKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs);
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
-        .map(match => faseGenerar === "Final" && configuracion.final_venue ? { ...match, court: configuracion.final_venue } : match);
+        .map(match => faseGenerar === "Final" ? { ...match, court: sedePrincipalProgramacion() } : match);
       const { error } = await supabase.from("matches").insert(matchesToInsert);
       if (error) throw error;
       alert(`${faseGenerar} generada automáticamente con los equipos clasificados.`);
@@ -394,7 +494,7 @@ export default function PartidosPage() {
       let maxIntentos = 100, exito = false;
 
       while (maxIntentos > 0 && !exito) {
-        let equiposDisponibles = [...equipos];
+        let equiposDisponibles = [...equiposActivos()];
         let combinacionValida = true;
         let tempMatches: any[] = [];
         
@@ -567,7 +667,7 @@ export default function PartidosPage() {
       match_date: editFechaISO,
       court: editCancha,
       stage: editFase
-    }, partidos.filter(partido => partido.id !== partidoEditando.id), configuracion.match_duration_minutes);
+    }, partidos, configuracion.match_duration_minutes, { maxLegs: maxCrucesPorFase(editFase), ignoreMatchId: partidoEditando.id });
     if (conflict) return alert(conflict);
 
     setLoading(true);
@@ -612,19 +712,76 @@ export default function PartidosPage() {
 
   // --- LÓGICA DE PARTIDO EN VIVO MANTENIDA ---
   const cargarConvocatoria = async (partido: any) => {
-    const { data: playersData } = await supabase.from("players")
-      .select("id, cedula, full_name, team_id")
+    const playersAdvanced = await supabase.from("players")
+      .select("id, cedula, full_name, team_id, eligibility_status, eligibility_reason")
       .in("team_id", [partido.home_team_id, partido.away_team_id])
       .order("full_name");
+    const playersData = playersAdvanced.error
+      ? ((await supabase.from("players").select("id, cedula, full_name, team_id").in("team_id", [partido.home_team_id, partido.away_team_id]).order("full_name")).data || [])
+      : (playersAdvanced.data || []);
     const idsPartidos = partidos.map(p => p.id);
     const { data: cardEvents } = idsPartidos.length
       ? await supabase.from("match_events").select("match_id, player_id, team_id, event_type").in("match_id", idsPartidos).in("event_type", ["amarilla", "roja"])
       : { data: [] as any[] };
-    const suspendidos = getSuspendedPlayerIdsForMatch(cardEvents || [], partidos, configuracion, partido);
-    return {
-      habilitados: (playersData || []).filter(player => !suspendidos.has(player.id)),
-      suspendidos: (playersData || []).filter(player => suspendidos.has(player.id)),
+    const suspensionInfo = getSuspensionInfoForMatch(cardEvents || [], partidos, configuracion, partido);
+    const suspendidos = new Set(suspensionInfo.keys());
+    const bloqueadoManual = (player: any) => ["suspended", "expelled", "ineligible"].includes(String(player.eligibility_status || "active"));
+    const completarSuspension = (player: any) => {
+      const info = suspensionInfo.get(player.id);
+      if (!info) return player;
+      return {
+        ...player,
+        suspension_reason: info.reason,
+        suspension_until_matchday: info.untilMatchday,
+        suspension_available_matchday: info.availableMatchday,
+        suspension_remaining_matches: info.remainingMatches,
+      };
     };
+    return {
+      habilitados: (playersData || []).filter(player => !suspendidos.has(player.id) && !bloqueadoManual(player)),
+      suspendidos: (playersData || []).filter(player => suspendidos.has(player.id) || bloqueadoManual(player)).map(completarSuspension),
+    };
+  };
+
+  const sortearLlavesEliminatorias = async () => {
+    if ((!autoVentanas.length && !autoDias.length && !autoDia) || !torneoId) return alert("Selecciona al menos una ventana de jornada.");
+    if (!window.confirm(`¿Sortear cruces de ${faseGenerar} con los clasificados disponibles?`)) return;
+    setLoading(true);
+    try {
+      const bloqueo = validarJornadaGenerable(autoJornada, faseGenerar);
+      if (bloqueo) throw new Error(bloqueo);
+      const required: Record<string, number> = { "16vos de Final": 32, "Octavos de Final": 16, "Cuartos de Final": 8, "Semifinal": 4, "Final": 2 };
+      const count = required[faseGenerar] || 0;
+      const previousStage: Record<string, string> = { "Octavos de Final": "16vos de Final", "Cuartos de Final": "Octavos de Final", "Semifinal": "Cuartos de Final", "Final": "Semifinal" };
+      const previous = previousStage[faseGenerar];
+      const winners = previous ? getStageWinners(partidos, equiposActivos(), previous) : [];
+      const groups = calculateStandings(equiposActivos(), partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
+      const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
+      if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados para sortear ${faseGenerar}.`);
+      const seed = Date.now();
+      const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
+      const fixtures = createDrawKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs, seed);
+      const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
+      if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
+      const matchesToInsert = distribuirPartidosEnHorarios(fixtures)
+        .map(match => faseGenerar === "Final" ? { ...match, court: sedePrincipalProgramacion() } : match);
+      const { error } = await supabase.from("matches").insert(matchesToInsert);
+      if (error) throw error;
+      await supabase.from("draw_history").insert([{
+        tournament_id: torneoId,
+        mode: "automatic",
+        title: `Sorteo ${faseGenerar}`,
+        pots: qualified.map(team => ({ id: team.id, name: team.name, group: team.group })),
+        result: matchesToInsert.map(match => ({ home_team_id: match.home_team_id, away_team_id: match.away_team_id, stage: match.stage })),
+        random_seed: String(seed)
+      }]);
+      alert(`${faseGenerar} sorteada correctamente.`);
+      cargarDatos();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const abrirPartido = async (partido: any) => {
@@ -677,21 +834,32 @@ export default function PartidosPage() {
     e.preventDefault();
     if (!eventoJugador) return;
     const jugadorSel = jugadores.find(j => j.id === eventoJugador);
-    
-    const eventoData = { match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: eventoMinuto ? parseInt(eventoMinuto) : null };
+    if (!jugadorSel) return;
+    const minuto = eventoMinuto ? parseInt(eventoMinuto) : null;
+    const eventosData = eventoTipo === "doble_amarilla"
+      ? [
+        { match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: "amarilla", minute: minuto },
+        { match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: "amarilla", minute: minuto },
+      ]
+      : [{ match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: minuto }];
 
     if (isOffline) {
-      await offlineStore.guardarEventoOffline(eventoData);
-      setEventos(prev => [{
-        ...eventoData,
-        id: 'offline-' + Date.now(),
-        players: { full_name: jugadorSel.full_name },
-        teams: { name: jugadorSel.teams?.name || 'Local' },
-        created_at: new Date().toISOString()
-      }, ...prev]);
+      for (const eventoData of eventosData) await offlineStore.guardarEventoOffline(eventoData);
+      const marcaTiempo = Date.now();
+      setEventos(prev => [
+        ...eventosData.map((eventoData, index) => ({
+          ...eventoData,
+          id: `offline-${marcaTiempo}-${index}`,
+          players: { full_name: jugadorSel.full_name },
+          teams: { name: jugadorSel.teams?.name || "Local" },
+          created_at: new Date().toISOString()
+        })),
+        ...prev
+      ]);
       alert("[MODO OFFLINE] Evento guardado en la memoria de su dispositivo.");
     } else {
-      await supabase.from("match_events").insert([eventoData]);
+      const { error } = await supabase.from("match_events").insert(eventosData);
+      if (error) return alert("No se pudo registrar el evento: " + error.message);
       cargarEventos(partidoActivo.id);
     }
     setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol"); 
@@ -706,6 +874,50 @@ export default function PartidosPage() {
   const eliminarEvento = async (id: string) => {
     if (isOffline) return alert("⚠️ Seguridad: No puedes anular eventos en Modo Offline. Espera a recuperar señal.");
     if (!window.confirm("¿Borrar evento?")) return; await supabase.from("match_events").delete().eq("id", id); cargarEventos(partidoActivo.id);
+  };
+
+  const alternarParticipacion = async (jugador: any) => {
+    if (!partidoActivo || !jugador) return;
+    if (isOffline) return alert("La convocatoria de jugadores requiere conexion para evitar duplicados.");
+    const participacion = eventos.find(evento => evento.event_type === "participacion" && evento.player_id === jugador.id);
+    setLoading(true);
+    try {
+      if (participacion) {
+        const { error } = await supabase.from("match_events").delete().eq("id", participacion.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("match_events").insert([{
+          match_id: partidoActivo.id,
+          player_id: jugador.id,
+          team_id: jugador.team_id,
+          event_type: "participacion",
+          minute: null,
+        }]);
+        if (error) throw error;
+      }
+      await cargarEventos(partidoActivo.id);
+    } catch (error: any) {
+      alert("No se pudo actualizar la participacion: " + (error.message || "operacion bloqueada"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const iconoEvento = (tipo: string) => {
+    if (tipo === "gol") return "G";
+    if (tipo === "amarilla") return "TA";
+    if (tipo === "roja") return "TR";
+    if (tipo === "mvp") return "MVP";
+    return "J";
+  };
+
+  const etiquetaEvento = (tipo: string) => {
+    if (tipo === "gol") return "Gol";
+    if (tipo === "amarilla") return "Tarjeta amarilla";
+    if (tipo === "roja") return "Tarjeta roja";
+    if (tipo === "mvp") return "MVP";
+    if (tipo === "participacion") return "Jugo el partido";
+    return tipo;
   };
 
   const finalizarPartido = async () => {
@@ -764,6 +976,26 @@ export default function PartidosPage() {
       capturaRef.current.style.display = "none";
       const link = document.createElement("a"); link.href = canvas.toDataURL("image/png"); link.download = `Póster_Calendario.png`; link.click();
     } catch (e) { alert("Error"); } finally { setLoading(false); }
+  };
+
+  const descargarPosterJornada = async () => {
+    const posterNode = jornadaPosterRef.current || capturaRef.current;
+    if (!posterNode) return;
+    setLoading(true);
+    try {
+      posterNode.style.display = "block";
+      const canvas = await html2canvas(posterNode, { backgroundColor: "#071735", scale: 3, useCORS: true });
+      posterNode.style.display = "none";
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `Poster-${tituloPosterJornada.replace(/\s+/g, "-")}-${configuracion.tournament_year}.png`;
+      link.click();
+    } catch (error) {
+      posterNode.style.display = "none";
+      alert("No se pudo generar el poster de la jornada.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ============================================================================
@@ -856,7 +1088,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const anchoCompleto = bracketPosterRef.current.scrollWidth;
-      const canvas = await html2canvas(bracketPosterRef.current, { backgroundColor: "#07122d", scale: 2, useCORS: true, width: anchoCompleto, windowWidth: anchoCompleto });
+      const canvas = await html2canvas(bracketPosterRef.current, { backgroundColor: "#07122d", scale: 3, useCORS: true, width: anchoCompleto, windowWidth: anchoCompleto });
       const socialCanvas = document.createElement("canvas");
       socialCanvas.width = 1080; socialCanvas.height = 1080;
       const context = socialCanvas.getContext("2d");
@@ -943,16 +1175,27 @@ export default function PartidosPage() {
       return alertas.length ? alertas : ["Sin pendientes financieros registrados antes del partido."];
     };
     const crearObservacionesAutomaticas = () => {
+      const reglaCambios = configuracion.substitution_rule === "unlimited"
+        ? "Cambios ilimitados."
+        : configuracion.substitution_rule === "reentry"
+          ? "Cambios con reingreso permitido."
+          : `Cambios limitados a ${configuracion.substitutes_count} suplente(s).`;
       return [
         `Cupo por equipo: ${cupoPartido} jugador(es). Titulares: ${configuracion.football_modality}. Suplentes: ${configuracion.substitutes_count}.`,
+        `Regla de sustituciones: ${reglaCambios}`,
         `Regla disciplinaria: ${configuracion.yellow_cards_for_suspension} amarilla(s) generan suspension; roja directa suspende ${configuracion.red_suspension_matches} partido(s).`,
-        ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""}`),
+        ...[partido.home, partido.away].filter(team => team && team.competition_status && team.competition_status !== "active").map(team => `Alerta de equipo: ${team.name} figura como ${team.competition_status}. Motivo: ${team.competition_status_reason || "sin observacion"}`),
+        ...suspendidos.map(player => {
+          const motivo = player.suspension_reason || player.eligibility_reason || "restriccion vigente";
+          const retorno = player.suspension_available_matchday ? ` - Disponible desde fecha ${player.suspension_available_matchday}` : "";
+          return `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""} - Motivo: ${motivo}${retorno}`;
+        }),
       ];
     };
     const crearEquipo = (teamId: string, sideLabel: string) => {
       const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
       const suspendidosTexto = suspendidosEquipo.length
-        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
+        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}${player.suspension_reason ? ` - ${player.suspension_reason}` : ""}${player.suspension_available_matchday ? ` - vuelve fecha ${player.suspension_available_matchday}` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
       const pendientesFinancieros = crearPendientesFinancieros(teamId);
       return `<section class="team-half"><div class="team-head"><div><span>${escapeHtml(sideLabel)}</span><h2>Nomina de jugadores</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
@@ -961,6 +1204,28 @@ export default function PartidosPage() {
         <div class="observ-mini"><b>Observaciones y pendientes</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(4)}</div></div>
         <div class="team-footer"><div><b>Firma representante del equipo</b></div></div></section>`;
     };
+    /* const crearMediaPlanilla = (teamId: string, teamName: string, etiqueta: "local" | "visitante", rival: string) => {
+      const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
+      const suspendidosTexto = suspendidosEquipo.length
+        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}${player.suspension_reason ? ` - ${player.suspension_reason}` : ""}${player.suspension_available_matchday ? ` - vuelve fecha ${player.suspension_available_matchday}` : ""}`)).join(", ")
+        : esEstandar ? "________________________________________________" : "Ninguno";
+      const pendientesFinancieros = crearPendientesFinancieros(teamId);
+      const equipoTitulo = etiqueta === "local" ? "Equipo local" : "Equipo visitante";
+      return `<section class="team-half">
+        <header class="half-header">
+          <div class="half-top"><div><strong>${escapeHtml(torneoNombre)}</strong><span>GAME-LEGAL PRO - Planilla oficial de control deportivo</span></div><b>Partido oficial</b><em>${escapeHtml(configuracion.tournament_year)}</em></div>
+          <div class="green-line"></div>
+          <div class="versus"><span>Equipo local: ${etiqueta === "local" ? escapeHtml(teamName) : escapeHtml(rival)}</span><b>VS</b><span>Equipo visitante: ${etiqueta === "visitante" ? escapeHtml(teamName) : escapeHtml(rival)}</span></div>
+          <div class="rules">Futbol ${configuracion.football_modality} / Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div>
+          <div class="meta"><span><b>Jornada:</b> ${escapeHtml(partido.matchday)}</span><span><b>Instancia:</b> ${escapeHtml(partido.stage)}</span><span><b>Cancha:</b> ${escapeHtml(partido.court || "Por confirmar")}</span><span><b>Fecha/hora:</b> ${esEstandar ? "________________" : fechaPartido.toLocaleString("es-EC")}</span></div>
+          <div class="score-row"><strong>${equipoTitulo}: ${escapeHtml(teamName)}</strong><span>Marcador: ______</span></div>
+        </header>
+        <table class="players-table"><thead><tr><th>Identificacion</th><th>N°</th><th>Nombres y apellidos</th><th>T/S</th><th>Goles</th><th>TA</th><th>TR</th><th>Sust.</th><th>Ingreso por</th></tr></thead><tbody>${crearFilasJugadores()}</tbody></table>
+        <div class="suspended"><b>No convocados automaticamente por suspension:</b><span>${suspendidosTexto}</span></div>
+        <div class="observ-mini"><b>Observaciones del equipo / sistema / adicionales</b><ul>${[...observacionesAutomaticas, ...pendientesFinancieros].map(alerta => `<li>${escapeHtml(alerta)}</li>`).join("")}</ul>${observacionesManual ? `<p><b>Manual:</b> ${escapeHtml(observacionesManual)}</p>` : ""}<div class="lines">${crearLineas(3)}</div></div>
+        <div class="team-footer"><div><b>Firma representante del equipo</b></div></div>
+      </section>`;
+    }; */
     const observacionesAutomaticas = crearObservacionesAutomaticas();
     const observacionesManual = String(partido.notes || "").trim();
     const html = `<!DOCTYPE html><html lang="es"><head><title>Planilla oficial</title><style>
@@ -1028,6 +1293,20 @@ export default function PartidosPage() {
   };
 
   const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
+  const partidosPoster = [...partidosFiltrados].sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
+  const claveDiaPoster = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+  const partidosPorDiaPoster = partidosPoster.reduce<Record<string, any[]>>((acc, partido) => {
+    const key = claveDiaPoster(partido.match_date);
+    (acc[key] ||= []).push(partido);
+    return acc;
+  }, {});
+  const diasPoster = Object.keys(partidosPorDiaPoster).sort();
+  const tituloPosterJornada = filtroJornada ? `FECHA ${filtroJornada}` : "JORNADA OFICIAL";
+  const fechasPosterTexto = diasPoster.map(dia => new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })).join(" / ");
+  const gruposManual = Array.from(new Set(equipos.map(equipo => equipo.group_name || "General"))).sort();
+  const equiposManual = faseBase(faseManual) === "Fase de Grupos" && grupoManual !== "Todos"
+    ? equipos.filter(equipo => (equipo.group_name || "General") === grupoManual)
+    : equipos;
   const jornadasCulminadas = Array.from(new Map(
     partidos
       .filter(partido => partido.status === "finished")
@@ -1035,7 +1314,6 @@ export default function PartidosPage() {
   ).values());
   const fasesCuadro = ["16vos de Final", "Octavos de Final", "Cuartos de Final", "Semifinal", "Final"];
   const fasesVisibles = fasesCuadro.filter(fase => partidos.some(partido => partido.stage === fase || partido.stage === `${fase} (Vuelta)`));
-  const faseBase = (stage: string) => String(stage || "").replace(" (Vuelta)", "");
   const esMismaLlave = (a: any, b: any) =>
     faseBase(a.stage) === faseBase(b.stage) &&
     [a.home_team_id, a.away_team_id].sort().join(":") === [b.home_team_id, b.away_team_id].sort().join(":");
@@ -1055,6 +1333,11 @@ export default function PartidosPage() {
   if (partidoActivo) {
     const golesLocal = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.home_team_id).length;
     const golesVisitante = eventos.filter(e => e.event_type === 'gol' && e.team_id === partidoActivo.away_team_id).length;
+    const participaciones = eventos.filter(e => e.event_type === "participacion");
+    const eventosDeJuego = eventos.filter(e => e.event_type !== "participacion");
+    const participantesIds = new Set(participaciones.map(e => e.player_id));
+    const jugadoresLocal = jugadores.filter(j => j.team_id === partidoActivo.home_team_id);
+    const jugadoresVisitante = jugadores.filter(j => j.team_id === partidoActivo.away_team_id);
     return (
       <div className="space-y-6">
         
@@ -1101,11 +1384,60 @@ export default function PartidosPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="flex-1">
               <label className="text-xs font-black uppercase tracking-widest text-[#D4A017]">Observaciones del encuentro</label>
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                Sustituciones: {configuracion.substitution_rule === "unlimited" ? "cambios ilimitados" : configuracion.substitution_rule === "reentry" ? "cambios con reingreso" : `limitadas a ${configuracion.substitutes_count} suplente(s)`}
+              </p>
               <textarea value={observacionesPartido} onChange={e => setObservacionesPartido(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white outline-none focus:border-[#D4A017]" placeholder="Comentarios adicionales del partido..." />
             </div>
             <button onClick={guardarObservacionesPartido} disabled={loading} className="rounded-xl border border-[#D4A017]/50 px-4 py-3 text-xs font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">
               Guardar observaciones
             </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-5">
+          <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A017]">Jugadores que disputaron el partido</p>
+              <h4 className="text-xl font-black uppercase text-white">Control de participacion</h4>
+            </div>
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase text-emerald-300">
+              {participaciones.length} registrado(s)
+            </span>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {[
+              { title: partidoActivo.home?.name || "Local", players: jugadoresLocal },
+              { title: partidoActivo.away?.name || "Visitante", players: jugadoresVisitante },
+            ].map(group => (
+              <div key={group.title} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3">
+                <p className="mb-3 text-xs font-black uppercase text-white">{group.title}</p>
+                <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
+                  {group.players.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-[#2E2E2E] p-3 text-xs font-bold text-gray-500">No hay jugadores habilitados para este equipo.</p>
+                  ) : group.players.map(jugador => {
+                    const marcado = participantesIds.has(jugador.id);
+                    return (
+                      <button
+                        key={jugador.id}
+                        type="button"
+                        onClick={() => alternarParticipacion(jugador)}
+                        disabled={loading || partidoActivo.status === "finished"}
+                        className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-all ${marcado ? "border-emerald-500/70 bg-emerald-500/15 text-white" : "border-[#2E2E2E] bg-[#141414] text-white hover:border-[#D4A017]/50"} disabled:cursor-not-allowed disabled:opacity-70`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block break-words text-xs font-black uppercase">{jugador.full_name}</span>
+                          {jugador.cedula && <span className="mt-0.5 block text-[10px] font-bold uppercase text-gray-500">ID {jugador.cedula}</span>}
+                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase ${marcado ? "bg-emerald-400 text-black" : "bg-[#2E2E2E] text-gray-400"}`}>
+                          {marcado ? "Jugo" : "No"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1115,11 +1447,11 @@ export default function PartidosPage() {
               <form onSubmit={registrarEvento} className="space-y-4">
                 <select value={eventoJugador} onChange={e => setEventoJugador(e.target.value)} required className="w-full p-2 mt-1 rounded bg-[#1c1c1c] border border-[#2e2e2e] text-white">
                     <option value="" disabled>Selecciona el jugador</option>
-                    <optgroup label={partidoActivo.home?.name}>{jugadores.filter(j => j.team_id === partidoActivo.home_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
-                    <optgroup label={partidoActivo.away?.name}>{jugadores.filter(j => j.team_id === partidoActivo.away_team_id).map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
+                    <optgroup label={partidoActivo.home?.name}>{jugadoresLocal.map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
+                    <optgroup label={partidoActivo.away?.name}>{jugadoresVisitante.map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
                 </select>
                 <div className="grid grid-cols-2 gap-3">
-                  <select value={eventoTipo} onChange={e => setEventoTipo(e.target.value)} className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded"><option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option></select>
+                  <select value={eventoTipo} onChange={e => setEventoTipo(e.target.value)} className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded"><option value="gol">Gol</option><option value="amarilla">Amarilla</option><option value="doble_amarilla">Doble amarilla</option><option value="roja">Roja directa</option><option value="mvp">MVP</option></select>
                   <input type="number" value={eventoMinuto} onChange={e => setEventoMinuto(e.target.value)} placeholder="Min" className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded" />
                 </div>
                 <button type="submit" className="w-full py-2 bg-[#1c1c1c] text-white font-bold uppercase rounded border border-[#2e2e2e] hover:border-[#D4A017] hover:text-[#D4A017] transition-all">Guardar Evento</button>
@@ -1131,12 +1463,12 @@ export default function PartidosPage() {
           <div className="lg:col-span-2 bg-[#1C1C1C] border border-[#2E2E2E] rounded-2xl p-6">
             <h4 className="text-white font-black uppercase tracking-widest text-sm mb-4">Minuto a Minuto</h4>
             <div className="space-y-3">
-              {eventos.map(ev => (
+              {eventosDeJuego.map(ev => (
                 <div key={ev.id} className="flex items-center justify-between bg-[#141414] p-3 rounded-xl border border-[#2E2E2E]">
                   {editandoEventoId === ev.id ? (
                       <div className="flex items-center gap-4 w-full">
                         <select id={`edit-t-${ev.id}`} defaultValue={ev.event_type} className="bg-black p-2 text-white rounded border border-[#2e2e2e]">
-                          <option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option>
+                          <option value="gol">Gol</option><option value="amarilla">Amarilla</option><option value="roja">Roja directa</option><option value="mvp">MVP</option>
                         </select>
                         <input id={`edit-m-${ev.id}`} type="number" defaultValue={ev.minute || ""} placeholder="Minuto" className="bg-black p-2 text-white w-20 rounded border border-[#2e2e2e]" />
                         <div className="flex gap-2 ml-auto">
@@ -1216,15 +1548,53 @@ export default function PartidosPage() {
         
         {modoProgramacion === "manual" && (
           <form onSubmit={programarPartido} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.name}</option>)}</select></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => setFaseManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <div className="md:col-span-6 rounded-xl border border-blue-500/30 bg-blue-950/30 p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-300">Modo manual: jornada por partidos</p>
+              <p className="mt-1 text-sm font-bold text-blue-100">Agrega cada cruce con su propia fecha, hora y cancha. Todos quedan dentro de la misma jornada, aunque se jueguen sabado, domingo u otros dias. El automatico sigue disponible cuando quieres que el sistema arme los cruces.</p>
+              <button type="button" onClick={() => setModoProgramacion("automatico")} className="mt-3 rounded-lg border border-[#D4A017]/50 bg-[#D4A017]/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">Usar generador automatico</button>
+            </div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Grupo</label><select value={grupoManual} onChange={e => { setGrupoManual(e.target.value); setLocalId(""); setVisitanteId(""); }} disabled={faseBase(faseManual) !== "Fase de Grupos"} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded disabled:opacity-60"><option value="Todos">Todos</option>{gruposManual.map(grupo => <option key={grupo} value={grupo}>Grupo {grupo}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name} · Grupo {eq.group_name || "General"}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name} · Grupo {eq.group_name || "General"}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => { setFaseManual(e.target.value); setLocalId(""); setVisitanteId(""); }} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <label className="flex items-center gap-3 rounded border border-[#2E2E2E] bg-[#1C1C1C] p-3 text-xs font-bold uppercase text-gray-300">
+              <input type="checkbox" checked={manualEsVuelta} onChange={e => setManualEsVuelta(e.target.checked)} className="h-4 w-4 accent-[#D4A017]" />
+              Partido de vuelta
+            </label>
             <div><label className="text-xs font-bold text-gray-500 uppercase">Jornada/Llave</label><input type="number" value={jornadaManual} onChange={e => setJornadaManual(Number(e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
-            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><MapPin size={14} /> Cancha</label><input type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Cancha 1" /></div>
+            <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><MapPin size={14} /> Sede / Cancha</label><input list="opciones-sede-cancha" type="text" value={canchaManual} onChange={e => setCanchaManual(e.target.value)} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Ej: Estadio Monumental" /></div>
+            <datalist id="opciones-sede-cancha">{canchasProgramacion().map(cancha => <option key={cancha} value={cancha} />)}</datalist>
             <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><CalendarDays size={14} /> Fecha</label><input type="date" value={obtenerDiaDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "dia", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div><label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase"><Clock3 size={14} /> Hora</label><input type="time" value={obtenerHoraDeCampo(fecha)} onChange={e => setFecha(actualizarFechaHoraCampo(fecha, "hora", e.target.value))} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" /></div>
             <div className="md:col-span-4"><label className="text-xs font-bold text-gray-500 uppercase">Observaciones</label><textarea value={observacionesManual} onChange={e => setObservacionesManual(e.target.value)} rows={2} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded" placeholder="Comentarios opcionales del encuentro..." /></div>
-            <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Guardando..." : "Programar"}</button>
+            <button type="submit" disabled={loading} className="md:col-span-2 py-3 bg-[#D4A017] text-black font-black uppercase rounded shadow-[0_0_15px_rgba(212,160,23,0.3)]">{loading ? "Procesando..." : "Agregar a jornada"}</button>
+            <div className="md:col-span-6 rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A017]">Jornada manual pendiente</p>
+                  <p className="text-xs font-bold text-gray-400">Aqui se acumulan los partidos antes de guardarlos en Supabase.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setManualPendientes([])} disabled={!manualPendientes.length || loading} className="rounded-lg border border-red-500/40 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-300 disabled:opacity-40">Limpiar</button>
+                  <button type="button" onClick={guardarJornadaManual} disabled={!manualPendientes.length || loading} className="rounded-lg bg-emerald-400 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-black disabled:opacity-40">{loading ? "Guardando..." : `Guardar ${manualPendientes.length} partido(s)`}</button>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2">
+                {manualPendientes.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-[#2E2E2E] p-3 text-xs font-bold text-gray-500">Todavia no hay partidos agregados a esta jornada manual.</p>
+                ) : manualPendientes.map(partido => (
+                  <div key={partido.id} className="grid grid-cols-1 gap-2 rounded-lg border border-[#2E2E2E] bg-[#141414] p-3 text-sm md:grid-cols-[1.3fr_1fr_1fr_auto] md:items-center">
+                    <div>
+                      <p className="font-black text-white">{partido.home_name} vs {partido.away_name}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Fecha {partido.matchday} - {partido.stage}</p>
+                    </div>
+                    <p className="font-bold text-gray-300">{new Date(partido.match_date).toLocaleString("es-EC", { dateStyle: "medium", timeStyle: "short" })}</p>
+                    <p className="font-bold text-gray-300">{partido.court}</p>
+                    <button type="button" onClick={() => quitarPartidoManualPendiente(partido.id)} className="rounded border border-red-500/40 px-3 py-2 text-[10px] font-black uppercase text-red-300 hover:bg-red-600 hover:text-white">Quitar</button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </form>
         )}
 
@@ -1282,6 +1652,16 @@ export default function PartidosPage() {
             </div>
             
             <form onSubmit={generarLlavesInteligentes} className="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+               <div className="md:col-span-4 rounded-xl border border-yellow-500/25 bg-yellow-500/10 p-4">
+                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-yellow-300">Regla activa de cruces</p>
+                 <p className="mt-1 text-sm font-bold text-yellow-50">
+                   {configuracion.knockout_pairing_mode === "group_cross"
+                     ? "Secuencia de grupos: primero del Grupo A vs segundo del Grupo B, y viceversa."
+                     : configuracion.knockout_pairing_mode === "manual"
+                       ? "Cruces manuales: arma cada partido desde el modo Manual y el sistema validara duplicados."
+                       : "Tabla general: mejor clasificado general vs ultimo clasificado general."}
+                 </p>
+               </div>
                <div className="md:col-span-2">
                  <label className="text-xs font-bold text-[#D4A017] uppercase tracking-widest">Formato de Llave</label>
                  <select value={formatoEliminatoria} onChange={e => setFormatoEliminatoria(e.target.value)} className="w-full p-3 mt-2 bg-[#141414] text-white border border-[#2E2E2E] rounded outline-none">
@@ -1332,8 +1712,12 @@ export default function PartidosPage() {
                <div><label className="text-xs font-bold text-[#D4A017] uppercase">N° Fecha</label><input type="number" value={autoJornada} onChange={e => setAutoJornada(Number(e.target.value))} className="w-full p-3 mt-1 bg-[#141414] text-white border border-[#2E2E2E] rounded" /></div>
 
                <div className="md:col-span-4">
+                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-cyan-200">Puedes generar por regla configurada o sortear los clasificados.</p>
                  <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black text-sm font-black uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(212,160,23,0.3)] hover:scale-[1.01] transition-transform">
                    ⚡ {loading ? "Calculando..." : "Calcular Clasificados y Generar Llaves"}
+                 </button>
+                 <button type="button" onClick={sortearLlavesEliminatorias} disabled={loading} className="mt-3 w-full py-4 rounded-xl border border-cyan-400/50 bg-cyan-500/10 text-sm font-black uppercase tracking-widest text-cyan-200 hover:bg-cyan-400 hover:text-black">
+                   Sortear cruces
                  </button>
                </div>
             </form>
@@ -1343,7 +1727,7 @@ export default function PartidosPage() {
                 <div className="text-center mb-7">
                   <p className="text-blue-300 text-[10px] uppercase tracking-[0.35em] font-black">Cuadro eliminatorio oficial</p>
                   <h3 className="text-white text-2xl font-black uppercase mt-2">{torneoNombre} · {configuracion.tournament_year}</h3>
-                  <p className="text-[#D4A017] text-xs font-bold uppercase mt-1">Final · {configuracion.final_venue || "Cancha por confirmar"}</p>
+                  <p className="text-[#D4A017] text-xs font-bold uppercase mt-1">Final · {sedePrincipalProgramacion()}</p>
                   <button data-html2canvas-ignore onClick={descargarCuadroEliminatorio} disabled={loading} className="mt-4 px-5 py-2 rounded-lg bg-blue-500 text-white font-black uppercase text-[10px] hover:bg-blue-400">Descargar póster del cuadro</button>
                 </div>
                 <div className="flex min-w-max items-stretch justify-center gap-8 pb-3">
@@ -1359,7 +1743,7 @@ export default function PartidosPage() {
                               {[["home", partido.home, partido.home_goals], ["away", partido.away, partido.away_goals]].map(([lado, equipo, goles]: any) => (
                                 <div key={lado} className="flex items-center gap-2 py-1">
                                   {equipo?.shield_url ? <Image src={equipo.shield_url} alt="" width={22} height={22} unoptimized crossOrigin="anonymous" className="w-6 h-6 object-contain" /> : <div className="w-6 h-6 rounded-full bg-blue-300/20" />}
-                                  <span className="flex-1 text-white text-[10px] font-black uppercase truncate">{equipo?.name || "Por definir"}</span>
+                                  <span className="flex-1 break-words text-white text-[10px] font-black uppercase leading-tight">{equipo?.name || "Por definir"}</span>
                                   <span className="text-[#D4A017] font-black text-xs">{partido.status === "finished" ? goles : "-"}</span>
                                 </div>
                               ))}
@@ -1405,7 +1789,7 @@ export default function PartidosPage() {
             </button>
 
             {/* BOTÓN POSTER */}
-            <button onClick={descargarCalendario} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
+            <button onClick={descargarPosterJornada} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               📸 Póster
             </button>
             <button onClick={imprimirPlanillaEstandar} className="bg-gray-800 border border-gray-600 text-white hover:bg-gray-700 font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all">
@@ -1433,12 +1817,12 @@ export default function PartidosPage() {
                 )}
                 
                 <div className="flex-1 text-right font-bold text-white text-lg mt-4 md:mt-0 relative z-20">
-                  <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {p.court || "Cancha 1"}</p>
+                  <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" })} • {p.court || "Cancha 1"}</p>
                   {p.notes && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#D4A017]">Obs: {p.notes}</p>}
                   <span className="uppercase tracking-wide">{p.home?.name}</span>
                 </div>
                 <div className="flex flex-col items-center px-4 w-48 relative z-20">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">{new Date(p.match_date).toLocaleString('es-EC', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}</span>
+                  <span className="rounded-full border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-1 text-[11px] text-[#D4A017] font-black uppercase tracking-widest mb-2">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' })}</span>
                   <div className="bg-[#0a0a0a] border border-[#2E2E2E] px-4 py-2 rounded-lg font-mono font-black text-xl text-[#D4A017] w-full text-center">
                     {p.status === 'finished' ? `${p.home_goals} - ${p.away_goals}` : "VS"}
                   </div>
@@ -1512,11 +1896,13 @@ export default function PartidosPage() {
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Cancha</label>
-                <input type="text" value={editCancha} onChange={e => setEditCancha(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
+                <input list="opciones-sede-cancha" type="text" value={editCancha} onChange={e => setEditCancha(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]" />
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Instancia</label>
-                <select value={editFase} onChange={e => setEditFase(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select>
+                <select value={editFase} onChange={e => setEditFase(e.target.value)} className="mt-2 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white outline-none focus:border-[#D4A017]">
+                  {[...opcionesFase, ...opcionesFase.map(f => `${f} (Vuelta)`)].map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-gray-400">Jornada/Llave</label>
@@ -1534,6 +1920,91 @@ export default function PartidosPage() {
           </div>
         </div>
       )}
+
+      <div style={{ display: "none" }} ref={jornadaPosterRef}>
+        <div
+          className="relative w-[1080px] min-h-[1350px] overflow-hidden bg-[#06183a] px-14 py-12 font-sans text-white"
+          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(135deg, rgba(3,16,46,.82), rgba(4,24,58,.92)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 10% 20%, rgba(212,160,23,.32), transparent 24%), radial-gradient(circle at 92% 70%, rgba(212,160,23,.24), transparent 22%), linear-gradient(145deg, #03102c, #063b78 52%, #020817)", fontFamily: posterFontFamily }}
+        >
+          <div className="absolute inset-8 rounded-[32px] border-4 border-white/85" />
+          <div className="absolute inset-12 rounded-[24px] border border-[#D4A017]/55" />
+          <div className="absolute right-10 top-10 rounded-2xl border border-white/20 bg-black/25 px-5 py-3 text-right">
+            <p className="text-[12px] font-black uppercase text-[#D4A017]">Game Legal Tournament</p>
+            <p className="text-xl font-black uppercase">{configuracion.tournament_year}</p>
+          </div>
+          <div className="relative z-10 flex items-start justify-between gap-8">
+            <div className="max-w-[760px]">
+              <p className="mb-4 inline-block rounded-full border border-[#D4A017]/60 bg-[#D4A017]/15 px-5 py-2 text-[13px] font-black uppercase text-[#D4A017]">Cronograma oficial</p>
+              <h1 className="text-7xl font-black uppercase leading-none text-white drop-shadow-[0_5px_0_rgba(0,0,0,.65)]">{tituloPosterJornada}</h1>
+              <p className="mt-4 text-2xl font-black uppercase text-white/90">{partidosPoster[0]?.stage || "Programacion"}</p>
+              <p className="mt-2 text-lg font-black uppercase text-[#D4A017]">{fechasPosterTexto || "Fechas por confirmar"}</p>
+            </div>
+            <div className="rounded-2xl border border-[#D4A017]/60 bg-black/45 p-3 text-center shadow-2xl">
+              {appUrl && <QRCodeSVG value={appUrl} size={112} level={"H"} fgColor="#D4A017" bgColor="#071735" />}
+              <span className="mt-2 block text-[11px] font-black uppercase">Ver en vivo</span>
+            </div>
+          </div>
+          <div className="relative z-10 mt-10 space-y-7">
+            {diasPoster.map(dia => (
+              <section key={dia} className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
+                  <h2 className="rounded-full bg-[#D4A017] px-6 py-2 text-lg font-black uppercase tracking-widest text-black shadow-lg">
+                    {new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long" })}
+                  </h2>
+                  <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
+                </div>
+                <div className="space-y-5">
+                  {partidosPorDiaPoster[dia].map(p => (
+                    <div key={p.id} className="relative grid grid-cols-[96px_1fr_148px_1fr_96px] items-center overflow-visible rounded-[18px] border border-white/80 bg-white px-4 py-4 text-[#072047] shadow-[0_18px_35px_rgba(0,0,0,.35)]">
+                      <div className="flex justify-center">
+                        {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={72} height={72} unoptimized crossOrigin="anonymous" className="h-[72px] w-[72px] object-contain drop-shadow-lg" /> : <div className="h-[72px] w-[72px] rounded-full bg-[#dbeafe]" />}
+                      </div>
+                      <div className="min-w-0 text-right">
+                        <p className="break-words text-[24px] font-black uppercase leading-tight">{p.home?.name || "Local"}</p>
+                      </div>
+                      <div className="relative mx-auto flex h-24 w-36 flex-col items-center justify-center rounded-2xl border-2 border-[#D4A017] bg-[#06183a] px-2 shadow-inner">
+                        <span className="relative z-10 text-[13px] font-black uppercase tracking-[0.22em] text-white/80">Hora</span>
+                        <span className="relative z-10 mt-1 text-3xl font-black leading-none text-[#D4A017]">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="relative z-10 mt-1 text-[11px] font-black uppercase tracking-[0.25em] text-white">VS</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="break-words text-[24px] font-black uppercase leading-tight">{p.away?.name || "Visitante"}</p>
+                      </div>
+                      <div className="flex justify-center">
+                        {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={72} height={72} unoptimized crossOrigin="anonymous" className="h-[72px] w-[72px] object-contain drop-shadow-lg" /> : <div className="h-[72px] w-[72px] rounded-full bg-[#dbeafe]" />}
+                      </div>
+                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-[#D4A017]/60 bg-[#06183a] px-5 py-1 text-[12px] font-black uppercase tracking-widest text-white shadow-lg">
+                        {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" })} - {p.court || "Cancha por confirmar"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+          <div className="relative z-10 mt-12 grid grid-cols-[1fr_auto] items-end gap-6">
+            <div>
+              <p className="text-4xl font-black italic tracking-wide text-white drop-shadow-[0_4px_0_rgba(0,0,0,.65)]">{torneoNombre}</p>
+              <p className="mt-2 text-xl font-black uppercase tracking-[0.2em] text-[#D4A017]">{sedePrincipalProgramacion()}</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-black/30 px-5 py-4 text-right">
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Organizacion</p>
+              <p className="text-2xl font-black uppercase">Game-Legal Pro</p>
+            </div>
+          </div>
+          {auspiciantesTorneo.length > 0 && (
+            <div className="relative z-10 mt-8 rounded-2xl border border-white/15 bg-black/30 p-4">
+              <p className="mb-3 text-center text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Auspiciantes oficiales</p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {auspiciantesTorneo.map((sponsor, index) => (
+                  <span key={`${sponsor}-${index}`} className="rounded-full border border-[#D4A017]/40 bg-white/10 px-4 py-1 text-[11px] font-black uppercase tracking-widest text-white">{sponsor}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ==============================================================================
           📸 LIENZO DE CAPTURA ORIGINAL "GAME-LEGAL PRO" MANTENIDO INTACTO

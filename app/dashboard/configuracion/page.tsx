@@ -23,6 +23,8 @@ export default function ConfiguracionPage() {
   const [amarillasSuspension, setAmarillasSuspension] = useState(3);
   const [partidosSuspensionAmarillas, setPartidosSuspensionAmarillas] = useState(1);
   const [partidosSuspensionRoja, setPartidosSuspensionRoja] = useState(1);
+  const [partidosDobleAmarilla, setPartidosDobleAmarilla] = useState(1);
+  const [limpiarAmarillasEliminatorias, setLimpiarAmarillasEliminatorias] = useState(true);
   const [numGrupos, setNumGrupos] = useState(1);
   const [equiposPorGrupo, setEquiposPorGrupo] = useState(4);
   const [clasificadosPorGrupo, setClasificadosPorGrupo] = useState(2);
@@ -30,6 +32,7 @@ export default function ConfiguracionPage() {
   const [cuposRepechaje, setCuposRepechaje] = useState(0);
   const [partidosEliminatoria, setPartidosEliminatoria] = useState(1);
   const [partidosFinal, setPartidosFinal] = useState(1);
+  const [modoCruces, setModoCruces] = useState("general_table");
   const [numCanchas, setNumCanchas] = useState(1);
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
@@ -37,6 +40,7 @@ export default function ConfiguracionPage() {
   const [descansoPartidos, setDescansoPartidos] = useState(10);
   const [modalidadFutbol, setModalidadFutbol] = useState(11);
   const [numSuplentes, setNumSuplentes] = useState(5);
+  const [tipoCambios, setTipoCambios] = useState("limited");
   const [canchaFinal, setCanchaFinal] = useState("");
   const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
   const [plantillaAutomatica, setPlantillaAutomatica] = useState(false);
@@ -77,7 +81,9 @@ export default function ConfiguracionPage() {
         if (data.red_card_fee) setCostoRoja(data.red_card_fee.toString());
         setAmarillasSuspension(Number(data.yellow_cards_for_suspension || 3));
         setPartidosSuspensionAmarillas(Number(data.yellow_suspension_matches || 1));
-        setPartidosSuspensionRoja(Number(data.red_suspension_matches || 1));
+        setPartidosSuspensionRoja(Number(data.red_suspension_matches || 2));
+        setPartidosDobleAmarilla(Number(data.double_yellow_suspension_matches || 1));
+        setLimpiarAmarillasEliminatorias(data.reset_yellows_on_knockout !== false);
         setNumGrupos(Number(data.group_count || 1));
         setEquiposPorGrupo(Number(data.teams_per_group || 4));
         setClasificadosPorGrupo(Number(data.qualifiers_per_group || 2));
@@ -85,6 +91,7 @@ export default function ConfiguracionPage() {
         setCuposRepechaje(Number(data.repechage_slots || 0));
         setPartidosEliminatoria(Number(data.knockout_legs || 1));
         setPartidosFinal(Number(data.final_legs || 1));
+        setModoCruces(data.knockout_pairing_mode || "general_table");
         setNumCanchas(Number(data.court_count || 1));
         setFechaInicio(data.start_date || "");
         setFechaFin(data.estimated_end_date || "");
@@ -92,6 +99,7 @@ export default function ConfiguracionPage() {
         setDescansoPartidos(Number(data.break_between_matches_minutes || 10));
         setModalidadFutbol(Number(data.football_modality || 11));
         setNumSuplentes(Number(data.substitutes_count ?? 5));
+        setTipoCambios(data.substitution_rule || "limited");
         setCanchaFinal(data.final_venue || "");
         setAnioTorneo(Number(data.tournament_year || new Date().getFullYear()));
         setPlantillaAutomatica(Boolean(data.is_auto_template_enabled));
@@ -104,6 +112,29 @@ export default function ConfiguracionPage() {
         clearActiveTournament();
         setTorneoId(null);
       }
+    }
+  };
+
+  const aplicarFormatoCompeticion = (value: string) => {
+    setFormato(value);
+    if (value === "sudamericana") {
+      setEquiposPorGrupo(4);
+      setClasificadosPorGrupo(2);
+      setPartidosEliminatoria(2);
+      setPartidosFinal(1);
+      setModoCruces("group_cross");
+      setRepechaje(false);
+      setCuposRepechaje(0);
+    } else if (value === "libertadores" || value === "champions" || value === "europa_league") {
+      setEquiposPorGrupo(4);
+      setClasificadosPorGrupo(2);
+      setPartidosEliminatoria(2);
+      setModoCruces("group_cross");
+    } else if (value === "liguilla" || value === "todos_contra_todos") {
+      setNumGrupos(1);
+      setClasificadosPorGrupo(2);
+      setPartidosEliminatoria(1);
+      setModoCruces("general_table");
     }
   };
 
@@ -154,6 +185,8 @@ export default function ConfiguracionPage() {
         yellow_cards_for_suspension: amarillasSuspension,
         yellow_suspension_matches: partidosSuspensionAmarillas,
         red_suspension_matches: partidosSuspensionRoja,
+        double_yellow_suspension_matches: partidosDobleAmarilla,
+        reset_yellows_on_knockout: limpiarAmarillasEliminatorias,
         group_count: numGrupos,
         teams_per_group: equiposPorGrupo,
         qualifiers_per_group: clasificadosPorGrupo,
@@ -161,6 +194,7 @@ export default function ConfiguracionPage() {
         repechage_slots: repechaje ? cuposRepechaje : 0,
         knockout_legs: partidosEliminatoria,
         final_legs: partidosFinal,
+        knockout_pairing_mode: modoCruces,
         court_count: numCanchas,
         start_date: fechaInicio || null,
         estimated_end_date: fechaFin || null,
@@ -168,6 +202,7 @@ export default function ConfiguracionPage() {
         break_between_matches_minutes: descansoPartidos,
         football_modality: modalidadFutbol,
         substitutes_count: numSuplentes,
+        substitution_rule: tipoCambios,
         final_venue: canchaFinal || null,
         tournament_year: anioTorneo,
         is_auto_template_enabled: plantillaAutomatica,
@@ -214,7 +249,7 @@ export default function ConfiguracionPage() {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Formato de Competición</label>
-              <select value={formato} onChange={e => setFormato(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all cursor-pointer">
+              <select value={formato} onChange={e => aplicarFormatoCompeticion(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all cursor-pointer">
                 <option value="mundial">Copa Mundial</option>
                 <option value="libertadores">Copa Libertadores</option>
                 <option value="sudamericana">Copa Sudamericana</option>
@@ -244,6 +279,21 @@ export default function ConfiguracionPage() {
             <SelectField label="Fases eliminatorias" value={partidosEliminatoria} onChange={setPartidosEliminatoria} />
             <SelectField label="Final" value={partidosFinal} onChange={setPartidosFinal} />
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Generacion de cruces</label>
+              <select value={modoCruces} onChange={e => setModoCruces(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none">
+                <option value="general_table">Tabla general: mejor vs ultimo</option>
+                <option value="group_cross">Secuencia de grupos: A1 vs B2</option>
+                <option value="manual">Manual: el cliente arma cada cruce</option>
+              </select>
+              <p className="mt-2 text-[11px] font-bold text-gray-500">Esta regla se usa al generar fases finales desde Partidos.</p>
+            </div>
+            <div className="rounded-xl border border-[#2e2e2e] bg-[#1c1c1c] p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#D4A017]">Clasificacion configurada</p>
+              <p className="mt-2 text-sm font-bold text-gray-300">Clasifican {clasificadosPorGrupo} equipo(s) por grupo. El orden se calcula por puntos, gol diferencia, goles a favor y fair play.</p>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -258,8 +308,17 @@ export default function ConfiguracionPage() {
             </div>
             <NumberField label="Suplentes por planilla" value={numSuplentes} onChange={setNumSuplentes} min={0} />
             <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cancha de la final</label>
-              <input type="text" value={canchaFinal} onChange={e => setCanchaFinal(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none" placeholder="Ej: Estadio Reina del Cisne" />
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo de cambios</label>
+              <select value={tipoCambios} onChange={e => setTipoCambios(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none">
+                <option value="limited">Cambios limitados</option>
+                <option value="unlimited">Cambios ilimitados</option>
+                <option value="reentry">Cambios con reingreso</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sedes y canchas disponibles</label>
+              <textarea value={canchaFinal} onChange={e => setCanchaFinal(e.target.value)} rows={3} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none" placeholder={"Ej: Estadio Monumental\nEstadio Casa Blanca\n\nO: Centro Deportivo La Sede"} />
+              <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Una sede por linea para estadios diferentes. Si es una sola sede con varias canchas, usa el numero de canchas disponibles.</p>
             </div>
             <NumberField label="Año del torneo" value={anioTorneo} onChange={setAnioTorneo} min={2000} />
             <NumberField label="Duración por partido (min)" value={duracionPartido} onChange={setDuracionPartido} min={15} />
@@ -296,7 +355,12 @@ export default function ConfiguracionPage() {
             <NumberField label="Amarillas para suspensión" value={amarillasSuspension} onChange={setAmarillasSuspension} />
             <NumberField label="Partidos por acumulación" value={partidosSuspensionAmarillas} onChange={setPartidosSuspensionAmarillas} />
             <NumberField label="Partidos por roja" value={partidosSuspensionRoja} onChange={setPartidosSuspensionRoja} />
+            <NumberField label="Partidos por doble amarilla" value={partidosDobleAmarilla} onChange={setPartidosDobleAmarilla} />
           </div>
+          <label className="flex items-center gap-3 bg-[#1c1c1c] border border-[#2e2e2e] rounded-xl p-4 cursor-pointer">
+            <input type="checkbox" checked={limpiarAmarillasEliminatorias} onChange={e => setLimpiarAmarillasEliminatorias(e.target.checked)} className="w-5 h-5 accent-red-400" />
+            <span className="text-white font-bold text-sm">Limpiar amarillas acumuladas al iniciar fases finales, manteniendo suspensiones pendientes</span>
+          </label>
         </div>
 
         <div className="space-y-4">

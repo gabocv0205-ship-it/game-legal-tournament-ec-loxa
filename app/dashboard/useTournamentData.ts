@@ -14,6 +14,8 @@ export function useTournamentData() {
     loading: true,
     tournamentId: null as string | null,
     tournamentName: "",
+    tournamentPosterUrl: "",
+    tournamentBannerUrl: "",
   });
 
   const fetchData = useCallback(async () => {
@@ -23,14 +25,14 @@ export function useTournamentData() {
 
       // Never infer another client's tournament. Indicators only belong to the explicitly selected tournament.
       if (!activeId) {
-        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
+        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
         return;
       }
 
       const tournament = await getAccessibleTournament(supabase, activeId);
       if (!tournament) {
         clearActiveTournament();
-        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
+        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
         return;
       }
 
@@ -107,10 +109,12 @@ export function useTournamentData() {
         loading: false,
         tournamentId: activeId,
         tournamentName: tournament?.name || activeName || "Torneo Oficial",
+        tournamentPosterUrl: tournament?.poster_url || "",
+        tournamentBannerUrl: tournament?.banner_url || "",
       });
     } catch (error) {
       console.error("Error cargando datos del torneo:", error);
-      setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "" });
+      setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
     }
   }, []);
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { calculateStandings, normalizeTournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, getSuspensionInfoForMatch, normalizeTournamentConfig } from "@/lib/tournamentEngine";
 import html2canvas from "html2canvas";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
@@ -10,6 +10,7 @@ export default function EstadisticasPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [tabla, setTabla] = useState<any[]>([]);
   const [goleadores, setGoleadores] = useState<any[]>([]);
+  const [estadisticasJugadores, setEstadisticasJugadores] = useState<any[]>([]);
   const [sanciones, setSanciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [llaves, setLlaves] = useState<any[]>([]);
@@ -19,6 +20,7 @@ export default function EstadisticasPage() {
   const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
   const posterPosicionesRef = useRef<HTMLDivElement>(null);
   const posterGoleadoresRef = useRef<HTMLDivElement>(null);
+  const posterFontFamily = '"Segoe UI", Arial, Helvetica, sans-serif';
 
   useEffect(() => {
     cargarEstadisticas();
@@ -41,6 +43,7 @@ export default function EstadisticasPage() {
         setTorneoId(null);
         setTabla([]);
         setGoleadores([]);
+        setEstadisticasJugadores([]);
         setSanciones([]);
         setLlaves([]);
         setLoading(false);
@@ -63,6 +66,10 @@ export default function EstadisticasPage() {
         .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
         .eq("tournament_id", activeId)
         .eq("status", "finished");
+      const { data: allMatches } = await supabase.from("matches")
+        .select("id, tournament_id, home_team_id, away_team_id, matchday, stage, status, match_date")
+        .eq("tournament_id", activeId)
+        .order("match_date", { ascending: true });
       const { data: knockoutMatches } = await supabase.from("matches")
         .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
         .eq("tournament_id", activeId)
@@ -132,6 +139,33 @@ export default function EstadisticasPage() {
       });
       setGoleadores(Object.values(golesObj).sort((a, b) => b.goles - a.goles).slice(0, 15));
 
+      const jugadoresObj: Record<string, any> = {};
+      events.forEach(e => {
+        const pId = e.player_id;
+        if (!pId) return;
+        if (!jugadoresObj[pId]) {
+          jugadoresObj[pId] = {
+            id: pId,
+            name: e.players?.full_name || "Desconocido",
+            team: e.teams?.name || "Sin Equipo",
+            partidos: new Set<string>(),
+            goles: 0,
+            amarillas: 0,
+            rojas: 0,
+          };
+        }
+        if (["participacion", "gol", "amarilla", "roja", "mvp"].includes(e.event_type)) {
+          jugadoresObj[pId].partidos.add(e.match_id);
+        }
+        if (e.event_type === "gol") jugadoresObj[pId].goles += 1;
+        if (e.event_type === "amarilla") jugadoresObj[pId].amarillas += 1;
+        if (e.event_type === "roja") jugadoresObj[pId].rojas += 1;
+      });
+      setEstadisticasJugadores(Object.values(jugadoresObj)
+        .map((player: any) => ({ ...player, pj: player.partidos.size, partidos: undefined }))
+        .sort((a: any, b: any) => b.pj - a.pj || b.goles - a.goles || a.name.localeCompare(b.name))
+      );
+
       // ==========================================
       // CÁLCULO DE SANCIONES Y SUSPENSIONES
       // ==========================================
@@ -145,12 +179,27 @@ export default function EstadisticasPage() {
          if (e.event_type === 'roja') sancionesObj[pId].rojas++;
       });
 
+      const proximosPartidos = [...(allMatches || [])]
+        .filter((match: any) => match.status !== "finished")
+        .sort((a: any, b: any) => new Date(a.match_date || 0).getTime() - new Date(b.match_date || 0).getTime());
+      const siguienteJornada = proximosPartidos.length ? Number(proximosPartidos[0].matchday || 0) : null;
+      const partidosSiguienteJornada = siguienteJornada === null
+        ? []
+        : proximosPartidos.filter((match: any) => Number(match.matchday || 0) === siguienteJornada);
+      const suspensionPorJugador = new Map<string, any>();
+      partidosSiguienteJornada.forEach((match: any) => {
+        getSuspensionInfoForMatch(events, allMatches || [], rules, match).forEach((info, playerId) => {
+          const current = suspensionPorJugador.get(playerId);
+          if (!current || info.remainingMatches > current.remainingMatches) suspensionPorJugador.set(playerId, info);
+        });
+      });
+
       const sancionesArray = Object.values(sancionesObj).map(s => {
-         // Regla de suspensión: 1 Roja directa o 3 Amarillas acumuladas
-         s.partidosSuspension = s.rojas > 0
-           ? s.rojas * rules.red_suspension_matches
-           : Math.floor(s.amarillas / rules.yellow_cards_for_suspension) * rules.yellow_suspension_matches;
-         s.suspendido = s.partidosSuspension > 0;
+         const suspension = suspensionPorJugador.get(s.id);
+         s.partidosSuspension = suspension?.remainingMatches || 0;
+         s.motivo = suspension?.reason || "";
+         s.disponibleJornada = suspension?.availableMatchday || null;
+         s.suspendido = Boolean(suspension);
          return s;
       }).sort((a, b) => (b.suspendido === a.suspendido ? b.rojas - a.rojas : b.suspendido ? 1 : -1));
 
@@ -178,6 +227,8 @@ export default function EstadisticasPage() {
     (groups[team.group || "General"] ||= []).push(team);
     return groups;
   }, {});
+  const gruposOrdenados = Object.entries(posicionesPorGrupo)
+    .sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" }));
 
   const descargarPosiciones = async () => {
     if (!posterPosicionesRef.current) return;
@@ -199,12 +250,12 @@ export default function EstadisticasPage() {
       }));
       const ancho = poster.scrollWidth;
       const alto = poster.scrollHeight;
-      const canvas = await html2canvas(poster, { backgroundColor: "#06132f", scale: 2, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
+      const canvas = await html2canvas(poster, { backgroundColor: "#f4f7f2", scale: 3, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
       const socialCanvas = document.createElement("canvas");
       socialCanvas.width = 1080; socialCanvas.height = 1350;
       const context = socialCanvas.getContext("2d");
       if (!context) throw new Error("No se pudo preparar el póster");
-      context.fillStyle = "#06132f"; context.fillRect(0, 0, 1080, 1350);
+      context.fillStyle = "#f4f7f2"; context.fillRect(0, 0, 1080, 1350);
       const scale = Math.min(1040 / canvas.width, 1310 / canvas.height);
       const width = canvas.width * scale; const height = canvas.height * scale;
       context.drawImage(canvas, (1080 - width) / 2, (1350 - height) / 2, width, height);
@@ -233,7 +284,7 @@ export default function EstadisticasPage() {
           image.onerror = resolve;
         });
       }));
-      const canvas = await html2canvas(poster, { backgroundColor: "#07122d", scale: 2, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
+      const canvas = await html2canvas(poster, { backgroundColor: "#f6f8f5", scale: 3, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `Goleadores-${nombreTorneo}-${anioTorneo}.png`;
@@ -259,7 +310,7 @@ export default function EstadisticasPage() {
           <div className="bg-red-600 p-2 rounded-lg text-xl">⚠️</div>
           <div>
             <h4 className="text-red-500 font-black uppercase tracking-widest text-sm">Alerta Disciplinaria</h4>
-            <p className="text-gray-300 text-sm mt-1">Hay <span className="font-bold text-white">{suspendidosActivos.length} jugador(es)</span> suspendidos para la siguiente fecha por acumulación de tarjetas o expulsión directa.</p>
+            <p className="text-gray-300 text-sm mt-1">Hay <span className="font-bold text-white">{suspendidosActivos.length} jugador(es)</span> suspendidos para la siguiente jornada programada. Cuando cumplan la sancion, volveran a estar habilitados automaticamente.</p>
           </div>
         </div>
       )}
@@ -292,7 +343,7 @@ export default function EstadisticasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
-              {Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
+              {gruposOrdenados.map(([grupo, equipos]) => (
                 <React.Fragment key={grupo}>
                   <tr className="bg-[#0f0f0f]">
                     <td colSpan={11} className="px-4 py-3 text-left text-[#D4A017] font-black uppercase tracking-[0.25em] text-xs">
@@ -321,30 +372,31 @@ export default function EstadisticasPage() {
               ))}
             </tbody>
           </table>
-          <div ref={posterGoleadoresRef} className="fixed -left-[9999px] top-0 w-[1080px] h-[1350px] overflow-hidden bg-[#07122d] p-16" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(160deg, rgba(2,8,23,.9), rgba(10,54,37,.82), rgba(2,8,23,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 15%, rgba(49,233,129,.28), transparent 30%), linear-gradient(160deg, #020817, #063b2a 50%, #020817)" }}>
-            <div className="absolute inset-10 border border-[#D4A017]/30 rounded-[28px]" />
-            <div className="relative z-10 text-center">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-[#D4A017] bg-black/40 text-4xl font-black text-[#D4A017]">GL</div>
-              <p className="mt-8 text-[18px] font-black uppercase tracking-[0.45em] text-[#D4A017]">Tabla de goleadores</p>
-              <h3 className="mt-4 text-5xl font-black uppercase tracking-widest text-white">{nombreTorneo}</h3>
-              <p className="mt-3 text-xl font-black uppercase tracking-[0.3em] text-emerald-200">{anioTorneo}</p>
+          <div ref={posterGoleadoresRef} className="fixed -left-[9999px] top-0 w-[1080px] h-[1350px] overflow-hidden bg-[#f6f8f5] p-14 text-[#102016]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(246,248,245,.93), rgba(246,248,245,.98)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "linear-gradient(180deg, #ffffff 0%, #edf4ee 100%)", fontFamily: posterFontFamily }}>
+            <div className="absolute inset-8 rounded-[28px] border-[6px] border-[#12311f]" />
+            <div className="absolute inset-14 rounded-[20px] border border-[#C99A1A]/55" />
+            <div className="relative z-10 border-b-4 border-[#C99A1A] pb-8 text-center">
+              <p className="text-[22px] font-black uppercase tracking-[0.35em] text-[#9B7411]">Tabla de goleadores</p>
+              <h3 className="mx-auto mt-4 max-w-[860px] text-5xl font-black uppercase leading-tight text-[#102016]">{nombreTorneo}</h3>
+              <p className="mt-3 text-lg font-black uppercase tracking-[0.22em] text-[#0b5b37]">Temporada {anioTorneo}</p>
             </div>
-            <div className="relative z-10 mt-14 space-y-4">
+            <div className="relative z-10 mt-10 overflow-hidden rounded-[24px] border-2 border-[#12311f] bg-white shadow-[0_24px_55px_rgba(15,23,42,.18)]">
+              <div className="grid grid-cols-[72px_1fr_260px_120px] bg-[#12311f] px-6 py-4 text-[14px] font-black uppercase tracking-[0.18em] text-white">
+                <span>Pos</span>
+                <span>Jugador</span>
+                <span>Equipo</span>
+                <span className="text-right">Goles</span>
+              </div>
               {(goleadores.length ? goleadores : [{ id: "empty", name: "Sin goles registrados", team: "Esperando resultados", goles: 0 }]).slice(0, 10).map((g, index) => (
-                <div key={g.id} className={`grid grid-cols-[72px_1fr_120px] items-center gap-5 rounded-3xl border px-6 py-5 ${index === 0 ? "border-[#D4A017] bg-[#D4A017]/18 shadow-[0_0_45px_rgba(212,160,23,.25)]" : "border-white/12 bg-white/8"}`}>
-                  <div className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black ${index === 0 ? "bg-[#D4A017] text-black" : "bg-white/10 text-white"}`}>{index + 1}</div>
-                  <div className="min-w-0">
-                    <p className="truncate text-2xl font-black uppercase tracking-wide text-white">{g.name}</p>
-                    <p className="mt-1 truncate text-sm font-black uppercase tracking-[0.22em] text-[#D4A017]">{g.team}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-5xl font-black text-white">{g.goles}</p>
-                    <p className="text-xs font-black uppercase tracking-[0.25em] text-emerald-200">goles</p>
-                  </div>
+                <div key={g.id} className={`grid grid-cols-[72px_1fr_260px_120px] items-center gap-4 border-b border-[#d9e4d9] px-6 py-5 last:border-0 ${index === 0 ? "bg-[#fff8df]" : index % 2 ? "bg-[#f8fbf7]" : "bg-white"}`}>
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-full text-xl font-black ${index === 0 ? "bg-[#C99A1A] text-black" : "bg-[#12311f] text-white"}`}>{index + 1}</div>
+                  <p className="break-words text-[28px] font-black uppercase leading-tight text-[#102016]">{g.name}</p>
+                  <p className="break-words text-[20px] font-black uppercase leading-tight text-[#0b5b37]">{g.team}</p>
+                  <p className="text-right text-5xl font-black text-[#102016]">{g.goles}</p>
                 </div>
               ))}
             </div>
-            <div className="absolute bottom-12 left-16 right-16 flex items-center justify-between border-t border-[#D4A017]/30 pt-6 text-[12px] font-black uppercase tracking-[0.35em] text-[#D4A017]">
+            <div className="absolute bottom-12 left-16 right-16 flex items-center justify-between border-t border-[#C99A1A]/45 pt-6 text-[13px] font-black uppercase tracking-[0.2em] text-[#9B7411]">
               <span>Game Legal Tournament</span>
               <span>Ranking oficial</span>
             </div>
@@ -352,41 +404,41 @@ export default function EstadisticasPage() {
         </div>
       </div>
 
-      <div ref={posterPosicionesRef} className="relative overflow-hidden rounded-2xl border border-[#D4A017]/40 p-7 bg-[#06132f]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(150deg, rgba(3,12,35,.9), rgba(8,39,84,.84), rgba(3,12,35,.95)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundImage: "radial-gradient(circle at 50% 18%, rgba(28,122,218,.42), transparent 32%), linear-gradient(150deg, #020817, #0a3068 48%, #020817)" }}>
-        <div className="absolute inset-4 rounded-xl border border-[#D4A017]/20 pointer-events-none" />
-        <div className="relative text-center mb-6">
-          <div className="mx-auto w-14 h-14 rounded-2xl border-2 border-[#D4A017] bg-gradient-to-br from-[#173e72] to-[#07122d] text-[#E7C36B] flex items-center justify-center font-black shadow-[0_0_25px_rgba(59,130,246,.45)]">G·L</div>
-          <h3 className="text-2xl text-white font-black uppercase tracking-widest mt-3">{nombreTorneo}</h3>
-          <p className="text-[#E7C36B] font-black uppercase tracking-[0.28em] text-xs mt-1">Tabla de posiciones · {anioTorneo}</p>
-          <div className="mt-4 mx-auto h-px max-w-2xl bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
+      <div ref={posterPosicionesRef} className="relative overflow-hidden rounded-2xl border-[10px] border-[#C99A1A] p-10 bg-[#f4f7f2] text-[#111827]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(244,247,242,.9), rgba(244,247,242,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 12% 18%, rgba(212,160,23,.2), transparent 24%), radial-gradient(circle at 88% 84%, rgba(5,96,78,.18), transparent 24%), linear-gradient(145deg, #f8fbf7, #dde9e1 55%, #f8fbf7)", fontFamily: posterFontFamily }}>
+        <div className="absolute inset-5 rounded-[26px] border-4 border-[#0B1620] pointer-events-none" />
+        <div className="relative text-center mb-8">
+          <p className="text-[14px] font-black uppercase tracking-[0.35em] text-[#9B7411]">Clasificacion oficial</p>
+          <h3 className="text-4xl text-[#111827] font-black uppercase leading-tight mt-3">{nombreTorneo}</h3>
+          <p className="text-[#9B7411] font-black uppercase text-base mt-1">Tabla de posiciones - {anioTorneo}</p>
+          <div className="mt-5 mx-auto h-px max-w-2xl bg-[#C99A1A]/60" />
         </div>
-        <div className={`relative grid gap-4 ${Object.keys(posicionesPorGrupo).length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
-          {Object.entries(posicionesPorGrupo).map(([grupo, equipos]) => (
-            <div key={grupo} className="overflow-hidden rounded-xl border border-[#D4A017]/45 bg-[#06142d]/95 shadow-[0_12px_30px_rgba(0,0,0,.35)]">
-              <div className="bg-gradient-to-r from-[#07152f] via-[#173d70] to-[#07152f] border-b border-[#D4A017]/45 px-3 py-2 flex justify-between">
-                <span className="text-[#E7C36B] text-xs font-black uppercase tracking-widest">Grupo {grupo}</span>
-                <span className="text-blue-200/70 text-[8px] font-bold uppercase">PJ · GD · PTS</span>
+        <div className={`relative grid gap-5 ${Object.keys(posicionesPorGrupo).length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+          {gruposOrdenados.map(([grupo, equipos]) => (
+            <div key={grupo} className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-[0_14px_34px_rgba(15,23,42,.20)]">
+              <div className="bg-[#0b0b0b] border-b border-[#D4A017]/50 px-3 py-2.5 flex justify-between">
+                <span className="text-white text-base font-black uppercase">Grupo {grupo}</span>
+                <span className="text-[#D4A017] text-[11px] font-black uppercase">PJ - GD - PTS</span>
               </div>
-              <div className="p-2">
+              <div className="p-3">
                 {equipos.map((team, index) => (
-                  <div key={team.id} className={`grid grid-cols-[18px_24px_1fr_24px_28px_30px] items-center gap-1 border-b border-white/10 py-2 last:border-0 border-l-2 ${team.classificationStatus === "qualified" ? "border-l-green-400" : team.classificationStatus === "repechage" ? "border-l-yellow-400" : "border-l-gray-600"}`}>
-                    <span className="text-[9px] font-black text-blue-200 text-center">{index + 1}</span>
-                    {team.shield ? <Image src={team.shield} alt="" width={20} height={20} unoptimized crossOrigin="anonymous" className="w-5 h-5 object-contain" /> : <div className="w-5 h-5 rounded-full bg-white/10" />}
-                    <span className="truncate text-[9px] text-white font-black uppercase">{team.name}</span>
-                    <span className="text-[9px] text-blue-100 text-center">{team.pj}</span>
-                    <span className="text-[9px] text-blue-100 text-center">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
-                    <span className="text-xs text-[#E7C36B] font-black text-center">{team.pts}</span>
+                  <div key={team.id} className={`grid grid-cols-[24px_34px_1fr_30px_34px_38px] items-center gap-2 border-b border-slate-200 py-2.5 last:border-0 border-l-4 pl-2 ${team.classificationStatus === "qualified" ? "border-l-emerald-500" : team.classificationStatus === "repechage" ? "border-l-amber-400" : "border-l-slate-300"}`}>
+                    <span className="text-sm font-black text-slate-500 text-center">{index + 1}</span>
+                    {team.shield ? <Image src={team.shield} alt="" width={30} height={30} unoptimized crossOrigin="anonymous" className="w-8 h-8 object-contain" /> : <div className="w-8 h-8 rounded-full bg-slate-200" />}
+                    <span className="break-words text-[13px] text-[#111827] font-black uppercase leading-tight">{team.name}</span>
+                    <span className="text-sm text-slate-700 font-black text-center">{team.pj}</span>
+                    <span className="text-sm text-slate-700 font-black text-center">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
+                    <span className="text-base text-[#9B7411] font-black text-center">{team.pts}</span>
                   </div>
                 ))}
               </div>
             </div>
           ))}
         </div>
-        <div className="relative mt-6 pt-4 border-t border-[#D4A017]/30 flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
-          <span className="text-green-400">Verde · Clasificado</span>
-          <span className="text-yellow-400">Amarillo · Repechaje</span>
-          <span className="text-gray-400">Gris · Eliminado</span>
-          <span className="text-[#E7C36B]">GAME LEGAL</span>
+        <div className="relative mt-7 pt-4 border-t border-[#C99A1A]/40 flex items-center justify-between text-[11px] font-black uppercase">
+          <span className="text-emerald-700">Verde - Clasificado</span>
+          <span className="text-amber-600">Amarillo - Repechaje</span>
+          <span className="text-slate-500">Gris - Eliminado</span>
+          <span className="text-[#9B7411]">Game Legal</span>
         </div>
       </div>
 
@@ -405,6 +457,13 @@ export default function EstadisticasPage() {
                     <div className="flex justify-between items-center"><span className="flex items-center gap-2">{match.home?.shield_url && <Image src={match.home.shield_url} alt="" width={20} height={20} unoptimized />}{match.home?.name}</span><b>{match.status === 'finished' ? match.home_goals : '-'}</b></div>
                     <div className="border-t border-[#2E2E2E] my-2" />
                     <div className="flex justify-between items-center"><span className="flex items-center gap-2">{match.away?.shield_url && <Image src={match.away.shield_url} alt="" width={20} height={20} unoptimized />}{match.away?.name}</span><b>{match.status === 'finished' ? match.away_goals : '-'}</b></div>
+                    <div className="mt-3 rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      {match.status === "finished"
+                        ? Number(match.home_goals || 0) === Number(match.away_goals || 0)
+                          ? "Empate / revisar penales"
+                          : `Avanza ${Number(match.home_goals || 0) > Number(match.away_goals || 0) ? match.home?.name : match.away?.name}`
+                        : "Pendiente"}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -480,7 +539,9 @@ export default function EstadisticasPage() {
                     <td className="px-2 py-3 text-center font-bold text-red-500">{s.rojas > 0 ? s.rojas : '-'}</td>
                     <td className="px-4 py-3 text-right">
                       {s.suspendido ? (
-                        <span className="inline-block bg-red-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded animate-pulse">Suspendido {s.partidosSuspension} partido(s)</span>
+                        <span className="inline-block bg-red-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded animate-pulse" title={`${s.motivo}${s.disponibleJornada ? ` - disponible fecha ${s.disponibleJornada}` : ""}`}>
+                          Suspendido {s.partidosSuspension} partido(s){s.disponibleJornada ? ` / vuelve fecha ${s.disponibleJornada}` : ""}
+                        </span>
                       ) : (
                         <span className="inline-block border border-green-600/50 text-green-500 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded">Habilitado</span>
                       )}
@@ -488,6 +549,40 @@ export default function EstadisticasPage() {
                   </tr>
                 ))
               )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="lg:col-span-2 bg-[#1C1C1C] rounded-2xl border border-[#2E2E2E] overflow-hidden shadow-xl">
+          <div className="bg-[#141414] border-b border-[#2E2E2E] px-6 py-4">
+            <h3 className="text-white font-black uppercase tracking-widest text-sm">Rendimiento individual de jugadores</h3>
+            <p className="mt-1 text-xs font-bold text-gray-500">PJ se calcula con los jugadores marcados como participantes en cada partido.</p>
+          </div>
+          <table className="w-full text-left text-sm text-white">
+            <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[10px] tracking-widest">
+              <tr>
+                <th className="px-6 py-3">Jugador</th>
+                <th className="px-3 py-3 text-center">PJ</th>
+                <th className="px-3 py-3 text-center">Goles</th>
+                <th className="px-3 py-3 text-center">TA</th>
+                <th className="px-3 py-3 text-center">TR</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#2E2E2E]">
+              {estadisticasJugadores.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500 italic">Aun no hay participaciones ni eventos registrados.</td></tr>
+              ) : estadisticasJugadores.map(player => (
+                <tr key={player.id} className="hover:bg-[#141414]">
+                  <td className="px-6 py-3">
+                    <p className="break-words font-bold uppercase tracking-wide">{player.name}</p>
+                    <p className="mt-0.5 break-words text-[10px] uppercase tracking-wider text-[#D4A017]">{player.team}</p>
+                  </td>
+                  <td className="px-3 py-3 text-center font-black text-white">{player.pj}</td>
+                  <td className="px-3 py-3 text-center font-black text-white">{player.goles}</td>
+                  <td className="px-3 py-3 text-center font-black text-yellow-500">{player.amarillas}</td>
+                  <td className="px-3 py-3 text-center font-black text-red-500">{player.rojas}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

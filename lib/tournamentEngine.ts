@@ -17,7 +17,11 @@ export type TournamentConfig = {
   yellow_cards_for_suspension: number;
   yellow_suspension_matches: number;
   red_suspension_matches: number;
+  double_yellow_suspension_matches: number;
+  reset_yellows_on_knockout: boolean;
   max_players_per_team: number;
+  knockout_pairing_mode: "general_table" | "group_cross" | "manual";
+  substitution_rule: "limited" | "unlimited" | "reentry";
 };
 
 export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
@@ -38,13 +42,23 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   tournament_year: new Date().getFullYear(),
   yellow_cards_for_suspension: 3,
   yellow_suspension_matches: 1,
-  red_suspension_matches: 1,
+  red_suspension_matches: 2,
+  double_yellow_suspension_matches: 1,
+  reset_yellows_on_knockout: true,
   max_players_per_team: 25,
+  knockout_pairing_mode: "general_table",
+  substitution_rule: "limited",
 };
 
 export function normalizeTournamentConfig(source: any): TournamentConfig {
   const number = (key: keyof TournamentConfig, minimum = 1) =>
     Math.max(minimum, Number(source?.[key] ?? DEFAULT_TOURNAMENT_CONFIG[key]));
+  const knockoutMode = ["general_table", "group_cross", "manual"].includes(String(source?.knockout_pairing_mode))
+    ? source.knockout_pairing_mode
+    : DEFAULT_TOURNAMENT_CONFIG.knockout_pairing_mode;
+  const substitutionRule = ["limited", "unlimited", "reentry"].includes(String(source?.substitution_rule))
+    ? source.substitution_rule
+    : DEFAULT_TOURNAMENT_CONFIG.substitution_rule;
 
   return {
     format: source?.format || DEFAULT_TOURNAMENT_CONFIG.format,
@@ -65,11 +79,27 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     yellow_cards_for_suspension: number("yellow_cards_for_suspension"),
     yellow_suspension_matches: number("yellow_suspension_matches"),
     red_suspension_matches: number("red_suspension_matches"),
+    double_yellow_suspension_matches: number("double_yellow_suspension_matches"),
+    reset_yellows_on_knockout: source?.reset_yellows_on_knockout !== false,
     max_players_per_team: number("max_players_per_team"),
+    knockout_pairing_mode: knockoutMode,
+    substitution_rule: substitutionRule,
   };
 }
 
-export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], config: Partial<TournamentConfig>, targetMatch: any) {
+export type SuspensionInfo = {
+  playerId: string;
+  teamId: string;
+  reason: string;
+  sourceMatchId: string;
+  sourceMatchday: number | null;
+  untilMatchday: number | null;
+  availableMatchday: number | null;
+  suspensionMatches: number;
+  remainingMatches: number;
+};
+
+export function getSuspensionInfoForMatch(events: any[], matches: any[], config: Partial<TournamentConfig>, targetMatch: any) {
   const rules = normalizeTournamentConfig(config);
   const matchById = Object.fromEntries(matches.map((match) => [match.id, match]));
   const matchOrder = (match: any) => {
@@ -78,29 +108,90 @@ export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], con
   };
   const targetOrder = matchOrder(targetMatch);
   const yellowCount: Record<string, number> = {};
-  const suspended = new Set<string>();
+  const suspended = new Map<string, SuspensionInfo>();
+  const targetIsKnockout = baseStage(targetMatch?.stage) !== "Fase de Grupos";
+  const incidents = new Map<string, {
+    matchId: string;
+    playerId: string;
+    teamId: string;
+    amarillas: number;
+    rojas: number;
+  }>();
 
-  [...events]
-    .filter((event) => event.player_id && event.team_id && matchById[event.match_id]?.status === "finished" && matchOrder(matchById[event.match_id]) < targetOrder)
-    .sort((a, b) => matchOrder(matchById[a.match_id]) - matchOrder(matchById[b.match_id]))
-    .forEach((event) => {
+  events.forEach((event) => {
+    if (!event?.match_id || !event?.player_id || !event?.team_id) return;
+    if (event.event_type !== "amarilla" && event.event_type !== "roja") return;
+    const match = matchById[event.match_id];
+    if (match?.status !== "finished" || matchOrder(match) >= targetOrder) return;
+    const key = `${event.match_id}:${event.player_id}:${event.team_id}`;
+    const incident = incidents.get(key) || {
+      matchId: event.match_id,
+      playerId: event.player_id,
+      teamId: event.team_id,
+      amarillas: 0,
+      rojas: 0,
+    };
+    if (event.event_type === "amarilla") incident.amarillas += 1;
+    if (event.event_type === "roja") incident.rojas += 1;
+    incidents.set(key, incident);
+  });
+
+  [...incidents.values()]
+    .sort((a, b) => matchOrder(matchById[a.matchId]) - matchOrder(matchById[b.matchId]))
+    .forEach((incident) => {
+      const sourceMatch = matchById[incident.matchId];
+      const sourceMatchday = sourceMatch?.matchday ? Number(sourceMatch.matchday) : null;
       let suspensionMatches = 0;
-      if (event.event_type === "roja") {
-        suspensionMatches = rules.red_suspension_matches;
-      } else if (event.event_type === "amarilla") {
-        yellowCount[event.player_id] = (yellowCount[event.player_id] || 0) + 1;
-        if (yellowCount[event.player_id] % rules.yellow_cards_for_suspension === 0) suspensionMatches = rules.yellow_suspension_matches;
+      let reason = "";
+
+      if (incident.rojas > 0) {
+        suspensionMatches = Math.max(1, rules.red_suspension_matches) * incident.rojas;
+        reason = `Roja directa en fecha ${sourceMatchday || sourceMatch?.stage || "anterior"}`;
+      } else if (incident.amarillas >= 2) {
+        suspensionMatches = Math.max(1, rules.double_yellow_suspension_matches);
+        reason = `Doble amarilla en fecha ${sourceMatchday || sourceMatch?.stage || "anterior"}`;
+      } else if (incident.amarillas === 1) {
+        if (rules.reset_yellows_on_knockout && targetIsKnockout && baseStage(sourceMatch?.stage) === "Fase de Grupos") {
+          return;
+        }
+        yellowCount[incident.playerId] = (yellowCount[incident.playerId] || 0) + 1;
+        if (yellowCount[incident.playerId] % rules.yellow_cards_for_suspension === 0) {
+          suspensionMatches = Math.max(1, rules.yellow_suspension_matches);
+          reason = `Acumulacion de ${rules.yellow_cards_for_suspension} amarilla(s)`;
+        }
       }
+
       if (!suspensionMatches) return;
-      const eventOrder = matchOrder(matchById[event.match_id]);
+      const eventOrder = matchOrder(sourceMatch);
       const nextTeamMatches = matches
-        .filter((match) => matchOrder(match) > eventOrder && (match.home_team_id === event.team_id || match.away_team_id === event.team_id))
-        .sort((a, b) => matchOrder(a) - matchOrder(b))
-        .slice(0, suspensionMatches);
-      if (nextTeamMatches.some((match) => match.id === targetMatch.id)) suspended.add(event.player_id);
+        .filter((match) => matchOrder(match) > eventOrder && (match.home_team_id === incident.teamId || match.away_team_id === incident.teamId))
+        .sort((a, b) => matchOrder(a) - matchOrder(b));
+      const suspensionWindow = nextTeamMatches.slice(0, suspensionMatches);
+      const targetIndex = suspensionWindow.findIndex((match) => match.id === targetMatch.id);
+      if (targetIndex < 0) return;
+
+      const availableMatch = nextTeamMatches[suspensionMatches] || null;
+      const untilMatch = suspensionWindow[suspensionWindow.length - 1] || null;
+      const current = suspended.get(incident.playerId);
+      const info: SuspensionInfo = {
+        playerId: incident.playerId,
+        teamId: incident.teamId,
+        reason,
+        sourceMatchId: incident.matchId,
+        sourceMatchday,
+        untilMatchday: untilMatch?.matchday ? Number(untilMatch.matchday) : null,
+        availableMatchday: availableMatch?.matchday ? Number(availableMatch.matchday) : null,
+        suspensionMatches,
+        remainingMatches: suspensionMatches - targetIndex,
+      };
+      if (!current || info.remainingMatches > current.remainingMatches) suspended.set(incident.playerId, info);
     });
 
   return suspended;
+}
+
+export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], config: Partial<TournamentConfig>, targetMatch: any) {
+  return new Set(getSuspensionInfoForMatch(events, matches, config, targetMatch).keys());
 }
 
 export function sortStandings(a: any, b: any) {
@@ -156,6 +247,7 @@ export function calculateStandings(teams: any[], matches: any[], events: any[] =
     group.forEach((team) => { team.gd = team.gf - team.gc; });
     group.sort(sortStandings);
     group.forEach((team, index) => {
+      team.groupRank = index + 1;
       if (index < rules.qualifiers_per_group) team.classificationStatus = "qualified";
       else if (rules.repechage_enabled && index < rules.qualifiers_per_group + rules.repechage_slots) team.classificationStatus = "repechage";
     });
@@ -186,7 +278,9 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
     const rotation = [...group].sort((a, b) => a.name.localeCompare(b.name));
     if (rotation.length % 2) rotation.push({ id: "__bye__" });
     const rounds = rotation.length - 1;
+    if (rounds <= 0) return;
     const roundIndex = Math.max(0, (matchday - 1) % rounds);
+    const isReturnLeg = legs === 2 && matchday > rounds;
     const fixed = rotation[0];
     const rotating = rotation.slice(1);
     const shifted = rotating.map((_, index) => rotating[(index + roundIndex) % rotating.length]);
@@ -196,21 +290,24 @@ export function createMatchdayFixtures(teams: any[], existingMatches: any[], tou
       const home = round[index];
       const away = round[round.length - 1 - index];
       if (home.id === "__bye__" || away.id === "__bye__") continue;
+      const local = isReturnLeg ? away : home;
+      const visitante = isReturnLeg ? home : away;
       const key = [home.id, away.id].sort().join(":");
-      const firstLegKey = `${home.id}:${away.id}`;
-      const secondLegKey = `${away.id}:${home.id}`;
+      const directedKey = `${local.id}:${visitante.id}`;
       if (legs === 1 && !existingPairs.has(key)) {
         fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
         existingPairs.add(key);
-        existingDirectedPairs.add(firstLegKey);
+        existingDirectedPairs.add(directedKey);
       } else if (legs === 2) {
-        if (!existingDirectedPairs.has(firstLegKey)) {
-          fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
-          existingDirectedPairs.add(firstLegKey);
-        }
-        if (!existingDirectedPairs.has(secondLegKey)) {
-          fixtures.push({ tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + rounds, stage: `${stage} (Vuelta)` });
-          existingDirectedPairs.add(secondLegKey);
+        if (!existingDirectedPairs.has(directedKey)) {
+          fixtures.push({
+            tournament_id: tournamentId,
+            home_team_id: local.id,
+            away_team_id: visitante.id,
+            matchday,
+            stage: isReturnLeg ? `${stage} (Vuelta)` : stage,
+          });
+          existingDirectedPairs.add(directedKey);
         }
       }
     }
@@ -228,14 +325,31 @@ export function scheduleFixtures(fixtures: any[], day: string, startTime: string
   });
 }
 
-export function validateManualMatch(candidate: any, matches: any[], durationMinutes: number) {
+const baseStage = (stage: string) => String(stage || "").replace(/\s+\(Vuelta\)$/i, "");
+
+export function validateManualMatch(candidate: any, matches: any[], durationMinutes: number, options: { maxLegs?: number; ignoreMatchId?: string } = {}) {
   const start = new Date(candidate.match_date).getTime();
   const end = start + durationMinutes * 60000;
   const pair = [candidate.home_team_id, candidate.away_team_id].sort().join(":");
+  const directedPair = `${candidate.home_team_id}:${candidate.away_team_id}`;
+  const candidateBaseStage = baseStage(candidate.stage);
+  const maxLegs = Math.max(1, Math.min(2, Number(options.maxLegs || 1)));
+  const sameTieMatches = matches.filter((match) => {
+    if (options.ignoreMatchId && match.id === options.ignoreMatchId) return false;
+    return baseStage(match.stage) === candidateBaseStage && [match.home_team_id, match.away_team_id].sort().join(":") === pair;
+  });
+  if (sameTieMatches.some(match => `${match.home_team_id}:${match.away_team_id}` === directedPair)) {
+    return "Este cruce con la misma localia ya existe en la misma fase.";
+  }
+  if (sameTieMatches.length >= maxLegs) {
+    return maxLegs === 1
+      ? "Este cruce ya fue programado o jugado en esta fase."
+      : "Este cruce ya tiene ida y vuelta registradas en esta fase.";
+  }
   for (const match of matches) {
+    if (options.ignoreMatchId && match.id === options.ignoreMatchId) continue;
     if (match.status === "finished") continue;
     const existingPair = [match.home_team_id, match.away_team_id].sort().join(":");
-    if (existingPair === pair && match.stage === candidate.stage) return "Este cruce ya existe en la misma fase.";
     if (!match.match_date) continue;
     const existingStart = new Date(match.match_date).getTime();
     const existingEnd = existingStart + durationMinutes * 60000;
@@ -256,6 +370,73 @@ export function createKnockoutFixtures(qualified: any[], tournamentId: string, s
     const worst = qualified[qualified.length - 1 - index];
     fixtures.push({ tournament_id: tournamentId, home_team_id: best.id, away_team_id: worst.id, matchday, stage });
     if (legs === 2) fixtures.push({ tournament_id: tournamentId, home_team_id: worst.id, away_team_id: best.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` });
+  }
+  return fixtures;
+}
+
+export function createGroupSequenceKnockoutFixtures(groups: Record<string, any[]>, tournamentId: string, stage: string, matchday: number, legs: number) {
+  const groupNames = Object.keys(groups).sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+  const used = new Set<string>();
+  const pairs: any[] = [];
+
+  for (let groupIndex = 0; groupIndex < groupNames.length; groupIndex += 2) {
+    const groupA = groups[groupIndex >= groupNames.length ? groupNames[0] : groupNames[groupIndex]];
+    const groupB = groups[groupIndex + 1 >= groupNames.length ? groupNames[0] : groupNames[groupIndex + 1]];
+    if (!groupA || !groupB || groupA === groupB) continue;
+    const qualifiedA = groupA.filter(team => team.classificationStatus === "qualified").sort((a, b) => Number(a.groupRank || 99) - Number(b.groupRank || 99));
+    const qualifiedB = groupB.filter(team => team.classificationStatus === "qualified").sort((a, b) => Number(a.groupRank || 99) - Number(b.groupRank || 99));
+    const maxRank = Math.max(qualifiedA.length, qualifiedB.length);
+    for (let rank = 0; rank < maxRank; rank++) {
+      const reverseRank = maxRank - rank - 1;
+      const first = qualifiedA[rank];
+      const second = qualifiedB[reverseRank];
+      if (first && second && !used.has(first.id) && !used.has(second.id)) {
+        pairs.push([first, second]);
+        used.add(first.id); used.add(second.id);
+      }
+      const third = qualifiedB[rank];
+      const fourth = qualifiedA[reverseRank];
+      if (third && fourth && !used.has(third.id) && !used.has(fourth.id)) {
+        pairs.push([third, fourth]);
+        used.add(third.id); used.add(fourth.id);
+      }
+    }
+  }
+
+  const remaining = Object.values(groups)
+    .flat()
+    .filter(team => team.classificationStatus === "qualified" && !used.has(team.id))
+    .sort(sortStandings);
+  while (remaining.length >= 2) pairs.push([remaining.shift(), remaining.pop()]);
+
+  return pairs.flatMap(([home, away]) => {
+    const fixture = { tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage };
+    return legs === 2
+      ? [fixture, { tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` }]
+      : [fixture];
+  });
+}
+
+export function createDrawKnockoutFixtures(qualified: any[], tournamentId: string, stage: string, matchday: number, legs: number, seed = Date.now()) {
+  const shuffled = [...qualified];
+  let value = Math.max(1, Number(seed) || 1);
+  const random = () => {
+    value = (value * 9301 + 49297) % 233280;
+    return value / 233280;
+  };
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  const fixtures: any[] = [];
+  const used = new Set<string>();
+  for (let index = 0; index < shuffled.length - 1; index += 2) {
+    const home = shuffled[index];
+    const away = shuffled[index + 1];
+    if (!home?.id || !away?.id || used.has(home.id) || used.has(away.id)) continue;
+    used.add(home.id); used.add(away.id);
+    fixtures.push({ tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage });
+    if (legs === 2) fixtures.push({ tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` });
   }
   return fixtures;
 }

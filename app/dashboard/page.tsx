@@ -68,7 +68,7 @@ function buildStandings(teams: any[], matches: any[]): Standing[] {
 }
 
 export default function DashboardInicio() {
-  const { players, teams, matches, stats, disciplinaryAlerts, loading, tournamentId, tournamentName } = useTournamentData();
+  const { players, teams, matches, stats, disciplinaryAlerts, loading, tournamentId, tournamentName, tournamentPosterUrl, tournamentBannerUrl } = useTournamentData();
   const [misTorneos, setMisTorneos] = useState<any[]>([]);
   const [torneoActivoId, setTorneoActivoId] = useState<string | null>(null);
   const [newsIndex, setNewsIndex] = useState(0);
@@ -156,6 +156,13 @@ export default function DashboardInicio() {
             <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-gray-400">Vista ejecutiva del torneo: estado deportivo, alertas, proximos encuentros y avance general en un solo lugar.</p>
           </div>
         <div className="rounded-2xl border border-[#D4A017]/30 bg-black/35 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="mb-4 h-40 overflow-hidden rounded-xl border border-[#2E2E2E] bg-[#0a0a0a]">
+              {tournamentPosterUrl || tournamentBannerUrl ? (
+                <Image src={tournamentPosterUrl || tournamentBannerUrl} alt="Poster del torneo" width={520} height={320} unoptimized className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#082017] via-[#141414] to-[#2b2108] text-4xl font-black text-[#D4A017]">GL</div>
+              )}
+            </div>
             <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">Gestionando torneo</label>
             <select value={torneoActivoId || ""} onChange={event => cambiarTorneo(event.target.value)} className="w-full rounded-xl border border-[#2E2E2E] bg-[#141414] p-3 text-sm font-black text-white outline-none focus:border-[#D4A017]">
               <option value="" disabled>Seleccione un torneo...</option>
