@@ -321,6 +321,7 @@ export default function LibroMayorFinanzas() {
     return acc;
   }, { totalCargos: 0, totalIngresos: 0, totalDescuentos: 0, totalPendiente: 0, inscripcion: 0, arbitraje: 0, tarjetas: 0 });
   const saldoFinal = cierreFinanciero.totalIngresos - cierreFinanciero.totalCargos + cierreFinanciero.totalDescuentos;
+  const money = (value: any) => `$${Number(value || 0).toFixed(2)}`;
 
   return (
     <div className="space-y-8">
@@ -392,7 +393,54 @@ export default function LibroMayorFinanzas() {
         )}
       </div>
 
-      <div className="bg-[#1C1C1C] rounded-2xl shadow-xl border border-[#2E2E2E] overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-[#2E2E2E] bg-[#1C1C1C] shadow-xl">
+        <div className="border-b border-[#2E2E2E] bg-[#0a0a0a] px-4 py-3">
+          <h3 className="text-xs font-black uppercase tracking-[0.24em] text-[#D4A017]">Valores pendientes por equipo</h3>
+          <p className="mt-1 text-[11px] font-bold text-gray-500">Inscripcion, arbitraje, tarjetas, pagos, descuentos y saldo con lectura proporcional.</p>
+        </div>
+        <div className="divide-y divide-[#2E2E2E]">
+          {equiposFiltrados.length === 0 ? (
+            <p className="p-6 text-center text-sm font-bold text-gray-500">No existen equipos con los filtros seleccionados.</p>
+          ) : equiposFiltrados.map(eq => {
+            const estado = eq.saldoPendiente > 0 ? (eq.pagadoTotal > 0 ? "Parcial" : "En mora") : "Al dia";
+            return (
+              <article key={eq.id} className="cursor-pointer bg-[#1C1C1C] p-3 transition-colors hover:bg-[#141414] sm:p-4" onClick={() => abrirDetalleEquipo(eq)}>
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(190px,1.35fr)_minmax(0,3.9fr)_minmax(190px,1.15fr)] xl:items-center">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {eq.shield_url ? <Image src={eq.shield_url} alt={`Escudo de ${eq.name}`} width={34} height={34} unoptimized className="h-9 w-9 shrink-0 object-contain" /> : <div className="h-9 w-9 shrink-0 rounded-full bg-[#2e2e2e]"></div>}
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-black uppercase leading-tight text-white">{eq.name}</p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{eq.partidosJugados} jugado(s) / {eq.partidosProgramados} programado(s)</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-4 2xl:grid-cols-7">
+                    <FinanceCell label="Inscripcion" value={money(eq.deudaInscripcion)} />
+                    <FinanceCell label="Arbitraje" value={money(eq.deudaArbitraje)} detail={`${eq.partidosJugados}J / ${eq.partidosProgramados}P`} />
+                    <FinanceCell label="Tarjetas" value={money(eq.deudaMultas)} detail={`${eq.amarillas}A / ${eq.rojas}R`} />
+                    <FinanceCell label="Generada" value={money(eq.totalDeudaGenerada)} tone="red" />
+                    <FinanceCell label="Pagado" value={money(eq.pagadoTotal)} tone="green" />
+                    <FinanceCell label="Descuento" value={money(eq.descuentoTotal)} tone="emerald" />
+                    <FinanceCell label="Saldo" value={money(eq.saldoPendiente)} tone={eq.saldoPendiente > 0 ? "red" : "green"} />
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row xl:flex-col 2xl:flex-row">
+                    <span className={`inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-center text-[10px] font-black uppercase tracking-widest ${eq.saldoPendiente > 0 ? (eq.pagadoTotal > 0 ? "border border-yellow-500/35 bg-yellow-500/15 text-yellow-300" : "border border-red-500/35 bg-red-500/15 text-red-300") : "border border-green-500/35 bg-green-500/15 text-green-300"}`}>
+                      {estado}
+                    </span>
+                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq, "descuento"); }} className="min-h-9 flex-1 rounded-lg border border-emerald-500/60 bg-emerald-400 px-3 text-[10px] font-black uppercase tracking-widest text-black transition-all hover:bg-emerald-600 hover:text-white">
+                      Descuento
+                    </button>
+                    <button onClick={(event) => { event.stopPropagation(); abrirModalPago(eq); }} className="min-h-9 flex-1 rounded-lg border border-[#2E2E2E] bg-[#141414] px-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-[#D4A017] hover:text-black">
+                      Abonar
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="hidden bg-[#1C1C1C] rounded-2xl shadow-xl border border-[#2E2E2E] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full table-fixed text-left text-[11px] text-white">
             <thead className="bg-[#0a0a0a] text-gray-400 uppercase text-[9px] tracking-widest border-b border-[#2E2E2E]">
@@ -560,6 +608,23 @@ export default function LibroMayorFinanzas() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FinanceCell({ label, value, detail, tone = "neutral" }: any) {
+  const tones: Record<string, string> = {
+    neutral: "border-[#2E2E2E] bg-[#141414] text-white",
+    red: "border-red-500/25 bg-red-500/10 text-red-300",
+    green: "border-green-500/25 bg-green-500/10 text-green-300",
+    emerald: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+  };
+
+  return (
+    <div className={`min-w-0 rounded-lg border p-2 ${tones[tone] || tones.neutral}`}>
+      <p className="truncate text-[8px] font-black uppercase tracking-widest text-gray-500">{label}</p>
+      <p className="mt-1 break-words font-mono text-sm font-black leading-tight">{value}</p>
+      {detail && <p className="mt-1 truncate text-[9px] font-bold uppercase tracking-wider text-gray-500">{detail}</p>}
     </div>
   );
 }
