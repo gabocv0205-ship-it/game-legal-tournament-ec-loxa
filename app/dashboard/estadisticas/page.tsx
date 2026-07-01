@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { calculateStandings, normalizeTournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, getSuspensionInfoForMatch, normalizeTournamentConfig } from "@/lib/tournamentEngine";
 import html2canvas from "html2canvas";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
@@ -66,6 +66,10 @@ export default function EstadisticasPage() {
         .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
         .eq("tournament_id", activeId)
         .eq("status", "finished");
+      const { data: allMatches } = await supabase.from("matches")
+        .select("id, tournament_id, home_team_id, away_team_id, matchday, stage, status, match_date")
+        .eq("tournament_id", activeId)
+        .order("match_date", { ascending: true });
       const { data: knockoutMatches } = await supabase.from("matches")
         .select("*, home:home_team_id(id, name, shield_url), away:away_team_id(id, name, shield_url)")
         .eq("tournament_id", activeId)
@@ -175,12 +179,27 @@ export default function EstadisticasPage() {
          if (e.event_type === 'roja') sancionesObj[pId].rojas++;
       });
 
+      const proximosPartidos = [...(allMatches || [])]
+        .filter((match: any) => match.status !== "finished")
+        .sort((a: any, b: any) => new Date(a.match_date || 0).getTime() - new Date(b.match_date || 0).getTime());
+      const siguienteJornada = proximosPartidos.length ? Number(proximosPartidos[0].matchday || 0) : null;
+      const partidosSiguienteJornada = siguienteJornada === null
+        ? []
+        : proximosPartidos.filter((match: any) => Number(match.matchday || 0) === siguienteJornada);
+      const suspensionPorJugador = new Map<string, any>();
+      partidosSiguienteJornada.forEach((match: any) => {
+        getSuspensionInfoForMatch(events, allMatches || [], rules, match).forEach((info, playerId) => {
+          const current = suspensionPorJugador.get(playerId);
+          if (!current || info.remainingMatches > current.remainingMatches) suspensionPorJugador.set(playerId, info);
+        });
+      });
+
       const sancionesArray = Object.values(sancionesObj).map(s => {
-         // Regla de suspensión: 1 Roja directa o 3 Amarillas acumuladas
-         s.partidosSuspension = s.rojas > 0
-           ? s.rojas * rules.red_suspension_matches
-           : Math.floor(s.amarillas / rules.yellow_cards_for_suspension) * rules.yellow_suspension_matches;
-         s.suspendido = s.partidosSuspension > 0;
+         const suspension = suspensionPorJugador.get(s.id);
+         s.partidosSuspension = suspension?.remainingMatches || 0;
+         s.motivo = suspension?.reason || "";
+         s.disponibleJornada = suspension?.availableMatchday || null;
+         s.suspendido = Boolean(suspension);
          return s;
       }).sort((a, b) => (b.suspendido === a.suspendido ? b.rojas - a.rojas : b.suspendido ? 1 : -1));
 
@@ -291,7 +310,7 @@ export default function EstadisticasPage() {
           <div className="bg-red-600 p-2 rounded-lg text-xl">⚠️</div>
           <div>
             <h4 className="text-red-500 font-black uppercase tracking-widest text-sm">Alerta Disciplinaria</h4>
-            <p className="text-gray-300 text-sm mt-1">Hay <span className="font-bold text-white">{suspendidosActivos.length} jugador(es)</span> suspendidos para la siguiente fecha por acumulación de tarjetas o expulsión directa.</p>
+            <p className="text-gray-300 text-sm mt-1">Hay <span className="font-bold text-white">{suspendidosActivos.length} jugador(es)</span> suspendidos para la siguiente jornada programada. Cuando cumplan la sancion, volveran a estar habilitados automaticamente.</p>
           </div>
         </div>
       )}
@@ -520,7 +539,9 @@ export default function EstadisticasPage() {
                     <td className="px-2 py-3 text-center font-bold text-red-500">{s.rojas > 0 ? s.rojas : '-'}</td>
                     <td className="px-4 py-3 text-right">
                       {s.suspendido ? (
-                        <span className="inline-block bg-red-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded animate-pulse">Suspendido {s.partidosSuspension} partido(s)</span>
+                        <span className="inline-block bg-red-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded animate-pulse" title={`${s.motivo}${s.disponibleJornada ? ` - disponible fecha ${s.disponibleJornada}` : ""}`}>
+                          Suspendido {s.partidosSuspension} partido(s){s.disponibleJornada ? ` / vuelve fecha ${s.disponibleJornada}` : ""}
+                        </span>
                       ) : (
                         <span className="inline-block border border-green-600/50 text-green-500 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded">Habilitado</span>
                       )}

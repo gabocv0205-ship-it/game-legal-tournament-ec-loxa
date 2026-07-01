@@ -6,6 +6,7 @@ import {
   createGroupSequenceKnockoutFixtures,
   createKnockoutFixtures,
   createMatchdayFixtures,
+  getSuspensionInfoForMatch,
   getStageWinners,
   getSuspendedPlayerIdsForMatch,
   normalizeTournamentConfig,
@@ -142,6 +143,37 @@ describe("motor deportivo", () => {
       { match_id: "m1", player_id: "p1", team_id: "a", event_type: "amarilla" },
     ];
     expect(getSuspendedPlayerIdsForMatch(dobleAmarilla, matches, { reset_yellows_on_knockout: true, double_yellow_suspension_matches: 1 }, matches[1]).has("p1")).toBe(true);
+  });
+
+  it("suspende una sola fecha futura por doble amarilla y habilita despues", () => {
+    const matches = [
+      { id: "m1", status: "finished", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "b", matchday: 1, match_date: "2026-07-01T09:00:00.000Z" },
+      { id: "m2", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "c", matchday: 2, match_date: "2026-07-08T09:00:00.000Z" },
+      { id: "m3", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "d", matchday: 3, match_date: "2026-07-15T09:00:00.000Z" },
+    ];
+    const events = [
+      { match_id: "m1", player_id: "calva", team_id: "a", event_type: "amarilla" },
+      { match_id: "m1", player_id: "calva", team_id: "a", event_type: "amarilla" },
+    ];
+    const fecha2 = getSuspensionInfoForMatch(events, matches, { double_yellow_suspension_matches: 1 }, matches[1]);
+    const fecha3 = getSuspensionInfoForMatch(events, matches, { double_yellow_suspension_matches: 1 }, matches[2]);
+    expect(fecha2.get("calva")?.reason).toContain("Doble amarilla");
+    expect(fecha2.get("calva")?.availableMatchday).toBe(3);
+    expect(fecha3.has("calva")).toBe(false);
+  });
+
+  it("suspende dos fechas futuras por roja directa y habilita en la cuarta", () => {
+    const matches = [
+      { id: "m1", status: "finished", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "b", matchday: 1, match_date: "2026-07-01T09:00:00.000Z" },
+      { id: "m2", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "c", matchday: 2, match_date: "2026-07-08T09:00:00.000Z" },
+      { id: "m3", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "d", matchday: 3, match_date: "2026-07-15T09:00:00.000Z" },
+      { id: "m4", status: "scheduled", stage: "Fase de Grupos", home_team_id: "a", away_team_id: "e", matchday: 4, match_date: "2026-07-22T09:00:00.000Z" },
+    ];
+    const events = [{ match_id: "m1", player_id: "calva", team_id: "a", event_type: "roja" }];
+    const config = { red_suspension_matches: 2 };
+    expect(getSuspensionInfoForMatch(events, matches, config, matches[1]).get("calva")?.reason).toContain("Roja directa");
+    expect(getSuspendedPlayerIdsForMatch(events, matches, config, matches[2]).has("calva")).toBe(true);
+    expect(getSuspendedPlayerIdsForMatch(events, matches, config, matches[3]).has("calva")).toBe(false);
   });
 
   it("avanza al ganador de una llave empatada resuelta por penales", () => {

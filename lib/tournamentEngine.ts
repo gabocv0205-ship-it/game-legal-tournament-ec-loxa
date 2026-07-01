@@ -87,7 +87,19 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
   };
 }
 
-export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], config: Partial<TournamentConfig>, targetMatch: any) {
+export type SuspensionInfo = {
+  playerId: string;
+  teamId: string;
+  reason: string;
+  sourceMatchId: string;
+  sourceMatchday: number | null;
+  untilMatchday: number | null;
+  availableMatchday: number | null;
+  suspensionMatches: number;
+  remainingMatches: number;
+};
+
+export function getSuspensionInfoForMatch(events: any[], matches: any[], config: Partial<TournamentConfig>, targetMatch: any) {
   const rules = normalizeTournamentConfig(config);
   const matchById = Object.fromEntries(matches.map((match) => [match.id, match]));
   const matchOrder = (match: any) => {
@@ -96,44 +108,90 @@ export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], con
   };
   const targetOrder = matchOrder(targetMatch);
   const yellowCount: Record<string, number> = {};
-  const suspended = new Set<string>();
+  const suspended = new Map<string, SuspensionInfo>();
   const targetIsKnockout = baseStage(targetMatch?.stage) !== "Fase de Grupos";
-  const yellowEventsByMatchPlayer: Record<string, number> = {};
+  const incidents = new Map<string, {
+    matchId: string;
+    playerId: string;
+    teamId: string;
+    amarillas: number;
+    rojas: number;
+  }>();
 
   events.forEach((event) => {
-    if (event.event_type === "amarilla" && event.match_id && event.player_id) {
-      const key = `${event.match_id}:${event.player_id}`;
-      yellowEventsByMatchPlayer[key] = (yellowEventsByMatchPlayer[key] || 0) + 1;
-    }
+    if (!event?.match_id || !event?.player_id || !event?.team_id) return;
+    if (event.event_type !== "amarilla" && event.event_type !== "roja") return;
+    const match = matchById[event.match_id];
+    if (match?.status !== "finished" || matchOrder(match) >= targetOrder) return;
+    const key = `${event.match_id}:${event.player_id}:${event.team_id}`;
+    const incident = incidents.get(key) || {
+      matchId: event.match_id,
+      playerId: event.player_id,
+      teamId: event.team_id,
+      amarillas: 0,
+      rojas: 0,
+    };
+    if (event.event_type === "amarilla") incident.amarillas += 1;
+    if (event.event_type === "roja") incident.rojas += 1;
+    incidents.set(key, incident);
   });
 
-  [...events]
-    .filter((event) => event.player_id && event.team_id && matchById[event.match_id]?.status === "finished" && matchOrder(matchById[event.match_id]) < targetOrder)
-    .sort((a, b) => matchOrder(matchById[a.match_id]) - matchOrder(matchById[b.match_id]))
-    .forEach((event) => {
+  [...incidents.values()]
+    .sort((a, b) => matchOrder(matchById[a.matchId]) - matchOrder(matchById[b.matchId]))
+    .forEach((incident) => {
+      const sourceMatch = matchById[incident.matchId];
+      const sourceMatchday = sourceMatch?.matchday ? Number(sourceMatch.matchday) : null;
       let suspensionMatches = 0;
-      if (event.event_type === "roja") {
-        suspensionMatches = rules.red_suspension_matches;
-      } else if (event.event_type === "amarilla") {
-        if (yellowEventsByMatchPlayer[`${event.match_id}:${event.player_id}`] >= 2) {
-          suspensionMatches = Math.max(suspensionMatches, rules.double_yellow_suspension_matches);
+      let reason = "";
+
+      if (incident.rojas > 0) {
+        suspensionMatches = Math.max(1, rules.red_suspension_matches) * incident.rojas;
+        reason = `Roja directa en fecha ${sourceMatchday || sourceMatch?.stage || "anterior"}`;
+      } else if (incident.amarillas >= 2) {
+        suspensionMatches = Math.max(1, rules.double_yellow_suspension_matches);
+        reason = `Doble amarilla en fecha ${sourceMatchday || sourceMatch?.stage || "anterior"}`;
+      } else if (incident.amarillas === 1) {
+        if (rules.reset_yellows_on_knockout && targetIsKnockout && baseStage(sourceMatch?.stage) === "Fase de Grupos") {
+          return;
         }
-        if (rules.reset_yellows_on_knockout && targetIsKnockout && baseStage(matchById[event.match_id]?.stage) === "Fase de Grupos") {
-          if (!suspensionMatches) return;
+        yellowCount[incident.playerId] = (yellowCount[incident.playerId] || 0) + 1;
+        if (yellowCount[incident.playerId] % rules.yellow_cards_for_suspension === 0) {
+          suspensionMatches = Math.max(1, rules.yellow_suspension_matches);
+          reason = `Acumulacion de ${rules.yellow_cards_for_suspension} amarilla(s)`;
         }
-        yellowCount[event.player_id] = (yellowCount[event.player_id] || 0) + 1;
-        if (yellowCount[event.player_id] % rules.yellow_cards_for_suspension === 0) suspensionMatches = rules.yellow_suspension_matches;
       }
+
       if (!suspensionMatches) return;
-      const eventOrder = matchOrder(matchById[event.match_id]);
+      const eventOrder = matchOrder(sourceMatch);
       const nextTeamMatches = matches
-        .filter((match) => matchOrder(match) > eventOrder && (match.home_team_id === event.team_id || match.away_team_id === event.team_id))
-        .sort((a, b) => matchOrder(a) - matchOrder(b))
-        .slice(0, suspensionMatches);
-      if (nextTeamMatches.some((match) => match.id === targetMatch.id)) suspended.add(event.player_id);
+        .filter((match) => matchOrder(match) > eventOrder && (match.home_team_id === incident.teamId || match.away_team_id === incident.teamId))
+        .sort((a, b) => matchOrder(a) - matchOrder(b));
+      const suspensionWindow = nextTeamMatches.slice(0, suspensionMatches);
+      const targetIndex = suspensionWindow.findIndex((match) => match.id === targetMatch.id);
+      if (targetIndex < 0) return;
+
+      const availableMatch = nextTeamMatches[suspensionMatches] || null;
+      const untilMatch = suspensionWindow[suspensionWindow.length - 1] || null;
+      const current = suspended.get(incident.playerId);
+      const info: SuspensionInfo = {
+        playerId: incident.playerId,
+        teamId: incident.teamId,
+        reason,
+        sourceMatchId: incident.matchId,
+        sourceMatchday,
+        untilMatchday: untilMatch?.matchday ? Number(untilMatch.matchday) : null,
+        availableMatchday: availableMatch?.matchday ? Number(availableMatch.matchday) : null,
+        suspensionMatches,
+        remainingMatches: suspensionMatches - targetIndex,
+      };
+      if (!current || info.remainingMatches > current.remainingMatches) suspended.set(incident.playerId, info);
     });
 
   return suspended;
+}
+
+export function getSuspendedPlayerIdsForMatch(events: any[], matches: any[], config: Partial<TournamentConfig>, targetMatch: any) {
+  return new Set(getSuspensionInfoForMatch(events, matches, config, targetMatch).keys());
 }
 
 export function sortStandings(a: any, b: any) {

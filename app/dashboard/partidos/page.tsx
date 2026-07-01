@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
-import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspendedPlayerIdsForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspensionInfoForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -723,11 +723,23 @@ export default function PartidosPage() {
     const { data: cardEvents } = idsPartidos.length
       ? await supabase.from("match_events").select("match_id, player_id, team_id, event_type").in("match_id", idsPartidos).in("event_type", ["amarilla", "roja"])
       : { data: [] as any[] };
-    const suspendidos = getSuspendedPlayerIdsForMatch(cardEvents || [], partidos, configuracion, partido);
+    const suspensionInfo = getSuspensionInfoForMatch(cardEvents || [], partidos, configuracion, partido);
+    const suspendidos = new Set(suspensionInfo.keys());
     const bloqueadoManual = (player: any) => ["suspended", "expelled", "ineligible"].includes(String(player.eligibility_status || "active"));
+    const completarSuspension = (player: any) => {
+      const info = suspensionInfo.get(player.id);
+      if (!info) return player;
+      return {
+        ...player,
+        suspension_reason: info.reason,
+        suspension_until_matchday: info.untilMatchday,
+        suspension_available_matchday: info.availableMatchday,
+        suspension_remaining_matches: info.remainingMatches,
+      };
+    };
     return {
       habilitados: (playersData || []).filter(player => !suspendidos.has(player.id) && !bloqueadoManual(player)),
-      suspendidos: (playersData || []).filter(player => suspendidos.has(player.id) || bloqueadoManual(player)),
+      suspendidos: (playersData || []).filter(player => suspendidos.has(player.id) || bloqueadoManual(player)).map(completarSuspension),
     };
   };
 
@@ -822,21 +834,32 @@ export default function PartidosPage() {
     e.preventDefault();
     if (!eventoJugador) return;
     const jugadorSel = jugadores.find(j => j.id === eventoJugador);
-    
-    const eventoData = { match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: eventoMinuto ? parseInt(eventoMinuto) : null };
+    if (!jugadorSel) return;
+    const minuto = eventoMinuto ? parseInt(eventoMinuto) : null;
+    const eventosData = eventoTipo === "doble_amarilla"
+      ? [
+        { match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: "amarilla", minute: minuto },
+        { match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: "amarilla", minute: minuto },
+      ]
+      : [{ match_id: partidoActivo.id, player_id: jugadorSel.id, team_id: jugadorSel.team_id, event_type: eventoTipo, minute: minuto }];
 
     if (isOffline) {
-      await offlineStore.guardarEventoOffline(eventoData);
-      setEventos(prev => [{
-        ...eventoData,
-        id: 'offline-' + Date.now(),
-        players: { full_name: jugadorSel.full_name },
-        teams: { name: jugadorSel.teams?.name || 'Local' },
-        created_at: new Date().toISOString()
-      }, ...prev]);
+      for (const eventoData of eventosData) await offlineStore.guardarEventoOffline(eventoData);
+      const marcaTiempo = Date.now();
+      setEventos(prev => [
+        ...eventosData.map((eventoData, index) => ({
+          ...eventoData,
+          id: `offline-${marcaTiempo}-${index}`,
+          players: { full_name: jugadorSel.full_name },
+          teams: { name: jugadorSel.teams?.name || "Local" },
+          created_at: new Date().toISOString()
+        })),
+        ...prev
+      ]);
       alert("[MODO OFFLINE] Evento guardado en la memoria de su dispositivo.");
     } else {
-      await supabase.from("match_events").insert([eventoData]);
+      const { error } = await supabase.from("match_events").insert(eventosData);
+      if (error) return alert("No se pudo registrar el evento: " + error.message);
       cargarEventos(partidoActivo.id);
     }
     setEventoJugador(""); setEventoMinuto(""); setEventoTipo("gol"); 
@@ -1167,13 +1190,17 @@ export default function PartidosPage() {
         `Regla de sustituciones: ${reglaCambios}`,
         `Regla disciplinaria: ${configuracion.yellow_cards_for_suspension} amarilla(s) generan suspension; roja directa suspende ${configuracion.red_suspension_matches} partido(s).`,
         ...[partido.home, partido.away].filter(team => team && team.competition_status && team.competition_status !== "active").map(team => `Alerta de equipo: ${team.name} figura como ${team.competition_status}. Motivo: ${team.competition_status_reason || "sin observacion"}`),
-        ...suspendidos.map(player => `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""}${player.eligibility_reason ? ` - Motivo: ${player.eligibility_reason}` : ""}`),
+        ...suspendidos.map(player => {
+          const motivo = player.suspension_reason || player.eligibility_reason || "restriccion vigente";
+          const retorno = player.suspension_available_matchday ? ` - Disponible desde fecha ${player.suspension_available_matchday}` : "";
+          return `Jugador suspendido/no habilitado: ${player.full_name}${player.cedula ? ` - ID ${player.cedula}` : ""} - Motivo: ${motivo}${retorno}`;
+        }),
       ];
     };
     const crearEquipo = (teamId: string, teamName: string, etiqueta: "local" | "visitante", rival: string) => {
       const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
       const suspendidosTexto = suspendidosEquipo.length
-        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
+        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}${player.suspension_reason ? ` - ${player.suspension_reason}` : ""}${player.suspension_available_matchday ? ` - vuelve fecha ${player.suspension_available_matchday}` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
       const pendientesFinancieros = crearPendientesFinancieros(teamId);
       return `<section class="team-half"><div class="half-brand"><strong>${escapeHtml(torneoNombre)}</strong><span>${escapeHtml(configuracion.tournament_year)}</span></div><div class="team-head"><div><span>Equipo</span><h2>${escapeHtml(teamName)}</h2></div><div class="team-meta">Titulares ${configuracion.football_modality} / Suplentes ${configuracion.substitutes_count} / Cupo ${cupoPartido}</div></div>
@@ -1185,7 +1212,7 @@ export default function PartidosPage() {
     const crearMediaPlanilla = (teamId: string, teamName: string, etiqueta: "local" | "visitante", rival: string) => {
       const suspendidosEquipo = suspendidos.filter(player => player.team_id === teamId);
       const suspendidosTexto = suspendidosEquipo.length
-        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}`)).join(", ")
+        ? suspendidosEquipo.map(player => escapeHtml(`${player.full_name}${player.cedula ? ` (${player.cedula})` : ""}${player.suspension_reason ? ` - ${player.suspension_reason}` : ""}${player.suspension_available_matchday ? ` - vuelve fecha ${player.suspension_available_matchday}` : ""}`)).join(", ")
         : esEstandar ? "________________________________________________" : "Ninguno";
       const pendientesFinancieros = crearPendientesFinancieros(teamId);
       const equipoTitulo = etiqueta === "local" ? "Equipo local" : "Equipo visitante";
@@ -1430,7 +1457,7 @@ export default function PartidosPage() {
                     <optgroup label={partidoActivo.away?.name}>{jugadoresVisitante.map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}</optgroup>
                 </select>
                 <div className="grid grid-cols-2 gap-3">
-                  <select value={eventoTipo} onChange={e => setEventoTipo(e.target.value)} className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded"><option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option></select>
+                  <select value={eventoTipo} onChange={e => setEventoTipo(e.target.value)} className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded"><option value="gol">Gol</option><option value="amarilla">Amarilla</option><option value="doble_amarilla">Doble amarilla</option><option value="roja">Roja directa</option><option value="mvp">MVP</option></select>
                   <input type="number" value={eventoMinuto} onChange={e => setEventoMinuto(e.target.value)} placeholder="Min" className="w-full p-2 mt-1 bg-[#1c1c1c] border border-[#2e2e2e] text-white rounded" />
                 </div>
                 <button type="submit" className="w-full py-2 bg-[#1c1c1c] text-white font-bold uppercase rounded border border-[#2e2e2e] hover:border-[#D4A017] hover:text-[#D4A017] transition-all">Guardar Evento</button>
@@ -1447,7 +1474,7 @@ export default function PartidosPage() {
                   {editandoEventoId === ev.id ? (
                       <div className="flex items-center gap-4 w-full">
                         <select id={`edit-t-${ev.id}`} defaultValue={ev.event_type} className="bg-black p-2 text-white rounded border border-[#2e2e2e]">
-                          <option value="gol">⚽ Gol</option><option value="amarilla">🟨 Amarilla</option><option value="roja">🟥 Roja</option><option value="mvp">🌟 MVP</option>
+                          <option value="gol">Gol</option><option value="amarilla">Amarilla</option><option value="roja">Roja directa</option><option value="mvp">MVP</option>
                         </select>
                         <input id={`edit-m-${ev.id}`} type="number" defaultValue={ev.minute || ""} placeholder="Minuto" className="bg-black p-2 text-white w-20 rounded border border-[#2e2e2e]" />
                         <div className="flex gap-2 ml-auto">
