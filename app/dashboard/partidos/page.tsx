@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import html2canvas from "html2canvas";
@@ -1255,17 +1255,29 @@ export default function PartidosPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
-  const partidosFiltrados = filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos;
-  const partidosPoster = [...partidosFiltrados].sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
-  const claveDiaPoster = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
-  const partidosPorDiaPoster = partidosPoster.reduce<Record<string, any[]>>((acc, partido) => {
-    const key = claveDiaPoster(partido.match_date);
+  const partidosFiltrados = useMemo(
+    () => (filtroJornada ? partidos.filter(p => p.matchday === filtroJornada) : partidos),
+    [partidos, filtroJornada]
+  );
+  const partidosPoster = useMemo(
+    () => [...partidosFiltrados].sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime()),
+    [partidosFiltrados]
+  );
+  const formatoDiaPoster = useMemo(
+    () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil", year: "numeric", month: "2-digit", day: "2-digit" }),
+    []
+  );
+  const partidosPorDiaPoster = useMemo(() => partidosPoster.reduce<Record<string, any[]>>((acc, partido) => {
+    const key = formatoDiaPoster.format(new Date(partido.match_date));
     (acc[key] ||= []).push(partido);
     return acc;
-  }, {});
-  const diasPoster = Object.keys(partidosPorDiaPoster).sort();
-  const tituloPosterJornada = filtroJornada ? `FECHA ${filtroJornada}` : "JORNADA OFICIAL";
-  const fechasPosterTexto = diasPoster.map(dia => new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })).join(" / ");
+  }, {}), [partidosPoster, formatoDiaPoster]);
+  const diasPoster = useMemo(() => Object.keys(partidosPorDiaPoster).sort(), [partidosPorDiaPoster]);
+  const tituloPosterJornada = useMemo(() => (filtroJornada ? `FECHA ${filtroJornada}` : "JORNADA OFICIAL"), [filtroJornada]);
+  const fechasPosterTexto = useMemo(
+    () => diasPoster.map(dia => new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })).join(" / "),
+    [diasPoster]
+  );
   const gruposManual = Array.from(new Set(equipos.map(equipo => equipo.group_name || "General"))).sort();
   const equiposManual = faseBase(faseManual) === "Fase de Grupos" && grupoManual !== "Todos"
     ? equipos.filter(equipo => (equipo.group_name || "General") === grupoManual)
@@ -1779,11 +1791,11 @@ export default function PartidosPage() {
                   </div>
                 )}
                 
-                <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#0f0f0f] p-3 md:text-right">
-                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#F5C842] drop-shadow-sm">Equipo local</p>
+                <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#141414] p-3 md:text-right">
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017] drop-shadow-sm">Equipo local</p>
                   <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" })} • {p.court || "Cancha 1"}</p>
                   {p.notes && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#D4A017]">Obs: {p.notes}</p>}
-                  <p className="mt-1 break-words text-base font-black uppercase leading-tight text-white md:text-lg">{p.home?.name}</p>
+                  <p className="mt-1 break-words text-base font-black uppercase leading-tight text-[var(--admin-text)] md:text-lg">{p.home?.name}</p>
                 </div>
                 <div className="relative z-20 flex flex-row items-center justify-center gap-3 md:flex-col md:gap-2">
                   <span className="rounded-full border border-[#D4A017]/40 bg-[#0a0a0a] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#D4A017]">{new Date(p.match_date).toLocaleTimeString('es-EC', { hour: '2-digit', minute:'2-digit' })}</span>
@@ -1792,9 +1804,9 @@ export default function PartidosPage() {
                   </div>
                   <span className="max-w-[120px] truncate text-[10px] font-bold uppercase text-gray-500">{p.court || "Cancha 1"}</span>
                 </div>
-                <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#0f0f0f] p-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#F5C842] drop-shadow-sm">Equipo visitante</p>
-                  <p className="mt-1 break-words text-base font-black uppercase leading-tight text-white md:text-lg">{p.away?.name}</p>
+                <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#141414] p-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017] drop-shadow-sm">Equipo visitante</p>
+                  <p className="mt-1 break-words text-base font-black uppercase leading-tight text-[var(--admin-text)] md:text-lg">{p.away?.name}</p>
                 </div>
                 <div className="relative z-20 grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-wrap md:justify-end">
                   

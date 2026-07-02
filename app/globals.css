@@ -163,6 +163,7 @@ textarea:focus {
 }
 
 .admin-premium-shell [class*="bg-[#141414]"],
+.admin-premium-shell [class*="bg-[#0f0f0f]"],
 .admin-premium-shell [class*="bg-[#0a0a0a]"],
 .admin-premium-shell [class*="bg-[#1C1C1C]"],
 .admin-premium-shell [class*="bg-[#1c1c1c]"],
