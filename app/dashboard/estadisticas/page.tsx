@@ -389,7 +389,7 @@ export default function EstadisticasPage() {
               </div>
               {(goleadores.length ? goleadores : [{ id: "empty", name: "Sin goles registrados", team: "Esperando resultados", goles: 0 }]).slice(0, 10).map((g, index) => (
                 <div key={g.id} className={`grid grid-cols-[72px_1fr_260px_120px] items-center gap-4 border-b border-[#d9e4d9] px-6 py-5 last:border-0 ${index === 0 ? "bg-[#fff8df]" : index % 2 ? "bg-[#f8fbf7]" : "bg-white"}`}>
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-full text-xl font-black ${index === 0 ? "bg-[#C99A1A] text-black" : "bg-[#12311f] text-white"}`}>{index + 1}</div>
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-xl font-black shadow-[0_8px_18px_rgba(15,23,42,.18)] ${index === 0 ? "border-[#7A5808] bg-[#C99A1A] text-[#08120B]" : "border-[#C99A1A] bg-white text-[#102016]"}`}>{index + 1}</div>
                   <p className="break-words text-[28px] font-black uppercase leading-tight text-[#102016]">{g.name}</p>
                   <p className="break-words text-[20px] font-black uppercase leading-tight text-[#0b5b37]">{g.team}</p>
                   <p className="text-right text-5xl font-black text-[#102016]">{g.goles}</p>

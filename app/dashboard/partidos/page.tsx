@@ -1780,7 +1780,7 @@ export default function PartidosPage() {
                 )}
                 
                 <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#0f0f0f] p-3 md:text-right">
-                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Equipo local</p>
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#F5C842] drop-shadow-sm">Equipo local</p>
                   <p className="text-[10px] text-gray-500 font-normal uppercase">Fecha {p.matchday} • {new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" })} • {p.court || "Cancha 1"}</p>
                   {p.notes && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#D4A017]">Obs: {p.notes}</p>}
                   <p className="mt-1 break-words text-base font-black uppercase leading-tight text-white md:text-lg">{p.home?.name}</p>
@@ -1793,7 +1793,7 @@ export default function PartidosPage() {
                   <span className="max-w-[120px] truncate text-[10px] font-bold uppercase text-gray-500">{p.court || "Cancha 1"}</span>
                 </div>
                 <div className="relative z-20 min-w-0 rounded-xl border border-[#2E2E2E] bg-[#0f0f0f] p-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Equipo visitante</p>
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#F5C842] drop-shadow-sm">Equipo visitante</p>
                   <p className="mt-1 break-words text-base font-black uppercase leading-tight text-white md:text-lg">{p.away?.name}</p>
                 </div>
                 <div className="relative z-20 grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-wrap md:justify-end">
@@ -1896,10 +1896,6 @@ export default function PartidosPage() {
         >
           <div className="absolute inset-8 rounded-[32px] border-4 border-white/85" />
           <div className="absolute inset-12 rounded-[24px] border border-[#D4A017]/55" />
-          <div className="absolute right-10 top-10 rounded-2xl border border-white/20 bg-black/25 px-5 py-3 text-right">
-            <p className="text-[12px] font-black uppercase text-[#D4A017]">Game Legal Tournament</p>
-            <p className="text-xl font-black uppercase">{configuracion.tournament_year}</p>
-          </div>
           <div className="relative z-10 flex items-start justify-between gap-8">
             <div className="max-w-[760px]">
               <p className="mb-4 inline-block rounded-full border border-[#D4A017]/60 bg-[#D4A017]/15 px-5 py-2 text-[13px] font-black uppercase text-[#D4A017]">Cronograma oficial</p>
@@ -1931,10 +1927,10 @@ export default function PartidosPage() {
                       <div className="min-w-0 text-right">
                         <p className="break-words text-[24px] font-black uppercase leading-tight">{p.home?.name || "Local"}</p>
                       </div>
-                      <div className="relative mx-auto flex h-20 w-32 flex-col items-center justify-center rounded-2xl border border-white/20 bg-[#06183a] px-2 shadow-[inset_0_0_18px_rgba(255,255,255,.08),0_10px_24px_rgba(0,0,0,.25)]">
-                        <span className="relative z-10 text-[9px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Hora</span>
-                        <span className="relative z-10 mt-1 rounded-lg bg-white px-2.5 py-1 text-2xl font-black leading-none text-[#06183a] shadow-sm">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
-                        <span className="relative z-10 mt-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-white">VS</span>
+                      <div className="relative mx-auto flex h-20 w-32 flex-col items-center justify-center rounded-2xl border border-white/20 bg-[#06183a] px-2 text-center shadow-[inset_0_0_18px_rgba(255,255,255,.08),0_10px_24px_rgba(0,0,0,.25)]">
+                        <span className="relative z-10 text-[8px] font-black uppercase tracking-[0.22em] text-[#D4A017]">Hora</span>
+                        <span className="relative z-10 mt-1 flex min-w-[92px] items-center justify-center rounded-lg bg-white px-2 py-1 text-xl font-black leading-none text-[#06183a] shadow-sm">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="relative z-10 mt-1.5 text-[9px] font-black uppercase tracking-[0.25em] text-white">VS</span>
                       </div>
                       <div className="min-w-0">
                         <p className="break-words text-[24px] font-black uppercase leading-tight">{p.away?.name || "Visitante"}</p>
@@ -1957,7 +1953,7 @@ export default function PartidosPage() {
               <p className="mt-2 text-xl font-black uppercase tracking-[0.2em] text-[#D4A017]">{sedePrincipalProgramacion()}</p>
             </div>
             <div className="rounded-2xl border border-white/15 bg-black/30 px-5 py-4 text-right">
-              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Organizacion</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Promocion oficial</p>
               <p className="text-2xl font-black uppercase">Game-Legal Pro</p>
             </div>
           </div>
