@@ -1784,7 +1784,7 @@ export default function PartidosPage() {
             <p className="text-gray-500 text-center py-8">No hay partidos para la fecha seleccionada.</p>
           ) : (
             partidosFiltrados.map(p => (
-              <div key={p.id} className="grid grid-cols-1 gap-4 rounded-2xl border border-[#2E2E2E] bg-[#141414] p-4 transition-all hover:border-[#D4A017] md:grid-cols-[minmax(0,1fr)_124px_minmax(0,1fr)_minmax(180px,auto)] md:items-center relative overflow-hidden">
+              <div key={p.id} className="premium-motion-card grid grid-cols-1 gap-4 rounded-2xl border border-[#2E2E2E] bg-[#141414] p-4 transition-all hover:border-[#D4A017] md:grid-cols-[minmax(0,1fr)_124px_minmax(0,1fr)_minmax(180px,auto)] md:items-center relative overflow-hidden">
                 {p.stage !== 'Fase de Grupos' && (
                   <div className="absolute top-0 left-0 bg-[#D4A017] text-black text-[9px] font-black uppercase px-3 py-1 rounded-br-lg shadow-lg z-10">
                     {p.stage}

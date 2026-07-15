@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { useTournamentData } from "./useTournamentData";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -175,7 +176,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="admin-premium-shell flex h-screen w-full overflow-hidden font-sans">
       
-      <aside className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-56 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}>
+      <motion.aside
+        initial={{ opacity: 0, x: -18 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.24, ease: "easeOut" }}
+        className={`admin-premium-sidebar fixed inset-y-0 left-0 z-50 w-56 text-white flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} border-r border-[#D4A017]/15`}
+      >
         <div className="p-3 border-b border-[#D4A017]/15 flex items-center gap-2.5 relative overflow-hidden">
           {perfilUsuario?.role === 'superadmin' && <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4A017]/20 blur-xl"></div>}
           
@@ -214,7 +220,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {MENU.filter(item => perfilUsuario?.role === "superadmin" || !["/dashboard/roles", "/dashboard/auditoria"].includes(item.href)).map(item => (
             <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
               className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-black tracking-wide transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_24px_rgba(212,160,23,0.28)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
-              <Icon path={item.icon} size={15} /> <span className="truncate">{item.label}</span>
+              <motion.span whileHover={{ x: 2 }} whileTap={{ scale: 0.98 }} className="flex w-full items-center gap-2">
+                <Icon path={item.icon} size={15} /> <span className="truncate">{item.label}</span>
+              </motion.span>
             </Link>
           ))}
           
@@ -251,9 +259,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Icon path={Icons.logout} size={16}/> Cerrar sesión
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
-      {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/80 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-40 bg-black/80 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       <main className="admin-premium-content flex-1 flex flex-col h-screen overflow-y-auto relative z-10 text-white">
         
@@ -282,16 +301,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-3">
-            <button
+            <motion.button
               type="button"
               onClick={cambiarTemaAdmin}
               className="admin-theme-toggle"
               aria-label="Cambiar entre modo dia y noche"
               title="Cambiar modo visual"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.96 }}
             >
               <Icon path={adminTheme === "dark" ? Icons.sun : Icons.moon} size={16} />
               <span className="hidden md:inline">{adminTheme === "dark" ? "Modo dia" : "Modo noche"}</span>
-            </button>
+            </motion.button>
             <div className="text-right hidden sm:block">
               <p className="text-xs font-black text-white uppercase">{perfilUsuario?.full_name || 'Organizador'}</p>
               <p className="text-[10px] text-green-500 tracking-widest uppercase font-bold">● Conectado</p>
@@ -301,7 +322,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </header>
-        <div className="flex-1 p-4 md:p-8 relative">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="flex-1 p-4 md:p-8 relative"
+          >
           
           {perfilUsuario?.role === 'superadmin' && (
             <div className="absolute top-4 right-8 pointer-events-none opacity-10">
@@ -309,8 +338,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           )}
 
-          {children}
-        </div>
+            {children}
+          </motion.div>
+        </AnimatePresence>
       </main>
     </div>
   );

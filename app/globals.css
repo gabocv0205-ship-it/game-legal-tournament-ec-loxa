@@ -6,6 +6,9 @@
 body {
   background-color: #0a0a0a;
   color: #ffffff;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 input[type="date"],
@@ -81,6 +84,7 @@ textarea:focus {
     radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--admin-green) 18%, transparent), transparent 30%),
     linear-gradient(135deg, var(--admin-bg) 0%, var(--admin-bg-2) 46%, var(--admin-bg) 100%);
   color: var(--admin-text);
+  transition: background 220ms ease, color 220ms ease;
 }
 
 .admin-premium-shell::before {
@@ -119,6 +123,45 @@ textarea:focus {
   border: 1px solid var(--admin-strong-border);
   background: linear-gradient(145deg, var(--admin-surface), var(--admin-surface-2));
   box-shadow: var(--admin-shadow);
+}
+
+.premium-motion-card {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+.admin-premium-shell .premium-motion-card,
+.premium-public-shell .premium-motion-card {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.admin-premium-shell .premium-motion-card:hover {
+  border-color: color-mix(in srgb, var(--admin-gold) 58%, var(--admin-border));
+  box-shadow: 0 22px 55px color-mix(in srgb, var(--admin-green) 12%, transparent), var(--admin-shadow);
+}
+
+.admin-premium-shell ::selection,
+.premium-public-shell ::selection {
+  background: color-mix(in srgb, var(--admin-gold, var(--premium-green)) 34%, transparent);
+}
+
+.admin-premium-shell ::-webkit-scrollbar,
+.premium-public-shell ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.admin-premium-shell ::-webkit-scrollbar-thumb,
+.premium-public-shell ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--admin-gold, var(--premium-green)) 38%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.admin-premium-shell ::-webkit-scrollbar-track,
+.premium-public-shell ::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .admin-theme-toggle {
@@ -944,6 +987,14 @@ textarea:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
   .sponsor-track {
     animation: none;
   }

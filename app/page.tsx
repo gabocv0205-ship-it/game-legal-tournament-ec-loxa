@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export default function PortalPrincipal() {
   const router = useRouter();
@@ -185,7 +186,7 @@ export default function PortalPrincipal() {
       <section className="hero">
         <div className="hero-bg"></div>
         <div className="hero-shell">
-          <div className="hero-copy reveal">
+          <motion.div className="hero-copy reveal" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38, ease: "easeOut" }}>
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>
               <span style={{ display:'inline-block', width:'8px',height:'8px',background:'var(--green-light)',borderRadius:'50%',marginRight:'8px', animation: 'pulse 2s infinite'}}></span>
               {torneoDestacado?.name || 'EDICIÓN PRO 2026'}
@@ -209,8 +210,8 @@ export default function PortalPrincipal() {
                 </button>
               )}
             </div>
-          </div>
-          <aside className="hero-panel reveal" style={{ transitionDelay: '0.12s' }}>
+          </motion.div>
+          <motion.aside className="hero-panel reveal premium-motion-card" style={{ transitionDelay: '0.12s' }} initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.42, ease: "easeOut", delay: 0.08 }}>
             <div className="section-label">Centro publico</div>
             <h2 style={{ fontSize: 'clamp(24px, 4vw, 42px)', lineHeight: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Gestion deportiva en vivo</h2>
             <p style={{ color: 'var(--gray)', lineHeight: 1.7, fontSize: 14 }}>Consulta torneos, posiciones, goleadores, partidos y comunicados desde una experiencia limpia y preparada para cualquier pantalla.</p>
@@ -220,7 +221,7 @@ export default function PortalPrincipal() {
               <div className="hero-mini-card"><strong>24/7</strong><span>Consulta en linea</span></div>
               <div className="hero-mini-card"><strong>GL</strong><span>Identidad oficial</span></div>
             </div>
-          </aside>
+          </motion.aside>
         </div>
       </section>
 
@@ -240,9 +241,9 @@ export default function PortalPrincipal() {
                  {torneosActivos.length === 0 ? (
                    <p style={{ color: 'var(--gray)', padding: '20px' }}>Aún no hay torneos registrados en el sistema.</p>
                  ) : (
-                   torneosActivos.map((torneo) => (
+                   torneosActivos.map((torneo, index) => (
                      <Link href={`/torneo/${torneo.slug}`} key={torneo.id} style={{ textDecoration: 'none' }}>
-                       <div className="tournament-card">
+                       <motion.div className="tournament-card premium-motion-card" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18) }} whileHover={{ y: -5, scale: 1.01 }}>
                          <div>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                              <h3 className="tournament-title"><i className="fa fa-trophy"></i> {torneo.name}</h3>
@@ -253,7 +254,7 @@ export default function PortalPrincipal() {
                          <div style={{ marginTop: '20px', borderTop: '1px solid var(--dark3)', paddingTop: '15px', color: 'var(--gold)', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
                            Ver Estadísticas Completas <i className="fa fa-arrow-right"></i>
                          </div>
-                       </div>
+                       </motion.div>
                      </Link>
                    ))
                  )}
@@ -295,9 +296,10 @@ export default function PortalPrincipal() {
         <p style={{ color: 'var(--gold)' }}> 👑 Game Legal — La casa digital de los campeones.</p>
       </footer>
 
+      <AnimatePresence>
       {showLogin && (
-        <div className="modal-overlay">
-          <div className="modal-content animate-in fade-in zoom-in duration-300">
+        <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+          <motion.div className="modal-content" initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.98 }} transition={{ duration: 0.22, ease: "easeOut" }}>
             <button onClick={() => setShowLogin(false)} className="modal-close">✖</button>
             <h3 style={{ fontSize: '24px', fontWeight: 'black', textTransform: 'uppercase', marginBottom: '5px', color: 'var(--white)' }}>Acceso Pro</h3>
             <p style={{ color: 'var(--gold)', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '25px' }}>Panel de Administración</p>
@@ -335,9 +337,10 @@ export default function PortalPrincipal() {
                 {authLoading ? "Verificando..." : "Ingresar al Panel"}
               </button>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </>
   );
 }

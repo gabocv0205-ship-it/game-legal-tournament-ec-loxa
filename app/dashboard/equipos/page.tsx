@@ -424,7 +424,7 @@ export default function EquiposPage() {
           <div className="col-span-full p-8 text-center text-gray-500 font-bold italic bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl">No hay equipos registrados en este torneo.</div>
         ) : (
           equipos.map(eq => (
-            <div key={eq.id} className="bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-4 flex flex-col gap-3 group transition-all hover:border-[#D4A017]">
+            <div key={eq.id} className="premium-motion-card bg-[#1C1C1C] border border-[#2E2E2E] rounded-xl p-4 flex flex-col gap-3 group transition-all hover:border-[#D4A017]">
               <div className="flex items-center gap-4">
                 {(editandoId === eq.id && previewEscudoEditado) || eq.shield_url ? (
                   <NextImage src={(editandoId === eq.id && previewEscudoEditado) || eq.shield_url} alt={`Escudo de ${eq.name}`} width={48} height={48} unoptimized className="w-12 h-12 object-contain rounded-full bg-white/5" />

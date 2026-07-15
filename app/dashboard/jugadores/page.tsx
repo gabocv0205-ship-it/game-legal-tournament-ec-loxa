@@ -400,7 +400,7 @@ export default function JugadoresPage() {
                   const enEdicion = editandoId === jugador.id;
 
                   return (
-                    <article key={jugador.id} className="rounded-2xl border border-[#2E2E2E] bg-[#111] p-4">
+                    <article key={jugador.id} className="premium-motion-card rounded-2xl border border-[#2E2E2E] bg-[#111] p-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <PlayerAvatar jugador={jugador} preview={previewsFoto[jugador.id]} size={64} />
                         <div className="min-w-0 flex-1">

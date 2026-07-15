@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useTournamentData } from "./useTournamentData";
+import { AnimatedPage, AnimatedStatCard, PremiumCard, PosterPreviewCard } from "@/components/premium-ui";
 
 type Standing = {
   id: string;
@@ -17,29 +18,6 @@ type Standing = {
   gc: number;
   gd: number;
   pts: number;
-};
-
-const Panel = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`admin-premium-card relative overflow-hidden rounded-3xl ${className}`}>
-    <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#D4A017]/10 blur-3xl" />
-    <div className="relative z-10">{children}</div>
-  </div>
-);
-
-const MetricCard = ({ label, value, sub, tone = "gold" }: { label: string; value: React.ReactNode; sub: string; tone?: "gold" | "green" | "red" | "blue" }) => {
-  const colors = {
-    gold: "text-[#D4A017] border-[#D4A017]/35 bg-[#D4A017]/10",
-    green: "text-green-400 border-green-500/35 bg-green-500/10",
-    red: "text-red-400 border-red-500/35 bg-red-500/10",
-    blue: "text-blue-300 border-blue-500/35 bg-blue-500/10",
-  };
-  return (
-    <div className="rounded-2xl border border-[#D4A017]/15 bg-black/35 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <div className={`mb-4 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${colors[tone]}`}>{label}</div>
-      <div className="text-3xl font-black text-white">{value}</div>
-      <p className="mt-2 text-xs font-bold text-gray-500">{sub}</p>
-    </div>
-  );
 };
 
 function buildStandings(teams: any[], matches: any[]): Standing[] {
@@ -131,11 +109,11 @@ export default function DashboardInicio() {
   if (!tournamentId) {
     return (
       <div className="mx-auto max-w-5xl">
-        <Panel className="p-8 md:p-12 text-center">
+        <PremiumCard className="p-8 md:p-12 text-center">
           <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4A017]">Centro de control</p>
           <h1 className="mt-4 text-4xl font-black uppercase tracking-tight text-white md:text-6xl">Selecciona un torneo</h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm font-bold leading-7 text-gray-400">Para ver indicadores deportivos, alertas, calendario y novedades, primero elige el torneo que vas a gestionar desde Mis Torneos.</p>
-        </Panel>
+        </PremiumCard>
       </div>
     );
   }
@@ -144,8 +122,8 @@ export default function DashboardInicio() {
   const activeNews = dashboard.news[newsIndex % Math.max(1, dashboard.news.length)];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <Panel className="p-6 md:p-8">
+    <AnimatedPage className="mx-auto max-w-7xl space-y-6">
+      <PremiumCard className="p-6 md:p-8">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_0.8fr] lg:items-center">
           <div>
             <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -155,7 +133,7 @@ export default function DashboardInicio() {
             <h1 className="break-words text-4xl font-black uppercase leading-none tracking-tight text-white md:text-6xl">{torneoActual?.name || tournamentName || "Torneo Oficial"}</h1>
             <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-gray-400">Vista ejecutiva del torneo: estado deportivo, alertas, proximos encuentros y avance general en un solo lugar.</p>
           </div>
-        <div className="rounded-2xl border border-[#D4A017]/30 bg-black/35 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <PosterPreviewCard>
             <div className="mb-4 h-40 overflow-hidden rounded-xl border border-[#2E2E2E] bg-[#0a0a0a]">
               {tournamentPosterUrl || tournamentBannerUrl ? (
                 <Image src={tournamentPosterUrl || tournamentBannerUrl} alt="Poster del torneo" width={520} height={320} unoptimized className="h-full w-full object-cover" />
@@ -174,20 +152,20 @@ export default function DashboardInicio() {
                 <div className="h-full rounded-full bg-gradient-to-r from-[#D4A017] via-yellow-300 to-green-400 transition-all" style={{ width: `${dashboard.progress}%` }} />
               </div>
             </div>
-          </div>
+          </PosterPreviewCard>
         </div>
-      </Panel>
+      </PremiumCard>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Equipos" value={teams.length} sub="Inscritos" />
-        <MetricCard label="Jugadores" value={players.length} sub="Registrados" tone="blue" />
-        <MetricCard label="Jugados" value={dashboard.finished.length} sub="Partidos finalizados" tone="green" />
-        <MetricCard label="Pendientes" value={dashboard.pending.length} sub={`${dashboard.unscheduled.length} sin programar`} />
-        <MetricCard label="Alertas" value={(stats?.suspended || 0) + (stats?.debts || 0)} sub="Disciplina y finanzas" tone={(stats?.suspended || stats?.debts) ? "red" : "green"} />
+        <AnimatedStatCard label="Equipos" value={teams.length} sub="Inscritos" />
+        <AnimatedStatCard label="Jugadores" value={players.length} sub="Registrados" tone="blue" />
+        <AnimatedStatCard label="Jugados" value={dashboard.finished.length} sub="Partidos finalizados" tone="green" />
+        <AnimatedStatCard label="Pendientes" value={dashboard.pending.length} sub={`${dashboard.unscheduled.length} sin programar`} />
+        <AnimatedStatCard label="Alertas" value={(stats?.suspended || 0) + (stats?.debts || 0)} sub="Disciplina y finanzas" tone={(stats?.suspended || stats?.debts) ? "red" : "green"} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Panel className="p-5 md:p-6">
+        <PremiumCard className="p-5 md:p-6">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Estado del torneo</p>
@@ -206,9 +184,9 @@ export default function DashboardInicio() {
               </div>
             ))}
           </div>
-        </Panel>
+        </PremiumCard>
 
-        <Panel className="p-5 md:p-6">
+        <PremiumCard className="p-5 md:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Novedades automaticas</p>
           <div className="mt-4 rounded-3xl border border-[#D4A017]/30 bg-gradient-to-br from-[#1C1C1C] to-[#0a0a0a] p-6 min-h-36 flex items-center">
             <p className="text-xl font-black leading-8 text-white">{activeNews || "Sin novedades criticas por ahora."}</p>
@@ -217,20 +195,20 @@ export default function DashboardInicio() {
             <AlertList title="Suspendidos" items={disciplinaryAlerts.suspended} empty="Sin suspendidos" />
             <AlertList title="Habilitados" items={disciplinaryAlerts.eligibleAgain} empty="Sin retornos" />
           </div>
-        </Panel>
+        </PremiumCard>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <Panel className="p-5 md:p-6">
+        <PremiumCard className="p-5 md:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Resumen deportivo</p>
           <div className="mt-5 space-y-4">
             <Highlight label="Lider de tabla" value={dashboard.leader?.name || "Sin datos"} detail={dashboard.leader ? `${dashboard.leader.pts} pts · GD ${dashboard.leader.gd}` : "Pendiente"} shield={dashboard.leader?.shield_url} />
             <Highlight label="Mejor defensa" value={dashboard.bestDefense?.name || "Sin datos"} detail={dashboard.bestDefense ? `${dashboard.bestDefense.gc} goles en contra` : "Pendiente"} shield={dashboard.bestDefense?.shield_url} />
             <Highlight label="Goleador" value={dashboard.topScorer?.full_name || "Sin datos"} detail={`${Number(dashboard.topScorer?.goals || dashboard.topScorer?.total_goals || 0)} gol(es)`} shield={dashboard.topScorer?.teams?.shield_url} />
           </div>
-        </Panel>
+        </PremiumCard>
 
-        <Panel className="p-5 md:p-6">
+        <PremiumCard className="p-5 md:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Ultimos resultados</p>
           <div className="mt-5 space-y-3">
             {dashboard.latest.length === 0 ? <p className="text-sm font-bold text-gray-500">Aun no existen resultados finalizados.</p> : dashboard.latest.map(match => (
@@ -240,9 +218,9 @@ export default function DashboardInicio() {
               </div>
             ))}
           </div>
-        </Panel>
+        </PremiumCard>
 
-        <Panel className="p-5 md:p-6">
+        <PremiumCard className="p-5 md:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Timeline</p>
           <div className="mt-5 space-y-4">
             {[
@@ -261,9 +239,9 @@ export default function DashboardInicio() {
               </div>
             ))}
           </div>
-        </Panel>
+        </PremiumCard>
       </div>
-    </div>
+    </AnimatedPage>
   );
 }
 

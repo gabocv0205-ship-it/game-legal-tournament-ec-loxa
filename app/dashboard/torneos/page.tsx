@@ -2,7 +2,9 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
+import { AnimatedPage, LoadingState, PremiumCard } from "@/components/premium-ui";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -179,21 +181,16 @@ export default function GestorTorneos() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 space-y-4">
-        <div className="w-12 h-12 border-4 border-[#D4A017] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-[#D4A017] font-black uppercase tracking-widest text-sm animate-pulse">Sincronizando Gestor SaaS...</p>
-      </div>
-    );
+    return <LoadingState label="Sincronizando Gestor SaaS..." />;
   }
 
   // El límite ahora evalúa solo los torneos que no han sido eliminados lógicamente
   const limiteAlcanzado = perfil?.role !== 'superadmin' && torneos.length >= (perfil?.max_tournaments || 1);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <AnimatedPage className="space-y-8 max-w-7xl mx-auto">
       
-      <div className="admin-premium-card rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <PremiumCard className="p-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4" hover={false}>
         <div>
           <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight">Mis Torneos</h2>
           <p className="text-gray-400 font-bold text-sm mt-1">
@@ -201,15 +198,17 @@ export default function GestorTorneos() {
           </p>
         </div>
         
-        <button 
+        <motion.button
           onClick={() => setMostrarModal(true)}
           disabled={limiteAlcanzado}
           className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest transition-all ${limiteAlcanzado ? 'bg-[#2E2E2E] text-gray-500 cursor-not-allowed' : 'bg-[#D4A017] text-black shadow-[0_0_20px_rgba(212,160,23,0.3)] hover:scale-105 hover:bg-yellow-500'}`}
+          whileHover={!limiteAlcanzado ? { y: -2, scale: 1.02 } : undefined}
+          whileTap={!limiteAlcanzado ? { scale: 0.97 } : undefined}
         >
           <Icon path={Icons.plus} size={18} /> 
           {limiteAlcanzado ? 'Límite Alcanzado' : 'Nuevo Torneo'}
-        </button>
-      </div>
+        </motion.button>
+      </PremiumCard>
 
       {torneos.length === 0 ? (
         <div className="admin-premium-card relative overflow-hidden rounded-3xl border border-dashed border-[#D4A017]/35 px-6 py-16 text-center">
@@ -229,7 +228,7 @@ export default function GestorTorneos() {
             const isActive = !isFinished && !isArchived;
 
             return (
-              <div key={t.id} className="admin-premium-card rounded-3xl p-6 relative overflow-hidden group hover:border-[#D4A017]/60 transition-all duration-300 flex flex-col h-full">
+              <PremiumCard key={t.id} className="p-6 group hover:border-[#D4A017]/60 transition-all duration-300 flex flex-col h-full">
                 <div className="absolute -right-6 -top-6 w-32 h-32 bg-[#D4A017]/10 rounded-full blur-2xl group-hover:bg-[#D4A017]/25 transition-all"></div>
                 
                 {/* Controles de Gestión Rápida Supriores */}
@@ -297,16 +296,17 @@ export default function GestorTorneos() {
                     <Icon path={Icons.eye} size={16} />
                   </button>
                 </div>
-              </div>
+              </PremiumCard>
             );
           })}
         </div>
       )}
 
       {/* MODAL DE CREACIÓN */}
+      <AnimatePresence>
       {mostrarModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="admin-premium-card w-full max-w-md rounded-3xl overflow-hidden">
+        <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+          <motion.div className="admin-premium-card w-full max-w-md rounded-3xl overflow-hidden" initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} transition={{ duration: 0.22, ease: "easeOut" }}>
             <div className="p-6 border-b border-[#2E2E2E] flex justify-between items-center">
               <h3 className="text-xl font-black text-white uppercase tracking-wider">Crear Nuevo Torneo</h3>
               <button onClick={() => setMostrarModal(false)} className="text-gray-500 hover:text-white">✖</button>
@@ -327,10 +327,11 @@ export default function GestorTorneos() {
                 {procesando ? "Configurando Servidor..." : "Generar Torneo"}
               </button>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
-    </div>
+    </AnimatedPage>
   );
 }
