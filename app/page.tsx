@@ -23,12 +23,7 @@ export default function PortalPrincipal() {
     async function inicializarPortal() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setSesionActiva(true);
-          router.replace("/dashboard/torneos");
-          return;
-        }
-        setSesionActiva(false);
+        setSesionActiva(Boolean(session));
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
@@ -50,7 +45,6 @@ export default function PortalPrincipal() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSesionActiva(Boolean(session));
-      if (session) router.replace("/dashboard/torneos");
     });
 
     const dot = document.getElementById('cursorDot');
@@ -130,7 +124,7 @@ export default function PortalPrincipal() {
         .cursor-ring { width: 36px; height: 36px; border: 2px solid rgba(212,160,23,0.5); border-radius: 50%; transition: width 0.3s, height 0.3s; }
         .topbar { background: var(--green); padding: 8px 0; font-size: 13px; font-weight: bold;}
         .topbar-marquee { overflow: hidden; white-space: nowrap; }
-        .topbar-marquee span { display: inline-block; padding-left: 100%; animation: marquee 30s linear infinite; }
+        .topbar-marquee span { display: inline-block; padding-left: 100%; animation: marquee 30s linear infinite !important; animation-play-state: running !important; will-change: transform; }
         @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
         .hero { position: relative; min-height: calc(100vh - 34px); display: flex; align-items: center; padding: clamp(56px, 8vw, 96px) clamp(18px, 5vw, 48px); overflow:hidden;}
         .hero-bg { position: absolute; inset: 0; background: radial-gradient(circle at 75% 28%, rgba(212,160,23,0.16), transparent 28%), radial-gradient(circle at center, rgba(27,107,47,0.22) 0%, var(--black) 78%); z-index: -1; }
@@ -151,7 +145,7 @@ export default function PortalPrincipal() {
         .section-label::before { content: ''; width: 30px; height: 2px; background: var(--gold); }
         .reveal { opacity: 0; transform: translateY(30px); transition: 0.8s ease; }
         .reveal.visible { opacity: 1; transform: translateY(0); }
-        .sponsors-track { display: flex; gap: 40px; animation: marquee 20s linear infinite; padding: 40px 0;}
+        .sponsors-track { display: flex; width: max-content; gap: 40px; animation: marquee 20s linear infinite !important; animation-play-state: running !important; padding: 40px 0; will-change: transform;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
 
         .section-wrap { padding: clamp(56px, 7vw, 88px) 20px; }
@@ -197,7 +191,7 @@ export default function PortalPrincipal() {
       <section className="hero">
         <div className="hero-bg"></div>
         <div className="hero-shell">
-          <div className="hero-copy reveal visible">
+          <div className="hero-copy reveal">
             <div style={{ display: 'inline-block', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '20px' }}>
               <span style={{ display:'inline-block', width:'8px',height:'8px',background:'var(--green-light)',borderRadius:'50%',marginRight:'8px', animation: 'pulse 2s infinite'}}></span>
               {torneoDestacado?.name || 'EDICIÓN PRO 2026'}
@@ -212,7 +206,7 @@ export default function PortalPrincipal() {
             </p>
             <div className="hero-actions">
               {sesionActiva ? (
-                <button onClick={() => router.push("/dashboard")} className="btn-primary">
+                <button onClick={() => router.push("/dashboard/torneos")} className="btn-primary">
                   <i className="fa fa-arrow-right"></i> Volver al Panel
                 </button>
               ) : (
@@ -222,7 +216,7 @@ export default function PortalPrincipal() {
               )}
             </div>
           </div>
-          <aside className="hero-panel reveal visible premium-motion-card" style={{ transitionDelay: '0.12s' }}>
+          <aside className="hero-panel reveal premium-motion-card" style={{ transitionDelay: '0.12s' }}>
             <div className="section-label">Centro publico</div>
             <h2 style={{ fontSize: 'clamp(24px, 4vw, 42px)', lineHeight: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Gestion deportiva en vivo</h2>
             <p style={{ color: 'var(--gray)', lineHeight: 1.7, fontSize: 14 }}>Consulta torneos, posiciones, goleadores, partidos y comunicados desde una experiencia limpia y preparada para cualquier pantalla.</p>
