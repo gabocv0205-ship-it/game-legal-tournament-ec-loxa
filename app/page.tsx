@@ -193,12 +193,6 @@ export default function PortalPrincipal() {
           .sponsors-track { gap: 16px; }
         .sponsor-logo { padding: 12px 18px; font-size: 12px; }
         }
-        @media (prefers-reduced-motion: reduce) {
-          *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
-          .reveal { opacity: 1 !important; transform: none !important; }
-          .topbar-marquee span, .sponsors-track { animation: none !important; transform: none !important; padding-left: 0; }
-          body, .btn-primary, .modal-close { cursor: auto !important; }
-        }
       `}} />
 
       <div className="cursor-dot" id="cursorDot"></div>
