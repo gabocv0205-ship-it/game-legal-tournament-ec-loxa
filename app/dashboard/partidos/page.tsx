@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import html2canvas from "html2canvas";
+import { capturePoster } from "@/lib/posterExport";
 import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
 import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspensionInfoForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
@@ -972,7 +972,7 @@ export default function PartidosPage() {
     if (!capturaRef.current) return; setLoading(true);
     try {
       capturaRef.current.style.display = "block";
-      const canvas = await html2canvas(capturaRef.current, { backgroundColor: "#0a0a0a", scale: 2, useCORS: true });
+      const canvas = await capturePoster(capturaRef.current, { backgroundColor: "#0a0a0a", scale: 2 });
       capturaRef.current.style.display = "none";
       const link = document.createElement("a"); link.href = canvas.toDataURL("image/png"); link.download = `Póster_Calendario.png`; link.click();
     } catch (e) { alert("Error"); } finally { setLoading(false); }
@@ -984,7 +984,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       posterNode.style.display = "block";
-      const canvas = await html2canvas(posterNode, { backgroundColor: "#071735", scale: 3, useCORS: true });
+      const canvas = await capturePoster(posterNode, { backgroundColor: "#071735", scale: 3 });
       posterNode.style.display = "none";
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
@@ -1088,15 +1088,16 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       const anchoCompleto = bracketPosterRef.current.scrollWidth;
-      const canvas = await html2canvas(bracketPosterRef.current, { backgroundColor: "#07122d", scale: 3, useCORS: true, width: anchoCompleto, windowWidth: anchoCompleto });
+      const canvas = await capturePoster(bracketPosterRef.current, { backgroundColor: "#07122d", scale: 3, width: anchoCompleto, windowWidth: anchoCompleto });
       const socialCanvas = document.createElement("canvas");
-      socialCanvas.width = 1080; socialCanvas.height = 1080;
+      const exportSize = 2160;
+      socialCanvas.width = exportSize; socialCanvas.height = exportSize;
       const context = socialCanvas.getContext("2d");
       if (!context) throw new Error("No se pudo preparar el póster");
-      context.fillStyle = "#07122d"; context.fillRect(0, 0, 1080, 1080);
-      const scale = Math.min(1040 / canvas.width, 1040 / canvas.height);
+      context.fillStyle = "#07122d"; context.fillRect(0, 0, exportSize, exportSize);
+      const scale = Math.min((exportSize - 160) / canvas.width, (exportSize - 160) / canvas.height);
       const width = canvas.width * scale; const height = canvas.height * scale;
-      context.drawImage(canvas, (1080 - width) / 2, (1080 - height) / 2, width, height);
+      context.drawImage(canvas, (exportSize - width) / 2, (exportSize - height) / 2, width, height);
       const link = document.createElement("a"); link.href = socialCanvas.toDataURL("image/png"); link.download = `Cuadro-Eliminatorio-${configuracion.tournament_year}.png`; link.click();
     } catch (error) {
       alert("No se pudo generar el póster eliminatorio.");

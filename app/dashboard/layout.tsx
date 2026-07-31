@@ -255,12 +255,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Link href="/dashboard/configuracion" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-2.5 py-2 border border-[#D4A017] rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${pathname === "/dashboard/configuracion" ? "bg-[#D4A017] text-black" : "text-[#D4A017] hover:bg-[#D4A017] hover:text-black"}`}>
             <Icon path={Icons.chart} size={16}/> Configurar Torneo
           </Link>
-          <Link href="/" className="w-full flex items-center justify-center gap-2 px-2.5 py-2 bg-[#1C1C1C] hover:bg-[#242424] rounded-lg text-[10px] text-white font-black uppercase tracking-wider transition-all border border-[#2E2E2E]">
-             <Icon path={Icons.eye} size={16}/> Ver App Pública
-          </Link>
-          <button onClick={cerrarSesion} className="w-full flex items-center justify-center gap-2 px-2.5 py-2 bg-red-950/40 hover:bg-red-900/60 rounded-lg text-[10px] text-red-300 font-black uppercase tracking-wider transition-all border border-red-900/60">
-            <Icon path={Icons.logout} size={16}/> Cerrar sesión
-          </button>
         </div>
       </motion.aside>
 
@@ -303,7 +297,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-xl border border-[#D4A017]/60 bg-[#D4A017]/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-[#F3D27A] transition-colors hover:bg-[#D4A017] hover:text-black"
+              aria-label="Ir a la página de visitantes"
+              title="Ir a la página de visitantes"
+            >
+              <Icon path={Icons.eye} size={16} />
+              <span className="hidden lg:inline">Página pública</span>
+            </Link>
+            <button
+              type="button"
+              onClick={cerrarSesion}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-900/70 bg-red-950/35 px-3 py-2 text-xs font-black uppercase tracking-wide text-red-200 transition-colors hover:bg-red-800/70 hover:text-white"
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <Icon path={Icons.logout} size={16} />
+              <span className="hidden lg:inline">Cerrar sesión</span>
+            </button>
             <motion.button
               type="button"
               onClick={cambiarTemaAdmin}

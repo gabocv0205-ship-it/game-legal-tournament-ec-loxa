@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { calculateStandings, getSuspensionInfoForMatch, normalizeTournamentConfig } from "@/lib/tournamentEngine";
-import html2canvas from "html2canvas";
+import { capturePoster } from "@/lib/posterExport";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function EstadisticasPage() {
@@ -241,26 +241,11 @@ export default function EstadisticasPage() {
     try {
       poster.style.width = "1080px";
       poster.style.minWidth = "1080px";
-      await Promise.all(Array.from(poster.querySelectorAll("img")).map(image => {
-        if (image.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          image.onload = resolve;
-          image.onerror = resolve;
-        });
-      }));
       const ancho = poster.scrollWidth;
       const alto = poster.scrollHeight;
-      const canvas = await html2canvas(poster, { backgroundColor: "#f4f7f2", scale: 3, useCORS: true, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
-      const socialCanvas = document.createElement("canvas");
-      socialCanvas.width = 1080; socialCanvas.height = 1350;
-      const context = socialCanvas.getContext("2d");
-      if (!context) throw new Error("No se pudo preparar el póster");
-      context.fillStyle = "#f4f7f2"; context.fillRect(0, 0, 1080, 1350);
-      const scale = Math.min(1040 / canvas.width, 1310 / canvas.height);
-      const width = canvas.width * scale; const height = canvas.height * scale;
-      context.drawImage(canvas, (1080 - width) / 2, (1350 - height) / 2, width, height);
+      const canvas = await capturePoster(poster, { backgroundColor: "#f4f7f2", scale: 3, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
       const link = document.createElement("a");
-      link.href = socialCanvas.toDataURL("image/png");
+      link.href = canvas.toDataURL("image/png");
       link.download = `Posiciones-${nombreTorneo}-${anioTorneo}.png`;
       link.click();
     } catch {
@@ -277,14 +262,7 @@ export default function EstadisticasPage() {
     setExportando(true);
     const poster = posterGoleadoresRef.current;
     try {
-      await Promise.all(Array.from(poster.querySelectorAll("img")).map(image => {
-        if (image.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          image.onload = resolve;
-          image.onerror = resolve;
-        });
-      }));
-      const canvas = await html2canvas(poster, { backgroundColor: "#f6f8f5", scale: 3, useCORS: true, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
+      const canvas = await capturePoster(poster, { backgroundColor: "#f6f8f5", scale: 3, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `Goleadores-${nombreTorneo}-${anioTorneo}.png`;
