@@ -987,7 +987,7 @@ export default function PartidosPage() {
     setLoading(true);
     try {
       posterNode.style.display = "block";
-      const canvas = await capturePoster(posterNode, { backgroundColor: "#071735", scale: 3 });
+      const canvas = await capturePoster(posterNode, { backgroundColor: "#071735", scale: 2, maxDimension: 1800 });
       posterNode.style.display = "none";
       await downloadPosterCanvas(canvas, `Poster-${tituloPosterJornada.replace(/\s+/g, "-")}-${configuracion.tournament_year}`);
     } catch (error) {
@@ -1284,7 +1284,7 @@ export default function PartidosPage() {
     () => Math.max(0, ...partidosPoster.flatMap(partido => [String(partido.home?.name || "Local").length, String(partido.away?.name || "Visitante").length])),
     [partidosPoster]
   );
-  const tamanoNombrePoster = maxNombreEquipoPoster > 30 ? "text-[16px]" : maxNombreEquipoPoster > 22 ? "text-[19px]" : "text-[22px]";
+  const tamanoNombrePoster = maxNombreEquipoPoster > 30 ? "text-[14px]" : maxNombreEquipoPoster > 22 ? "text-[17px]" : "text-[20px]";
   const gruposManual = Array.from(new Set(equipos.map(equipo => equipo.group_name || "General"))).sort();
   const equiposManual = faseBase(faseManual) === "Fase de Grupos" && grupoManual !== "Todos"
     ? equipos.filter(equipo => (equipo.group_name || "General") === grupoManual)
@@ -1912,56 +1912,56 @@ export default function PartidosPage() {
 
       <div style={{ display: "none" }} ref={jornadaPosterRef}>
         <div
-          className="relative w-[1080px] min-h-[1500px] overflow-hidden bg-[#06183a] px-14 py-12 text-white"
+          className="relative w-[1080px] min-h-[1440px] overflow-hidden bg-[#06183a] px-10 py-9 text-white"
           style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(135deg, rgba(3,16,46,.82), rgba(4,24,58,.92)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 10% 20%, rgba(212,160,23,.32), transparent 24%), radial-gradient(circle at 92% 70%, rgba(212,160,23,.24), transparent 22%), linear-gradient(145deg, #03102c, #063b78 52%, #020817)", fontFamily: posterFontFamily }}
         >
-          <div className="absolute inset-8 rounded-[32px] border-4 border-white/85" />
-          <div className="absolute inset-12 rounded-[24px] border border-[#D4A017]/55" />
-          <div className="relative z-10 flex items-start justify-between gap-8">
+          <div className="absolute inset-6 rounded-[28px] border-4 border-white/85" />
+          <div className="absolute inset-10 rounded-[20px] border border-[#D4A017]/55" />
+          <div className="relative z-10 flex items-start justify-between gap-6">
             <div className="min-w-0 max-w-[760px]">
-              <p className="mb-4 inline-block rounded-full border border-[#D4A017]/60 bg-[#D4A017]/15 px-5 py-2 text-[13px] font-black uppercase tracking-[0.2em] text-[#D4A017]">Cronograma oficial</p>
+              <p className="mb-3 inline-block rounded-full border border-[#D4A017]/60 bg-[#D4A017]/15 px-4 py-1.5 text-[12px] font-black uppercase tracking-[0.2em] text-[#D4A017]">Cronograma oficial</p>
               <h1 className="break-words text-5xl font-black uppercase leading-[0.95] tracking-tight text-white drop-shadow-[0_5px_0_rgba(0,0,0,.65)]">{tituloPosterJornada}</h1>
               <p className="mt-4 break-words text-xl font-black uppercase tracking-[0.12em] text-white/90">{partidosPoster[0]?.stage || "Programación"}</p>
               <p className="mt-2 break-words text-base font-black uppercase tracking-[0.12em] text-[#D4A017]">{fechasPosterTexto || "Fechas por confirmar"}</p>
             </div>
-            <div className="rounded-2xl border border-[#D4A017]/60 bg-black/45 p-3 text-center shadow-2xl">
-              {appUrl && <QRCodeSVG value={appUrl} size={112} level={"H"} fgColor="#D4A017" bgColor="#071735" />}
-              <span className="mt-2 block text-[11px] font-black uppercase">Ver en vivo</span>
+            <div className="rounded-xl border border-[#D4A017]/60 bg-black/45 p-2 text-center shadow-2xl">
+              {appUrl && <QRCodeSVG value={appUrl} size={96} level={"H"} fgColor="#D4A017" bgColor="#071735" />}
+              <span className="mt-1 block text-[9px] font-black uppercase">Ver en vivo</span>
             </div>
           </div>
-          <div className="relative z-10 mt-10 space-y-8">
+          <div className="relative z-10 mt-6 space-y-5">
             {diasPoster.map(dia => (
-              <section key={dia} className="space-y-3">
-                <div className="flex items-center gap-4">
+              <section key={dia} className="space-y-2">
+                <div className="flex items-center gap-3">
                   <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
-                  <h2 className="rounded-full bg-[#D4A017] px-6 py-2 text-base font-black uppercase tracking-widest text-black shadow-lg">
+                  <h2 className="rounded-full bg-[#D4A017] px-5 py-1.5 text-sm font-black uppercase tracking-widest text-black shadow-lg">
                     {new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long" })}
                   </h2>
                   <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
                 </div>
-                <div className="grid grid-cols-[126px_minmax(0,1fr)_100px_minmax(0,1fr)] items-center overflow-hidden rounded-t-xl border border-[#D4A017]/70 bg-[#D4A017] px-5 py-2 text-center text-[11px] font-black uppercase tracking-[0.22em] text-black">
+                <div className="grid grid-cols-[126px_minmax(0,1fr)_84px_minmax(0,1fr)] items-center overflow-hidden rounded-t-xl border border-[#D4A017]/70 bg-[#D4A017] px-4 py-1.5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-black">
                   <span>Hora</span><span>Local</span><span>VS</span><span>Visitante</span>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {partidosPorDiaPoster[dia].map(p => (
-                    <div key={p.id} className="grid grid-cols-[126px_minmax(0,1fr)_100px_minmax(0,1fr)] items-center overflow-hidden rounded-xl border border-white/90 bg-white px-5 py-4 text-[#072047] shadow-[0_14px_28px_rgba(0,0,0,.3)]">
-                      <div className="flex min-h-[76px] flex-col items-center justify-center border-r border-[#072047]/15 px-2 text-center">
-                        <span className="text-2xl font-black leading-none tracking-tight">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
-                        <span className="mt-2 text-[9px] font-black uppercase tracking-[0.18em] text-[#0b5b37]">Partido</span>
+                    <div key={p.id} className="grid grid-cols-[126px_minmax(0,1fr)_84px_minmax(0,1fr)] items-center overflow-hidden rounded-xl border border-white/90 bg-white px-4 py-3 text-[#072047] shadow-[0_10px_22px_rgba(0,0,0,.28)]">
+                      <div className="flex min-h-[64px] flex-col items-center justify-center border-r border-[#072047]/15 px-2 text-center">
+                        <span className="text-xl font-black leading-none tracking-tight">{new Date(p.match_date).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="mt-1 text-[8px] font-black uppercase tracking-[0.18em] text-[#0b5b37]">Partido</span>
                       </div>
-                      <div className="flex min-w-0 items-center justify-end gap-3 px-4 text-right">
+                      <div className="flex min-w-0 items-center justify-end gap-2 px-3 text-right">
                         <p className={`min-w-0 break-words ${tamanoNombrePoster} font-black uppercase leading-[1.05]`}>{p.home?.name || "Local"}</p>
-                        {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={64} height={64} unoptimized crossOrigin="anonymous" className="h-16 w-16 shrink-0 object-contain drop-shadow-lg" /> : <div className="h-16 w-16 shrink-0 rounded-full bg-[#dbeafe]" />}
+                        {p.home?.shield_url ? <Image src={p.home.shield_url} alt={`Escudo de ${p.home.name}`} width={56} height={56} unoptimized loading="eager" decoding="async" crossOrigin="anonymous" className="h-14 w-14 shrink-0 object-contain drop-shadow-lg" /> : <div className="h-14 w-14 shrink-0 rounded-full bg-[#dbeafe]" />}
                       </div>
-                      <div className="flex min-h-[76px] flex-col items-center justify-center border-x border-[#D4A017]/35 px-2 text-center">
-                        <span className="text-3xl font-black italic leading-none text-[#D71920]">VS</span>
-                        <span className="mt-2 text-[8px] font-black uppercase tracking-[0.18em] text-[#9B7411]">Enfrentamiento</span>
+                      <div className="flex min-h-[64px] flex-col items-center justify-center border-x border-[#D4A017]/35 px-2 text-center">
+                        <span className="text-2xl font-black italic leading-none text-[#D71920]">VS</span>
+                        <span className="mt-1 text-[7px] font-black uppercase tracking-[0.18em] text-[#9B7411]">Enfrentamiento</span>
                       </div>
-                      <div className="flex min-w-0 items-center justify-start gap-3 px-4">
-                        {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={64} height={64} unoptimized crossOrigin="anonymous" className="h-16 w-16 shrink-0 object-contain drop-shadow-lg" /> : <div className="h-16 w-16 shrink-0 rounded-full bg-[#dbeafe]" />}
+                      <div className="flex min-w-0 items-center justify-start gap-2 px-3">
+                        {p.away?.shield_url ? <Image src={p.away.shield_url} alt={`Escudo de ${p.away.name}`} width={56} height={56} unoptimized loading="eager" decoding="async" crossOrigin="anonymous" className="h-14 w-14 shrink-0 object-contain drop-shadow-lg" /> : <div className="h-14 w-14 shrink-0 rounded-full bg-[#dbeafe]" />}
                         <p className={`min-w-0 break-words ${tamanoNombrePoster} font-black uppercase leading-[1.05]`}>{p.away?.name || "Visitante"}</p>
                       </div>
-                      <div className="col-span-4 mt-3 flex items-center justify-between gap-3 border-t border-[#072047]/15 pt-2 text-[10px] font-black uppercase tracking-[0.15em] text-[#38506c]">
+                      <div className="col-span-4 mt-2 flex items-center justify-between gap-3 border-t border-[#072047]/15 pt-1 text-[8px] font-black uppercase tracking-[0.15em] text-[#38506c]">
                         <span>{new Date(p.match_date).toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" })}</span>
                         <span className="truncate text-right">{p.court || "Cancha por confirmar"}</span>
                       </div>
@@ -1971,22 +1971,22 @@ export default function PartidosPage() {
               </section>
             ))}
           </div>
-          <div className="relative z-10 mt-12 grid grid-cols-[1fr_auto] items-end gap-6">
+          <div className="relative z-10 mt-8 flex items-end justify-between gap-6 border-t border-white/20 pt-4">
             <div>
-              <p className="text-4xl font-black italic tracking-wide text-white drop-shadow-[0_4px_0_rgba(0,0,0,.65)]">{torneoNombre}</p>
-              <p className="mt-2 text-xl font-black uppercase tracking-[0.2em] text-[#D4A017]">{sedePrincipalProgramacion()}</p>
+              <p className="text-2xl font-black italic tracking-wide text-white drop-shadow-[0_4px_0_rgba(0,0,0,.65)]">{torneoNombre}</p>
+              <p className="mt-1 text-sm font-black uppercase tracking-[0.2em] text-[#D4A017]">{sedePrincipalProgramacion()}</p>
             </div>
-            <div className="rounded-2xl border border-white/15 bg-black/30 px-5 py-4 text-right">
-              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Promocion oficial</p>
-              <p className="text-2xl font-black uppercase">Game-Legal Pro</p>
+            <div className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-right">
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4A017]">Promocion oficial</p>
+              <p className="text-xl font-black uppercase">Game-Legal Pro</p>
             </div>
           </div>
           {auspiciantesTorneo.length > 0 && (
-            <div className="relative z-10 mt-8 rounded-2xl border border-white/15 bg-black/30 p-4">
-              <p className="mb-3 text-center text-[10px] font-black uppercase tracking-[0.35em] text-[#D4A017]">Auspiciantes oficiales</p>
+            <div className="relative z-10 mt-4 rounded-xl border border-white/15 bg-black/30 p-3">
+              <p className="mb-2 text-center text-[9px] font-black uppercase tracking-[0.3em] text-[#D4A017]">Auspiciantes oficiales</p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {auspiciantesTorneo.map((sponsor, index) => (
-                  <span key={`${sponsor}-${index}`} className="rounded-full border border-[#D4A017]/40 bg-white/10 px-4 py-1 text-[11px] font-black uppercase tracking-widest text-white">{sponsor}</span>
+                  <span key={`${sponsor}-${index}`} className="rounded-full border border-[#D4A017]/40 bg-white/10 px-3 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">{sponsor}</span>
                 ))}
               </div>
             </div>
