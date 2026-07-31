@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { calculateStandings, getSuspensionInfoForMatch, normalizeTournamentConfig } from "@/lib/tournamentEngine";
-import { capturePoster } from "@/lib/posterExport";
+import { capturePoster, downloadPosterCanvas } from "@/lib/posterExport";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function EstadisticasPage() {
@@ -244,10 +244,7 @@ export default function EstadisticasPage() {
       const ancho = poster.scrollWidth;
       const alto = poster.scrollHeight;
       const canvas = await capturePoster(poster, { backgroundColor: "#f4f7f2", scale: 3, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
-      const link = document.createElement("a");
-      link.href = canvas.toDataURL("image/png");
-      link.download = `Posiciones-${nombreTorneo}-${anioTorneo}.png`;
-      link.click();
+      await downloadPosterCanvas(canvas, `Posiciones-${nombreTorneo}-${anioTorneo}`);
     } catch {
       alert("No se pudo generar el póster de posiciones.");
     } finally {
@@ -263,10 +260,7 @@ export default function EstadisticasPage() {
     const poster = posterGoleadoresRef.current;
     try {
       const canvas = await capturePoster(poster, { backgroundColor: "#f6f8f5", scale: 3, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
-      const link = document.createElement("a");
-      link.href = canvas.toDataURL("image/png");
-      link.download = `Goleadores-${nombreTorneo}-${anioTorneo}.png`;
-      link.click();
+      await downloadPosterCanvas(canvas, `Goleadores-${nombreTorneo}-${anioTorneo}`);
     } catch {
       alert("No se pudo generar el poster de goleadores.");
     } finally {

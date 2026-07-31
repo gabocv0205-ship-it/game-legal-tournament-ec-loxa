@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { QRCodeCanvas } from "qrcode.react";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 import { playAudioEffect } from "@/lib/audioExperience";
-import { capturePoster } from "@/lib/posterExport";
+import { capturePoster, downloadPosterCanvas } from "@/lib/posterExport";
 
 export default function SorteoPage() {
   const [equipos, setEquipos] = useState<any[]>([]);
@@ -206,11 +206,7 @@ export default function SorteoPage() {
         windowWidth: posterWidth,
         windowHeight: posterHeight,
       });
-      const image = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = image;
-      link.download = `Sorteo-Oficial-${Date.now()}.png`;
-      link.click();
+      await downloadPosterCanvas(canvas, `Sorteo-Oficial-${Date.now()}`);
     } catch (error: any) {
       alert(`Error al generar la imagen: ${error.message || "intenta nuevamente"}`);
     } finally {

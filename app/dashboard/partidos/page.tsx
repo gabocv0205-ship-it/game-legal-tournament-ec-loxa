@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { capturePoster } from "@/lib/posterExport";
+import { capturePoster, downloadPosterCanvas } from "@/lib/posterExport";
 import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
 import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspensionInfoForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
@@ -974,7 +974,7 @@ export default function PartidosPage() {
       capturaRef.current.style.display = "block";
       const canvas = await capturePoster(capturaRef.current, { backgroundColor: "#0a0a0a", scale: 2 });
       capturaRef.current.style.display = "none";
-      const link = document.createElement("a"); link.href = canvas.toDataURL("image/png"); link.download = `Póster_Calendario.png`; link.click();
+      await downloadPosterCanvas(canvas, "Poster_Calendario");
     } catch (e) { alert("Error"); } finally { setLoading(false); }
   };
 
@@ -986,10 +986,7 @@ export default function PartidosPage() {
       posterNode.style.display = "block";
       const canvas = await capturePoster(posterNode, { backgroundColor: "#071735", scale: 3 });
       posterNode.style.display = "none";
-      const link = document.createElement("a");
-      link.href = canvas.toDataURL("image/png");
-      link.download = `Poster-${tituloPosterJornada.replace(/\s+/g, "-")}-${configuracion.tournament_year}.png`;
-      link.click();
+      await downloadPosterCanvas(canvas, `Poster-${tituloPosterJornada.replace(/\s+/g, "-")}-${configuracion.tournament_year}`);
     } catch (error) {
       posterNode.style.display = "none";
       alert("No se pudo generar el poster de la jornada.");
@@ -1098,7 +1095,7 @@ export default function PartidosPage() {
       const scale = Math.min((exportSize - 160) / canvas.width, (exportSize - 160) / canvas.height);
       const width = canvas.width * scale; const height = canvas.height * scale;
       context.drawImage(canvas, (exportSize - width) / 2, (exportSize - height) / 2, width, height);
-      const link = document.createElement("a"); link.href = socialCanvas.toDataURL("image/png"); link.download = `Cuadro-Eliminatorio-${configuracion.tournament_year}.png`; link.click();
+      await downloadPosterCanvas(socialCanvas, `Cuadro-Eliminatorio-${configuracion.tournament_year}`);
     } catch (error) {
       alert("No se pudo generar el póster eliminatorio.");
     } finally {
