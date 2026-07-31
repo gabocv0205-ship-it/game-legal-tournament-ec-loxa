@@ -4,7 +4,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { capturePoster, downloadPosterCanvas } from "@/lib/posterExport";
 import { QRCodeSVG } from "qrcode.react";
-import { CalendarDays, Clock3, Copy, MapPin, Plus } from "lucide-react";
+import { CalendarDays, Clock3, Copy, Eye, FileText, MapPin, Plus } from "lucide-react";
 import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspensionInfoForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
@@ -1827,8 +1827,9 @@ export default function PartidosPage() {
                       Editar
                     </button>
                   )}
-                  <button onClick={() => imprimirPlanilla(p)} className="rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-gray-700">
-                    Planilla abierta
+                  <button onClick={() => imprimirPlanilla(p)} aria-label={`Abrir planilla de ${p.home?.name || "equipo local"} vs ${p.away?.name || "equipo visitante"}`} className="match-action-button match-action-planilla">
+                    <FileText size={14} strokeWidth={2.5} aria-hidden="true" />
+                    <span>Planilla abierta</span>
                   </button>
                   {p.status === "finished" && p.stage !== "Fase de Grupos" && (
                     <button onClick={() => registrarPenales(p)} className="rounded-lg border border-blue-700 bg-blue-950 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-300 transition-all hover:bg-blue-800">
@@ -1836,8 +1837,9 @@ export default function PartidosPage() {
                     </button>
                   )}
 
-                  <button onClick={() => abrirPartido(p)} className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${p.status === 'finished' ? 'bg-[#2E2E2E] text-gray-400 hover:text-white' : 'bg-[#D4A017] text-black hover:bg-yellow-500 shadow-[0_0_10px_rgba(212,160,23,0.3)]'}`}>
-                    {p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}
+                  <button onClick={() => abrirPartido(p)} aria-pressed={partidoActivo?.id === p.id} className={`match-action-button match-action-details ${partidoActivo?.id === p.id ? "ring-2 ring-white/80 ring-offset-2 ring-offset-transparent" : ""}`}>
+                    <Eye size={14} strokeWidth={2.5} aria-hidden="true" />
+                    <span>{p.status === 'finished' ? 'Ver Detalles' : 'Jugar Partido'}</span>
                   </button>
                   {p.status !== 'finished' && (
                     <button onClick={() => eliminarPartido(p.id)} className="rounded-lg border border-red-900/50 bg-red-900/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 transition-all hover:bg-red-600 hover:text-white">

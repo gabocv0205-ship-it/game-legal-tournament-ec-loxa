@@ -75,18 +75,24 @@ export default function JugadoresPage() {
         partidosRoja: Number(tournament.red_suspension_matches || 1),
       });
 
-      const { data: teamsData } = await supabase
-        .from("teams")
-        .select("id, name")
-        .eq("tournament_id", activeId)
-        .order("name");
+      const [teamsResult, playersResult] = await Promise.all([
+        supabase
+          .from("teams")
+          .select("id, name")
+          .eq("tournament_id", activeId)
+          .order("name"),
+        supabase
+          .from("players")
+          .select("*, teams(name)")
+          .eq("tournament_id", activeId)
+          .order("created_at", { ascending: false }),
+      ]);
+      if (teamsResult.error) throw teamsResult.error;
+      if (playersResult.error) throw playersResult.error;
+      const teamsData = teamsResult.data;
+      const playersData = playersResult.data;
       setEquipos(teamsData || []);
 
-      const { data: playersData } = await supabase
-        .from("players")
-        .select("*, teams(name)")
-        .eq("tournament_id", activeId)
-        .order("created_at", { ascending: false });
       setJugadores(playersData || []);
 
       const playerIds = (playersData || []).map((player) => player.id);
@@ -256,23 +262,34 @@ export default function JugadoresPage() {
     }
   };
 
-  const obtenerEstadisticasJugador = (jugador: any) => {
-    const historial = eventos.filter((evento) => evento.player_id === jugador.id);
-    const goles = historial.filter((evento) => evento.event_type === "gol").length;
-    const amarillas = historial.filter((evento) => evento.event_type === "amarilla").length;
-    const rojas = historial.filter((evento) => evento.event_type === "roja").length;
-    const mvp = historial.filter((evento) => evento.event_type === "mvp").length;
-    const suspensionesPorAmarillas = Math.floor(amarillas / Math.max(1, reglas.amarillasSuspension)) * reglas.partidosAmarillas;
-    const suspensionesPorRojas = rojas * reglas.partidosRoja;
+  const estadisticasPorJugador = useMemo(() => {
+    const stats = new Map<string, { historial: any[]; goles: number; amarillas: number; rojas: number; mvp: number; suspensiones: number }>();
+    eventos.forEach((evento) => {
+      if (!evento.player_id) return;
+      const actual = stats.get(evento.player_id) || { historial: [], goles: 0, amarillas: 0, rojas: 0, mvp: 0, suspensiones: 0 };
+      actual.historial.push(evento);
+      const tipo = String(evento.event_type || "").toLowerCase();
+      if (tipo === "gol" || tipo === "goal") actual.goles += 1;
+      if (tipo === "amarilla" || tipo === "yellow") actual.amarillas += 1;
+      if (tipo === "roja" || tipo === "red") actual.rojas += 1;
+      if (tipo === "mvp") actual.mvp += 1;
+      stats.set(evento.player_id, actual);
+    });
 
-    return {
-      historial,
-      goles,
-      amarillas,
-      rojas,
-      mvp,
-      suspensiones: suspensionesPorAmarillas + suspensionesPorRojas,
-    };
+    stats.forEach(actual => {
+      const suspensionesPorAmarillas = Math.floor(actual.amarillas / Math.max(1, reglas.amarillasSuspension)) * reglas.partidosAmarillas;
+      actual.suspensiones = suspensionesPorAmarillas + actual.rojas * reglas.partidosRoja;
+    });
+    return stats;
+  }, [eventos, reglas]);
+
+  const obtenerEstadisticasJugador = (jugador: any) => estadisticasPorJugador.get(jugador.id) || {
+    historial: [],
+    goles: 0,
+    amarillas: 0,
+    rojas: 0,
+    mvp: 0,
+    suspensiones: 0,
   };
 
   const etiquetaEstadoJugador = (jugador: any) => {
@@ -295,18 +312,30 @@ export default function JugadoresPage() {
     });
   }, [busqueda, filtroEquipo, jugadores]);
 
-  const jugadoresPorEquipo = useMemo(() => {
-    const grupos = equipos
-      .filter((equipo) => !filtroEquipo || equipo.id === filtroEquipo)
-      .map((equipo) => ({
-        equipo,
-        jugadores: jugadoresFiltrados
-          .filter((jugador) => jugador.team_id === equipo.id)
-          .sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || ""))),
-      }))
-      .filter((grupo) => grupo.jugadores.length > 0 || (!busqueda && filtroEquipo === grupo.equipo.id));
+  const cantidadJugadoresPorEquipo = useMemo(() => {
+    const counts = new Map<string, number>();
+    jugadores.forEach(jugador => counts.set(jugador.team_id, (counts.get(jugador.team_id) || 0) + 1));
+    return counts;
+  }, [jugadores]);
 
-    const sinEquipo = jugadoresFiltrados.filter((jugador) => !jugador.team_id);
+  const jugadoresPorEquipo = useMemo(() => {
+    const grouped = new Map<string, any[]>();
+    jugadoresFiltrados.forEach(jugador => {
+      const key = jugador.team_id || "sin-equipo";
+      const list = grouped.get(key) || [];
+      list.push(jugador);
+      grouped.set(key, list);
+    });
+
+    const grupos = equipos
+      .filter(equipo => !filtroEquipo || equipo.id === filtroEquipo)
+      .map(equipo => ({
+        equipo,
+        jugadores: (grouped.get(equipo.id) || []).sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || ""))),
+      }))
+      .filter(grupo => grupo.jugadores.length > 0 || (!busqueda && filtroEquipo === grupo.equipo.id));
+
+    const sinEquipo = grouped.get("sin-equipo") || [];
     if (sinEquipo.length) grupos.push({ equipo: { id: "sin-equipo", name: "Sin equipo" }, jugadores: sinEquipo });
     return grupos;
   }, [busqueda, equipos, filtroEquipo, jugadoresFiltrados]);
@@ -347,7 +376,7 @@ export default function JugadoresPage() {
               <option value="" disabled>Selecciona un equipo...</option>
               {equipos.map((eq) => (
                 <option key={eq.id} value={eq.id}>
-                  {eq.name} ({jugadores.filter((jugador) => jugador.team_id === eq.id).length}{plantillaAutomatica ? `/${maxJugadoresEquipo}` : ""})
+                  {eq.name} ({cantidadJugadoresPorEquipo.get(eq.id) || 0}{plantillaAutomatica ? `/${maxJugadoresEquipo}` : ""})
                 </option>
               ))}
             </select>
@@ -521,7 +550,7 @@ function MiniStat({ label, value, tone = "neutral" }: { label: string; value: nu
   );
 }
 
-function PlayerAvatar({ jugador, preview, size = 56 }: { jugador: any; preview?: string; size?: number }) {
+const PlayerAvatar = React.memo(function PlayerAvatar({ jugador, preview, size = 56 }: { jugador: any; preview?: string; size?: number }) {
   const source = preview || jugador.photo_url;
   const initials = String(jugador.full_name || "J").trim().charAt(0).toUpperCase();
   return (
@@ -533,7 +562,8 @@ function PlayerAvatar({ jugador, preview, size = 56 }: { jugador: any; preview?:
       )}
     </div>
   );
-}
+});
+PlayerAvatar.displayName = "PlayerAvatar";
 
 function PlayerProfileModal({ jugador, stats, partidosEventos, onClose }: { jugador: any; stats: any; partidosEventos: Record<string, any>; onClose: () => void }) {
   const etiquetaEvento: Record<string, string> = {

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
-import { exportTeamPlayersPdf } from "@/lib/exportUtils";
+import { exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
 
 export default function EquiposPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -26,6 +26,15 @@ export default function EquiposPage() {
   const [escudoEditado, setEscudoEditado] = useState<File | null>(null);
   const [previewEscudoEditado, setPreviewEscudoEditado] = useState("");
   const [exportandoEquipoId, setExportandoEquipoId] = useState<string | null>(null);
+  const [carnetsHabilitados, setCarnetsHabilitados] = useState(true);
+  const [formatoCarnets, setFormatoCarnets] = useState<"pdf" | "zip">("pdf");
+  const [opcionesCarnets, setOpcionesCarnets] = useState({
+    photo: true,
+    identification: true,
+    jerseyNumber: true,
+    status: true,
+    statistics: true,
+  });
   const [estadoEquipoEditandoId, setEstadoEquipoEditandoId] = useState<string | null>(null);
   const [estadoEquipo, setEstadoEquipo] = useState("active");
   const [motivoEstadoEquipo, setMotivoEstadoEquipo] = useState("");
@@ -58,6 +67,18 @@ export default function EquiposPage() {
       setTorneoId(activeId);
       setTorneoNombre((tournament as any).name || "Torneo seleccionado");
 
+      try {
+        const stored = localStorage.getItem(`gamelegal-carnets:${activeId}`);
+        if (stored) {
+          const preferences = JSON.parse(stored);
+          setCarnetsHabilitados(preferences.enabled !== false);
+          setFormatoCarnets(preferences.format === "zip" ? "zip" : "pdf");
+          setOpcionesCarnets(prev => ({ ...prev, ...(preferences.options || {}) }));
+        }
+      } catch {
+        // Las preferencias visuales son opcionales; no deben bloquear la carga del torneo.
+      }
+
       // 2. Traer SOLO los equipos de este torneo
       const { data } = await supabase.from("teams")
         .select("*")
@@ -71,6 +92,15 @@ export default function EquiposPage() {
       setCargandoDatos(false);
     }
   };
+
+  useEffect(() => {
+    if (!torneoId) return;
+    localStorage.setItem(`gamelegal-carnets:${torneoId}`, JSON.stringify({
+      enabled: carnetsHabilitados,
+      format: formatoCarnets,
+      options: opcionesCarnets,
+    }));
+  }, [carnetsHabilitados, formatoCarnets, opcionesCarnets, torneoId]);
 
   const validarEscudo = (file: File) => {
     const tiposPermitidos = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -302,50 +332,60 @@ export default function EquiposPage() {
     return "Activo";
   };
 
+  const cargarFilasJugadoresEquipo = async (equipo: any): Promise<TeamPlayerCardRow[]> => {
+    if (!torneoId) {
+      alert("Selecciona un torneo antes de descargar el reporte.");
+      return [];
+    }
+    const { data: jugadores, error: playersError } = await supabase
+      .from("players")
+      .select("*")
+      .eq("tournament_id", torneoId)
+      .eq("team_id", equipo.id)
+      .order("full_name", { ascending: true });
+    if (playersError) throw playersError;
+
+    const playerIds = (jugadores || []).map((jugador: any) => jugador.id).filter(Boolean);
+    const { data: eventos, error: eventsError } = playerIds.length
+      ? await supabase.from("match_events").select("player_id, match_id, event_type").in("player_id", playerIds)
+      : { data: [], error: null } as any;
+    if (eventsError) throw eventsError;
+
+    const stats = new Map<string, { goals: number; yellowCards: number; redCards: number; matches: Set<string> }>();
+    playerIds.forEach((id: string) => stats.set(id, { goals: 0, yellowCards: 0, redCards: 0, matches: new Set<string>() }));
+    (eventos || []).forEach((evento: any) => {
+      const playerStats = stats.get(evento.player_id);
+      if (!playerStats) return;
+      const type = String(evento.event_type || "").toLowerCase();
+      if (type.includes("gol") || type.includes("goal")) playerStats.goals += 1;
+      if (type.includes("amarilla") || type.includes("yellow")) playerStats.yellowCards += 1;
+      if (type.includes("roja") || type.includes("red")) playerStats.redCards += 1;
+      if (evento.match_id) playerStats.matches.add(evento.match_id);
+    });
+
+    return (jugadores || []).map((jugador: any, index: number) => {
+      const playerStats = stats.get(jugador.id) || { goals: 0, yellowCards: 0, redCards: 0, matches: new Set<string>() };
+      return {
+        index: index + 1,
+        fullName: jugador.full_name || jugador.name || "Sin nombre",
+        identification: jugador.cedula || jugador.identification_number || jugador.document_number || "-",
+        jerseyNumber: String(jugador.jersey_number || jugador.shirt_number || jugador.dorsal || jugador.numero_camiseta || jugador.number || "-"),
+        status: estadoJugador(jugador),
+        eligibilityReason: jugador.eligibility_reason || "",
+        photoUrl: jugador.photo_url || "",
+        goals: playerStats.goals,
+        yellowCards: playerStats.yellowCards,
+        redCards: playerStats.redCards,
+        matchesPlayed: playerStats.matches.size,
+      };
+    });
+  };
+
   const descargarPdfJugadores = async (equipo: any) => {
     if (!torneoId) return alert("Selecciona un torneo antes de descargar el reporte.");
     setExportandoEquipoId(equipo.id);
     try {
-      const { data: jugadores, error: playersError } = await supabase
-        .from("players")
-        .select("*")
-        .eq("tournament_id", torneoId)
-        .eq("team_id", equipo.id)
-        .order("full_name", { ascending: true });
-      if (playersError) throw playersError;
-
-      const playerIds = (jugadores || []).map((jugador: any) => jugador.id).filter(Boolean);
-      const { data: eventos, error: eventsError } = playerIds.length
-        ? await supabase.from("match_events").select("player_id, match_id, event_type").in("player_id", playerIds)
-        : { data: [], error: null } as any;
-      if (eventsError) throw eventsError;
-
-      const stats = new Map<string, { goals: number; yellowCards: number; redCards: number; matches: Set<string> }>();
-      playerIds.forEach((id: string) => stats.set(id, { goals: 0, yellowCards: 0, redCards: 0, matches: new Set<string>() }));
-      (eventos || []).forEach((evento: any) => {
-        const playerStats = stats.get(evento.player_id);
-        if (!playerStats) return;
-        const type = String(evento.event_type || "").toLowerCase();
-        if (type.includes("gol") || type.includes("goal")) playerStats.goals += 1;
-        if (type.includes("amarilla") || type.includes("yellow")) playerStats.yellowCards += 1;
-        if (type.includes("roja") || type.includes("red")) playerStats.redCards += 1;
-        if (evento.match_id) playerStats.matches.add(evento.match_id);
-      });
-
-      const rows = (jugadores || []).map((jugador: any, index: number) => {
-        const playerStats = stats.get(jugador.id) || { goals: 0, yellowCards: 0, redCards: 0, matches: new Set<string>() };
-        return {
-          index: index + 1,
-          fullName: jugador.full_name || jugador.name || "Sin nombre",
-          identification: jugador.cedula || jugador.identification_number || jugador.document_number || "-",
-          jerseyNumber: String(jugador.jersey_number || jugador.shirt_number || jugador.dorsal || jugador.numero_camiseta || jugador.number || "-"),
-          status: estadoJugador(jugador),
-          goals: playerStats.goals,
-          yellowCards: playerStats.yellowCards,
-          redCards: playerStats.redCards,
-          matchesPlayed: playerStats.matches.size,
-        };
-      });
+      const rows = await cargarFilasJugadoresEquipo(equipo);
 
       const safeTeamName = String(equipo.name || "equipo").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       exportTeamPlayersPdf({
@@ -362,6 +402,32 @@ export default function EquiposPage() {
     }
   };
 
+  const descargarCarnets = async (equipo: any) => {
+    if (!torneoId) return alert("Selecciona un torneo antes de descargar los carnets.");
+    setExportandoEquipoId(equipo.id);
+    try {
+      const rows = await cargarFilasJugadoresEquipo(equipo);
+      const safeTeamName = String(equipo.name || "equipo").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const report = {
+        tournamentName: torneoNombre,
+        teamName: equipo.name || "Equipo",
+        teamShieldUrl: equipo.shield_url || "",
+        generatedAt: new Date().toLocaleString("es-EC"),
+        rows,
+        options: opcionesCarnets,
+      };
+      if (formatoCarnets === "zip") {
+        exportTeamPlayerCardsZip(report, `carnets-${safeTeamName || "equipo"}.zip`);
+      } else {
+        exportTeamPlayerCardsPdf(report, `carnets-${safeTeamName || "equipo"}.pdf`);
+      }
+    } catch (error: any) {
+      alert("No se pudieron generar los carnets: " + (error.message || "Intenta nuevamente."));
+    } finally {
+      setExportandoEquipoId(null);
+    }
+  };
+
   if (cargandoDatos) {
     return <div className="text-[#D4A017] text-center p-20 font-black animate-pulse">Sincronizando clubes inscritos...</div>;
   }
@@ -371,6 +437,46 @@ export default function EquiposPage() {
       <h2 className="text-3xl font-black text-white uppercase tracking-wider">Gestión de Clubes</h2>
       <p className="text-gray-400 text-sm">Administra los equipos participantes del torneo seleccionado.</p>
       
+      <section className="rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4 shadow-lg" aria-label="Configuracion de carnets">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#D4A017]">Carnets de jugadores</p>
+            <p className="mt-1 max-w-2xl text-xs text-gray-400">Modulo opcional por torneo. Genera una hoja A4 lista para imprimir o un paquete ZIP liviano con los carnets y la lista CSV.</p>
+          </div>
+          <label className="flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-wider text-[var(--admin-text)]">
+            <input type="checkbox" checked={carnetsHabilitados} onChange={e => setCarnetsHabilitados(e.target.checked)} className="h-4 w-4 accent-[#D4A017]" />
+            Habilitar descarga
+          </label>
+        </div>
+        {carnetsHabilitados && (
+          <div className="mt-4 grid grid-cols-1 gap-3 border-t border-[#2E2E2E] pt-4 md:grid-cols-[180px_1fr]">
+            <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Formato de salida
+              <select value={formatoCarnets} onChange={e => setFormatoCarnets(e.target.value as "pdf" | "zip")} className="mt-2 w-full rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm font-bold text-[var(--admin-text)] outline-none focus:border-[#D4A017]">
+                <option value="pdf">PDF A4 imprimible</option>
+                <option value="zip">ZIP liviano</option>
+              </select>
+            </label>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Campos incluidos en el carnet</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                {([
+                  ["photo", "Fotografia"],
+                  ["identification", "Identificacion"],
+                  ["jerseyNumber", "Dorsal"],
+                  ["status", "Estado"],
+                  ["statistics", "Estadisticas"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-xs font-bold text-[var(--admin-text)]">
+                    <input type="checkbox" checked={opcionesCarnets[key]} onChange={e => setOpcionesCarnets(prev => ({ ...prev, [key]: e.target.checked }))} className="h-4 w-4 accent-[#D4A017]" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
       <div className="bg-[#141414] p-6 rounded-2xl border border-[#2E2E2E] shadow-lg">
         <form onSubmit={guardarEquipo} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -491,6 +597,7 @@ export default function EquiposPage() {
                 ) : (
                   <>
                     <button onClick={() => descargarPdfJugadores(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-blue-400 hover:text-blue-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "PDF jugadores"}</button>
+                    {carnetsHabilitados && <button onClick={() => descargarCarnets(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 hover:text-emerald-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : `Carnets ${formatoCarnets.toUpperCase()}`}</button>}
                     <button onClick={() => abrirEstadoEquipo(eq)} className="text-[10px] uppercase tracking-wider font-bold text-red-300 hover:text-red-200 transition-all">Estado</button>
                     <button onClick={() => { cancelarEdicion(); setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="text-[10px] uppercase tracking-wider font-bold text-[#D4A017] hover:text-yellow-300 transition-all">Editar</button>
                     <button onClick={() => eliminarEquipo(eq.id, eq.shield_url)} className="text-[10px] uppercase tracking-wider font-bold text-red-500 hover:text-red-400 transition-all">Eliminar</button>

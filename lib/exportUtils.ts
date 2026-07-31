@@ -93,6 +93,27 @@ export type TeamPlayersPdfReport = {
   rows: TeamPlayerPdfRow[];
 };
 
+export type TeamPlayerCardRow = TeamPlayerPdfRow & {
+  photoUrl?: string;
+  eligibilityReason?: string;
+};
+
+export type TeamPlayerCardsReport = {
+  tournamentName: string;
+  tournamentCategory?: string;
+  teamName: string;
+  teamShieldUrl?: string;
+  generatedAt: string;
+  rows: TeamPlayerCardRow[];
+  options?: {
+    photo?: boolean;
+    identification?: boolean;
+    jerseyNumber?: boolean;
+    status?: boolean;
+    statistics?: boolean;
+  };
+};
+
 export function exportTeamPlayersPdf(report: TeamPlayersPdfReport, filename: string) {
   const category = report.tournamentCategory ? `<p class="muted">Modalidad/Categoria: ${escapeHtml(report.tournamentCategory)}</p>` : "";
   const shield = report.teamShieldUrl
@@ -168,6 +189,100 @@ export function exportTeamPlayersPdf(report: TeamPlayersPdfReport, filename: str
   popup.document.close();
   popup.focus();
   setTimeout(() => popup.print(), 300);
+}
+
+function playerCardsHtml(report: TeamPlayerCardsReport) {
+  const options = {
+    photo: true,
+    identification: true,
+    jerseyNumber: true,
+    status: true,
+    statistics: true,
+    ...report.options,
+  };
+  const cards = report.rows.length
+    ? report.rows.map(row => {
+      const photo = options.photo && row.photoUrl
+        ? `<img class="player-photo" src="${escapeHtml(row.photoUrl)}" alt="Foto de ${escapeHtml(row.fullName)}" />`
+        : `<div class="player-photo placeholder">${escapeHtml(row.fullName.slice(0, 1).toUpperCase() || "J")}</div>`;
+      const identification = options.identification ? `<p><strong>Identificacion:</strong> ${escapeHtml(row.identification)}</p>` : "";
+      const jersey = options.jerseyNumber ? `<p><strong>Dorsal:</strong> ${escapeHtml(row.jerseyNumber)}</p>` : "";
+      const status = options.status ? `<span class="status">${escapeHtml(row.status)}</span>` : "";
+      const statistics = options.statistics
+        ? `<div class="stats"><span>Goles <b>${row.goals}</b></span><span>TA <b>${row.yellowCards}</b></span><span>TR <b>${row.redCards}</b></span><span>PJ <b>${row.matchesPlayed}</b></span></div>`
+        : "";
+      return `<article class="card">
+        <div class="card-top"><div class="team-mark">${report.teamShieldUrl ? `<img src="${escapeHtml(report.teamShieldUrl)}" alt="Escudo" />` : "GL"}</div><span class="card-label">GAME LEGAL<br/>CARNET OFICIAL</span></div>
+        <div class="player-main">${photo}<div class="player-copy"><h2>${escapeHtml(row.fullName)}</h2>${identification}${jersey}${status}</div></div>
+        ${statistics}
+        ${row.eligibilityReason ? `<p class="reason">${escapeHtml(row.eligibilityReason)}</p>` : ""}
+        <div class="card-footer"><span>${escapeHtml(report.teamName)}</span><span>${escapeHtml(report.tournamentName)}</span></div>
+      </article>`;
+    }).join("")
+    : `<p class="empty">No existen jugadores registrados para este equipo en el torneo seleccionado.</p>`;
+
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Carnets - ${escapeHtml(report.teamName)}</title><style>
+    @page { size: A4 portrait; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef2f5; color: #132033; font-family: Arial, "Helvetica Neue", sans-serif; }
+    .page { max-width: 794px; margin: 0 auto; padding: 18px; background: #fff; }
+    .heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 3px solid #d4a017; }
+    .heading h1 { margin: 0; font-size: 19px; text-transform: uppercase; letter-spacing: .08em; }
+    .heading p { margin: 4px 0 0; color: #5b6878; font-size: 10px; }
+    .heading .date { color: #7b5a00; font-size: 9px; text-align: right; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .card { min-height: 214px; page-break-inside: avoid; break-inside: avoid; overflow: hidden; border: 1px solid #d4a017; border-radius: 12px; background: linear-gradient(145deg, #ffffff, #f4f7fb); box-shadow: 0 3px 10px rgba(16, 24, 39, .1); }
+    .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: #101827; color: #fff; border-bottom: 3px solid #d4a017; }
+    .team-mark { width: 34px; height: 34px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: #fff; color: #101827; font-weight: 900; font-size: 10px; }
+    .team-mark img { width: 100%; height: 100%; object-fit: contain; }
+    .card-label { color: #f5c842; font-size: 7px; font-weight: 900; letter-spacing: .12em; line-height: 1.35; text-align: right; }
+    .player-main { display: flex; align-items: center; gap: 10px; padding: 12px 12px 7px; }
+    .player-photo { width: 68px; height: 78px; flex: 0 0 68px; object-fit: cover; border: 2px solid #d4a017; border-radius: 8px; background: #e6ebf1; }
+    .placeholder { display: grid; place-items: center; color: #8b6700; font-size: 26px; font-weight: 900; }
+    .player-copy { min-width: 0; }
+    .player-copy h2 { margin: 0 0 5px; overflow-wrap: anywhere; color: #101827; font-size: 14px; line-height: 1.1; text-transform: uppercase; }
+    .player-copy p { margin: 2px 0; color: #536274; font-size: 9px; }
+    .player-copy strong { color: #1b2a3b; }
+    .status { display: inline-block; margin-top: 4px; padding: 3px 7px; border-radius: 999px; background: #e8f6ed; color: #146c37; font-size: 8px; font-weight: 900; text-transform: uppercase; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 2px 12px 8px; padding: 6px; border-radius: 7px; background: #e9eef4; color: #526274; font-size: 7px; text-align: center; text-transform: uppercase; }
+    .stats b { display: block; color: #101827; font-size: 12px; }
+    .reason { margin: 0 12px 8px; color: #8a3a24; font-size: 8px; }
+    .card-footer { display: flex; justify-content: space-between; gap: 8px; margin: 0 12px; padding: 7px 0 8px; border-top: 1px solid #dce3eb; color: #6a7786; font-size: 7px; text-transform: uppercase; }
+    .empty { padding: 30px; color: #64748b; text-align: center; }
+    .footer { margin-top: 18px; color: #64748b; font-size: 8px; text-align: center; text-transform: uppercase; letter-spacing: .1em; }
+    @media print { body { background: #fff; } .page { max-width: none; padding: 0; } .card { box-shadow: none; } }
+  </style></head><body><main class="page">
+    <header class="heading"><div><h1>${escapeHtml(report.tournamentName)}</h1><p>${escapeHtml(report.teamName)}${report.tournamentCategory ? ` · ${escapeHtml(report.tournamentCategory)}` : ""}</p></div><div class="date">CARNETS DE JUGADORES<br/>${escapeHtml(report.generatedAt)}</div></header>
+    <section class="cards">${cards}</section>
+    <footer class="footer">Game Legal Tournament · Documento oficial</footer>
+  </main></body></html>`;
+}
+
+export function exportTeamPlayerCardsPdf(report: TeamPlayerCardsReport, filename: string) {
+  const html = playerCardsHtml(report);
+  const popup = window.open("", "_blank");
+  if (!popup) {
+    downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), filename.replace(/\.pdf$/i, ".html"));
+    return;
+  }
+  popup.document.write(html);
+  popup.document.close();
+  popup.focus();
+  setTimeout(() => popup.print(), 250);
+}
+
+export function exportTeamPlayerCardsZip(report: TeamPlayerCardsReport, filename: string) {
+  const html = playerCardsHtml(report);
+  const csv = [
+    ["#", "Jugador", "Identificacion", "Dorsal", "Estado", "Partidos", "Goles", "Amarillas", "Rojas"],
+    ...report.rows.map(row => [row.index, row.fullName, row.identification, row.jerseyNumber, row.status, row.matchesPlayed, row.goals, row.yellowCards, row.redCards]),
+  ].map(row => row.map(escapeCsv).join(",")).join("\r\n");
+  const zip = createZip([
+    { name: "carnets.html", content: html },
+    { name: "jugadores.csv", content: `\ufeff${csv}` },
+    { name: "LEEME.txt", content: "Abra carnets.html para visualizar e imprimir los carnets del equipo." },
+  ]);
+  downloadBlob(new Blob([zip], { type: "application/zip" }), filename);
 }
 
 function crc32(input: string) {
