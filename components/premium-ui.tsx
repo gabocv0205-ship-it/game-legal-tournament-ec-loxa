@@ -2,6 +2,8 @@
 
 import React from "react";
 import { motion, type HTMLMotionProps } from "framer-motion";
+import Image from "next/image";
+import Link from "next/link";
 
 export const premiumTransition = { duration: 0.22, ease: "easeOut" } as const;
 
@@ -125,3 +127,171 @@ export function PosterPreviewCard({ children, className = "" }: { children: Reac
   );
 }
 
+export function SidebarItem({
+  href,
+  active,
+  icon,
+  label,
+  onClick,
+  tone = "default",
+}: {
+  href: string;
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  tone?: "default" | "danger" | "gold";
+}) {
+  const inactiveTone = {
+    default: "text-[var(--admin-muted)] hover:text-[var(--admin-text)]",
+    danger: "text-red-400 hover:text-red-100",
+    gold: "text-[var(--admin-gold)] hover:text-black",
+  }[tone];
+
+  return (
+    <Link href={href} onClick={onClick} className="block">
+      <motion.span
+        layout
+        whileHover={{ x: 2, scale: 1.01 }}
+        whileTap={{ scale: 0.98 }}
+        transition={premiumTransition}
+        className={`relative flex w-full items-center gap-2 overflow-hidden rounded-xl border px-2.5 py-2 text-[11px] font-black tracking-wide ${
+          active
+            ? "border-transparent bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_10px_26px_rgba(212,160,23,0.28)]"
+            : `border-transparent bg-transparent ${inactiveTone} hover:border-[var(--admin-strong-border)] hover:bg-white/[0.07]`
+        }`}
+      >
+        {active ? <motion.span layoutId="sidebar-active-pill" className="absolute inset-y-1 left-1 w-1 rounded-full bg-black/40" /> : null}
+        <span className="relative z-10 flex h-5 w-5 items-center justify-center">{icon}</span>
+        <span className="relative z-10 truncate">{label}</span>
+      </motion.span>
+    </Link>
+  );
+}
+
+export function TournamentHero({
+  eyebrow,
+  title,
+  description,
+  mediaUrl,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  description?: string;
+  mediaUrl?: string | null;
+  action?: React.ReactNode;
+}) {
+  return (
+    <PremiumCard className="p-6 md:p-8" hover={false}>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.35fr_0.75fr] lg:items-center">
+        <div>
+          <span className="inline-flex rounded-full border border-[#D4A017]/35 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">
+            {eyebrow}
+          </span>
+          <h1 className="mt-4 break-words text-4xl font-black uppercase leading-none tracking-tight text-[var(--admin-text)] md:text-6xl">
+            {title}
+          </h1>
+          {description ? <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-[var(--admin-muted)]">{description}</p> : null}
+          {action ? <div className="mt-6">{action}</div> : null}
+        </div>
+        <motion.div
+          variants={fadeUp}
+          whileHover={{ scale: 1.015 }}
+          transition={premiumTransition}
+          className="premium-sport-media relative h-56 overflow-hidden rounded-3xl border border-[#D4A017]/25 bg-[#0a0a0a]"
+        >
+          {mediaUrl ? (
+            <Image src={mediaUrl} alt={title} fill unoptimized className="object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_20%_20%,rgba(212,160,23,.34),transparent_28%),linear-gradient(135deg,#082017,#141414,#2b2108)] text-5xl font-black text-[#D4A017]">
+              GL
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+        </motion.div>
+      </div>
+    </PremiumCard>
+  );
+}
+
+export function TeamCard({
+  name,
+  subtitle,
+  imageUrl,
+  meta,
+  actions,
+  className = "",
+}: {
+  name: string;
+  subtitle?: string;
+  imageUrl?: string | null;
+  meta?: React.ReactNode;
+  actions?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <PremiumCard className={`p-5 ${className}`}>
+      <div className="flex items-center gap-4">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[#D4A017]/25 bg-[#0a0a0a]">
+          {imageUrl ? <Image src={imageUrl} alt={name} width={64} height={64} unoptimized className="h-full w-full object-contain p-1" /> : <span className="text-sm font-black text-[#D4A017]">GL</span>}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-lg font-black uppercase text-[var(--admin-text)]">{name}</h3>
+          {subtitle ? <p className="mt-1 truncate text-xs font-bold text-[var(--admin-muted)]">{subtitle}</p> : null}
+          {meta ? <div className="mt-3">{meta}</div> : null}
+        </div>
+      </div>
+      {actions ? <div className="mt-4 border-t border-[var(--admin-border)] pt-4">{actions}</div> : null}
+    </PremiumCard>
+  );
+}
+
+export function MatchCard({
+  home,
+  away,
+  homeScore,
+  awayScore,
+  meta,
+  status,
+  onClick,
+}: {
+  home: string;
+  away: string;
+  homeScore?: React.ReactNode;
+  awayScore?: React.ReactNode;
+  meta?: React.ReactNode;
+  status?: React.ReactNode;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <p className="truncate text-right text-sm font-black uppercase text-[var(--admin-text)]">{home}</p>
+        <div className="rounded-2xl border border-[#D4A017]/30 bg-[#D4A017]/10 px-3 py-2 text-center text-lg font-black text-[#D4A017]">
+          {homeScore ?? "-"} <span className="text-[var(--admin-muted)]">:</span> {awayScore ?? "-"}
+        </div>
+        <p className="truncate text-left text-sm font-black uppercase text-[var(--admin-text)]">{away}</p>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-black uppercase tracking-widest text-[var(--admin-muted)]">
+        <span>{meta}</span>
+        {status ? <span className="rounded-full border border-[#D4A017]/30 px-2 py-1 text-[#D4A017]">{status}</span> : null}
+      </div>
+    </>
+  );
+
+  return (
+    <motion.div
+      variants={fadeUp}
+      whileHover={{ y: -2, scale: 1.01 }}
+      whileTap={onClick ? { scale: 0.985 } : undefined}
+      transition={premiumTransition}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      className={`premium-match-card rounded-2xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${onClick ? "cursor-pointer" : ""}`}
+    >
+      {content}
+    </motion.div>
+  );
+}

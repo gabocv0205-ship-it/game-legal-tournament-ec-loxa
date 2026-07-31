@@ -208,8 +208,19 @@ export async function POST(request: Request) {
     const email = String(body.email || '').trim().toLowerCase();
     const password = String(body.password || '');
     const full_name = String(body.full_name || '').trim();
+    const hasLicenseAmount = body.license_amount !== undefined && body.license_amount !== '';
+    const licenseAmount = hasLicenseAmount ? Number(body.license_amount) : 0;
+    const billingConcept = String(body.license_concept || 'Licencia Game Legal').trim();
+    const dueDate = body.due_date ? String(body.due_date).trim() : null;
     if (!email || !password || password.length < 6 || !full_name) {
       return NextResponse.json({ error: 'Nombre, correo y contraseña válida son obligatorios' }, { status: 400 });
+    }
+
+    if (!Number.isFinite(licenseAmount) || licenseAmount < 0 || licenseAmount > 100000000) {
+      return NextResponse.json({ error: 'El valor de la licencia debe ser un monto valido igual o mayor a cero' }, { status: 400 });
+    }
+    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      return NextResponse.json({ error: 'La fecha de vencimiento no es valida' }, { status: 400 });
     }
 
     const { data: authData, error: authError } = await auth.admin.auth.admin.createUser({
@@ -230,7 +241,7 @@ export async function POST(request: Request) {
       email,
       full_name,
       role: 'organizer',
-      saas_status: 'active',
+      saas_status: licenseAmount > 0 ? 'pending_payment' : 'active',
       max_tournaments: 1
     });
 
@@ -239,7 +250,35 @@ export async function POST(request: Request) {
       throw profileError;
     }
 
-    return NextResponse.json({ success: true, user: authData.user });
+    let invoice = null;
+    if (licenseAmount > 0) {
+      const { data: invoiceData, error: invoiceError } = await auth.admin
+        .from('saas_invoices')
+        .insert({
+          organizer_id: userId,
+          amount: Number(licenseAmount.toFixed(2)),
+          concept: billingConcept || 'Licencia Game Legal',
+          due_date: dueDate,
+          created_by: auth.user.id,
+        })
+        .select('*')
+        .single();
+
+      if (invoiceError) {
+        await auth.admin.auth.admin.deleteUser(userId);
+        throw invoiceError;
+      }
+      invoice = invoiceData;
+    }
+
+    await auth.admin.from('admin_activity_log').insert({
+      actor_id: auth.user.id,
+      target_id: userId,
+      action: 'client_created',
+      details: { license_amount: licenseAmount, due_date: dueDate, invoice_id: invoice?.id || null },
+    });
+
+    return NextResponse.json({ success: true, user: authData.user, invoice });
   } catch (error) {
     console.error('Error al crear cliente SaaS:', error);
     const response = clientCreationError(error);

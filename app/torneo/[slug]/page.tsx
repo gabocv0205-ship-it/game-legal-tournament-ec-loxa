@@ -16,6 +16,7 @@ export default function PortalTorneoDinamico() {
   const [equipos, setEquipos] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
   const [goleadores, setGoleadores] = useState<any[]>([]);
+  const [redesSociales, setRedesSociales] = useState<Record<string, string>>({});
   const [visitas, setVisitas] = useState(0);
   const [activeTab, setActiveTab] = useState("posiciones");
   const [errorTorneo, setErrorTorneo] = useState(false);
@@ -46,6 +47,12 @@ export default function PortalTorneoDinamico() {
         }
 
         setTorneoActual(tourney);
+        const { data: socialLinks } = await supabase
+          .from("public_tournament_social_links")
+          .select("full_name, facebook_url, instagram_url, whatsapp_url, tiktok_url, youtube_url, website_url, other_social_url")
+          .eq("slug", slug)
+          .maybeSingle();
+        setRedesSociales(socialLinks || {});
 
         const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
         setEquipos(teams || []);
@@ -678,6 +685,19 @@ export default function PortalTorneoDinamico() {
               <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>
             ))}
           </div>
+          {Object.entries(redesSociales).some(([key, value]) => key.endsWith("_url") && Boolean(value)) && (
+            <div className="reveal" style={{ marginTop: '28px', textAlign: 'center' }}>
+              <p style={{ color: 'var(--gray)', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', textTransform: 'uppercase' }}>Canales oficiales del organizador</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px', marginTop: '14px' }}>
+                {([
+                  ['facebook_url', 'Facebook'], ['instagram_url', 'Instagram'], ['whatsapp_url', 'WhatsApp'],
+                  ['tiktok_url', 'TikTok'], ['youtube_url', 'YouTube'], ['website_url', 'Sitio web'], ['other_social_url', 'Otro enlace'],
+                ] as const).map(([key, label]) => redesSociales[key] ? (
+                  <a key={key} href={redesSociales[key]} target="_blank" rel="noopener noreferrer" className="sponsor-logo" style={{ color: 'var(--gold)', textDecoration: 'none' }}>{label}</a>
+                ) : null)}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

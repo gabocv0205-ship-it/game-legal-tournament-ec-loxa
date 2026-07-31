@@ -383,6 +383,110 @@ textarea:focus {
   transition-timing-function: ease;
 }
 
+.admin-premium-shell button,
+.admin-premium-shell a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.admin-premium-shell button:hover,
+.admin-premium-shell a:hover {
+  text-decoration: none;
+}
+
+.premium-match-card {
+  position: relative;
+  overflow: hidden;
+  color: var(--admin-text);
+}
+
+.premium-match-card::before,
+.premium-sport-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(212, 160, 23, 0.12) 48%, transparent 100%);
+  transform: translateX(-24%);
+  transition: opacity 180ms ease, transform 420ms ease;
+}
+
+.premium-match-card:hover::before,
+.premium-sport-media:hover::after {
+  opacity: 1;
+  transform: translateX(24%);
+}
+
+.admin-premium-shell .admin-premium-card,
+.admin-premium-shell .premium-match-card,
+.admin-premium-shell table {
+  backdrop-filter: blur(18px);
+}
+
+.admin-premium-shell table {
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: 18px;
+  background: var(--admin-surface);
+  box-shadow: 0 16px 42px color-mix(in srgb, var(--admin-green) 10%, transparent);
+}
+
+.admin-premium-shell th {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-premium-shell tbody tr {
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.admin-premium-shell tbody tr:hover {
+  background: color-mix(in srgb, var(--admin-green) 8%, transparent);
+}
+
+.admin-premium-shell input,
+.admin-premium-shell select,
+.admin-premium-shell textarea {
+  min-height: 42px;
+  border-radius: 14px !important;
+}
+
+.admin-premium-shell .admin-theme-toggle,
+.admin-premium-shell button[class*="rounded"],
+.admin-premium-shell a[class*="rounded"] {
+  transform: translateZ(0);
+}
+
+:root[data-admin-theme="light"] .admin-premium-sidebar {
+  color: var(--admin-text) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-sidebar .text-white,
+:root[data-admin-theme="light"] .admin-premium-header .text-white {
+  color: var(--admin-text) !important;
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell .premium-match-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(237, 249, 241, 0.94));
+  border-color: rgba(9, 126, 63, 0.22);
+}
+
+:root[data-admin-theme="light"] .admin-premium-shell .bg-\[\#D4A017\],
+:root[data-admin-theme="light"] .admin-premium-shell [class*="from-[#D4A017]"] {
+  color: #06140c !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 :root {
   --premium-bg: #050807;
   --premium-bg-soft: #0e1511;

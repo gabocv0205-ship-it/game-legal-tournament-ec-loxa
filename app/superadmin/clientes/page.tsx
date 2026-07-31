@@ -27,6 +27,8 @@ export default function BovedaSuperAdmin() {
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoEmail, setNuevoEmail] = useState("");
   const [nuevaClave, setNuevaClave] = useState("");
+  const [nuevoMontoLicencia, setNuevoMontoLicencia] = useState("");
+  const [nuevaFechaVencimiento, setNuevaFechaVencimiento] = useState("");
   const [creandoCliente, setCreandoCliente] = useState(false);
   const [errorCarga, setErrorCarga] = useState("");
 
@@ -116,7 +118,14 @@ export default function BovedaSuperAdmin() {
       const response = await fetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: nuevoEmail, password: nuevaClave, full_name: nuevoNombre })
+        body: JSON.stringify({
+          email: nuevoEmail,
+          password: nuevaClave,
+          full_name: nuevoNombre,
+          license_amount: nuevoMontoLicencia || 0,
+          due_date: nuevaFechaVencimiento || null,
+          license_concept: "Licencia Game Legal",
+        })
       });
       
       const data = await response.json();
@@ -129,6 +138,8 @@ export default function BovedaSuperAdmin() {
       setNuevoNombre("");
       setNuevoEmail("");
       setNuevaClave("");
+      setNuevoMontoLicencia("");
+      setNuevaFechaVencimiento("");
       await cargarClientes();
     } catch (error: any) {
       alert(error.message);
@@ -310,7 +321,18 @@ export default function BovedaSuperAdmin() {
                 </div>
                 <input type="text" value={nuevaClave} onChange={(e) => setNuevaClave(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none font-mono" required placeholder="Mínimo 6 caracteres" minLength={6} />
               </div>
-              
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Valor de licencia ($)</label>
+                  <input type="number" min="0" step="0.01" value={nuevoMontoLicencia} onChange={(e) => setNuevoMontoLicencia(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none font-mono" placeholder="Ej: 75.00" />
+                  <p className="mt-1 text-[10px] text-gray-500">Se crea como cuenta por cobrar. Usa 0 si no corresponde cobrarla.</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Vencimiento (opcional)</label>
+                  <input type="date" value={nuevaFechaVencimiento} onChange={(e) => setNuevaFechaVencimiento(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none" />
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-4 border-t border-[#2E2E2E]">
                 <button type="button" onClick={() => setMostrarModalCrear(false)} className="flex-1 py-3 bg-[#141414] text-gray-400 font-bold uppercase tracking-widest text-xs rounded-xl hover:text-white transition-all">Cancelar</button>
                 <button type="submit" disabled={creandoCliente} className="flex-1 py-3 bg-[#D4A017] text-black font-black uppercase tracking-widest text-xs rounded-xl shadow-lg hover:bg-yellow-500 transition-all">

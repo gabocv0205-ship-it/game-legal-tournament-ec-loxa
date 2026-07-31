@@ -43,6 +43,14 @@ export default function LibroMayorFinanzas() {
   const [exportDesde, setExportDesde] = useState("");
   const [exportHasta, setExportHasta] = useState("");
   const [historialExportaciones, setHistorialExportaciones] = useState<any[]>([]);
+  const [movimientosOperativos, setMovimientosOperativos] = useState<any[]>([]);
+  const [operativoTipo, setOperativoTipo] = useState<"income" | "expense">("expense");
+  const [operativoCategoria, setOperativoCategoria] = useState("otro");
+  const [operativoMonto, setOperativoMonto] = useState("");
+  const [operativoFecha, setOperativoFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [operativoMetodo, setOperativoMetodo] = useState("efectivo");
+  const [operativoDescripcion, setOperativoDescripcion] = useState("");
+  const [procesandoOperativo, setProcesandoOperativo] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -78,6 +86,13 @@ export default function LibroMayorFinanzas() {
       const { data: teams } = await supabase.from("teams").select("*, payments(*)").eq("tournament_id", activeId);
       const { data: ledger } = await supabase.from("financial_ledger").select("*").eq("tournament_id", activeId).order("created_at", { ascending: false });
       setHistorialLibro(ledger || []);
+      const { data: operationalData, error: operationalError } = await supabase
+        .from("tournament_operating_transactions")
+        .select("*")
+        .eq("tournament_id", activeId)
+        .order("transaction_date", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (!operationalError) setMovimientosOperativos(operationalData || []);
       const { data: exports } = await supabase.from("financial_exports").select("*").eq("tournament_id", activeId).order("created_at", { ascending: false }).limit(12);
       setHistorialExportaciones(exports || []);
       
@@ -268,7 +283,19 @@ export default function LibroMayorFinanzas() {
           };
         });
 
-    return base.filter(row => {
+    const operativas = movimientosOperativos.map(item => ({
+      fecha: `${item.transaction_date}T12:00:00`,
+      equipo: "Operacion del torneo",
+      tipo: item.transaction_type,
+      categoria: item.category,
+      metodo: item.payment_method || "",
+      ingreso: item.transaction_type === "income" ? Number(item.amount || 0) : 0,
+      egreso: item.transaction_type === "expense" ? Number(item.amount || 0) : 0,
+      saldo: 0,
+      descripcion: item.description || "",
+    }));
+
+    return [...base, ...operativas].filter(row => {
       const fecha = new Date(row.fecha);
       const equipoFiltro = filtroEquipoId ? equipos.find(equipo => equipo.id === filtroEquipoId)?.name : "";
       const fechaOk = (!desde || fecha >= desde) && (!hasta || fecha <= hasta);
@@ -291,6 +318,45 @@ export default function LibroMayorFinanzas() {
     }]);
     const { data } = await supabase.from("financial_exports").select("*").eq("tournament_id", torneoId).order("created_at", { ascending: false }).limit(12);
     setHistorialExportaciones(data || []);
+  };
+
+  const registrarMovimientoOperativo = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const amount = Number(operativoMonto);
+    if (!torneoId || !operativoCategoria.trim() || !Number.isFinite(amount) || amount <= 0) {
+      return alert("Ingresa una categoria y un valor mayor a cero.");
+    }
+    setProcesandoOperativo(true);
+    try {
+      const { data, error } = await supabase
+        .from("tournament_operating_transactions")
+        .insert({
+          tournament_id: torneoId,
+          transaction_type: operativoTipo,
+          category: operativoCategoria.trim(),
+          amount: Number(amount.toFixed(2)),
+          transaction_date: operativoFecha || new Date().toISOString().slice(0, 10),
+          payment_method: operativoMetodo || null,
+          description: operativoDescripcion.trim() || null,
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+      setMovimientosOperativos(actuales => [data, ...actuales]);
+      setOperativoMonto("");
+      setOperativoDescripcion("");
+    } catch (error: any) {
+      alert(`No se pudo registrar el movimiento operativo: ${error?.message || "error desconocido"}`);
+    } finally {
+      setProcesandoOperativo(false);
+    }
+  };
+
+  const eliminarMovimientoOperativo = async (id: string) => {
+    if (!window.confirm("¿Eliminar este movimiento operativo? Esta accion quedara registrada.")) return;
+    const { error } = await supabase.from("tournament_operating_transactions").delete().eq("id", id).eq("tournament_id", torneoId);
+    if (error) return alert(`No se pudo eliminar: ${error.message}`);
+    setMovimientosOperativos(actuales => actuales.filter(item => item.id !== id));
   };
 
   const exportarFinanzas = async (tipo: "csv" | "xlsx" | "pdf") => {
@@ -322,6 +388,8 @@ export default function LibroMayorFinanzas() {
   }, { totalCargos: 0, totalIngresos: 0, totalDescuentos: 0, totalPendiente: 0, inscripcion: 0, arbitraje: 0, tarjetas: 0 });
   const saldoFinal = cierreFinanciero.totalIngresos - cierreFinanciero.totalCargos + cierreFinanciero.totalDescuentos;
   const money = (value: any) => `$${Number(value || 0).toFixed(2)}`;
+  const operativoIngresos = movimientosOperativos.filter(item => item.transaction_type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const operativoGastos = movimientosOperativos.filter(item => item.transaction_type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   return (
     <div className="space-y-8">
@@ -392,6 +460,49 @@ export default function LibroMayorFinanzas() {
           </div>
         )}
       </div>
+
+      <section className="rounded-2xl border border-sky-500/25 bg-[#1C1C1C] p-4 shadow-xl">
+        <div className="flex flex-col gap-3 border-b border-[#2E2E2E] pb-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-sky-300">Libro independiente del torneo</p>
+            <h3 className="mt-1 text-xl font-black uppercase text-white">Gastos e ingresos operativos</h3>
+            <p className="mt-1 text-xs font-bold text-gray-500">Balones, cancha, arbitraje, premiacion y otros movimientos. No se mezclan con pagos de equipos ni con la tesoreria SaaS.</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <Summary label="Ingresos" value={operativoIngresos} color="text-green-400" />
+            <Summary label="Gastos" value={operativoGastos} color="text-red-400" />
+            <Summary label="Neto" value={operativoIngresos - operativoGastos} color="text-sky-300" />
+          </div>
+        </div>
+        <form onSubmit={registrarMovimientoOperativo} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <select value={operativoTipo} onChange={e => setOperativoTipo(e.target.value as "income" | "expense")} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white">
+            <option value="expense">Gasto operativo</option>
+            <option value="income">Ingreso adicional</option>
+          </select>
+          <input value={operativoCategoria} onChange={e => setOperativoCategoria(e.target.value)} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white" placeholder="Categoria: balones, cancha..." required />
+          <input type="number" min="0.01" step="0.01" value={operativoMonto} onChange={e => setOperativoMonto(e.target.value)} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 font-mono text-sm text-white" placeholder="Monto" required />
+          <input type="date" value={operativoFecha} onChange={e => setOperativoFecha(e.target.value)} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white" />
+          <select value={operativoMetodo} onChange={e => setOperativoMetodo(e.target.value)} className="rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="deposito">Deposito</option>
+            <option value="otro">Otro</option>
+          </select>
+          <button type="submit" disabled={procesandoOperativo} className="rounded-xl bg-sky-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-950 transition hover:bg-sky-300 disabled:opacity-60">{procesandoOperativo ? "Guardando..." : "Registrar"}</button>
+          <textarea value={operativoDescripcion} onChange={e => setOperativoDescripcion(e.target.value)} className="min-h-12 rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-sm text-white md:col-span-2 xl:col-span-6" rows={2} placeholder="Observacion opcional del movimiento" />
+        </form>
+        <div className="mt-4 divide-y divide-[#2E2E2E] rounded-xl border border-[#2E2E2E]">
+          {movimientosOperativos.length === 0 ? <p className="p-5 text-center text-xs font-bold text-gray-500">Aun no hay gastos ni ingresos operativos registrados.</p> : movimientosOperativos.slice(0, 30).map(item => (
+            <div key={item.id} className="grid grid-cols-1 gap-2 p-3 text-xs md:grid-cols-[110px_1fr_130px_100px_auto] md:items-center">
+              <span className="text-gray-500">{item.transaction_date}</span>
+              <span><b className={item.transaction_type === "income" ? "text-green-400" : "text-red-400"}>{item.transaction_type === "income" ? "Ingreso" : "Gasto"}</b><span className="ml-2 font-bold uppercase text-white">{item.category}</span><span className="block text-gray-500">{item.description || "Sin observaciones"}</span></span>
+              <span className="font-mono font-black text-white">{money(item.amount)}</span>
+              <span className="uppercase text-gray-500">{item.payment_method || "-"}</span>
+              <button type="button" onClick={() => eliminarMovimientoOperativo(item.id)} className="text-left font-black uppercase tracking-widest text-red-400 hover:text-red-200 md:text-right">Eliminar</button>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="overflow-hidden rounded-2xl border border-[#2E2E2E] bg-[#1C1C1C] shadow-xl">
         <div className="border-b border-[#2E2E2E] bg-[#0a0a0a] px-4 py-3">

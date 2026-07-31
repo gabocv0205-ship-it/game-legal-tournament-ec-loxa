@@ -24,6 +24,15 @@ export default function MiPerfilPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState("");
   const [logoPreview, setLogoPreview] = useState("");
+  const [redes, setRedes] = useState({
+    facebook_url: "",
+    instagram_url: "",
+    whatsapp_url: "",
+    tiktok_url: "",
+    youtube_url: "",
+    website_url: "",
+    other_social_url: "",
+  });
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
 
@@ -45,6 +54,15 @@ export default function MiPerfilPage() {
         setTelefono(data.phone || "");
         setAvatarUrl(data.avatar_url || "");
         setLogoUrl(data.logo_url || "");
+        setRedes({
+          facebook_url: data.facebook_url || "",
+          instagram_url: data.instagram_url || "",
+          whatsapp_url: data.whatsapp_url || "",
+          tiktok_url: data.tiktok_url || "",
+          youtube_url: data.youtube_url || "",
+          website_url: data.website_url || "",
+          other_social_url: data.other_social_url || "",
+        });
       } else {
         
         setPerfil({ email: session.user.email, role: 'organizer' });
@@ -112,6 +130,8 @@ export default function MiPerfilPage() {
     e.preventDefault();
     setProcesando(true);
     try {
+      const urlsInvalidas = Object.values(redes).some(value => value && !/^https?:\/\/\S+$/i.test(value.trim()));
+      if (urlsInvalidas) throw new Error("Los enlaces deben iniciar con http:// o https://");
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No hay sesión activa");
 
@@ -122,7 +142,8 @@ export default function MiPerfilPage() {
         full_name: nombre,
         phone: telefono,
         avatar_url: nextAvatarUrl || null,
-        logo_url: nextLogoUrl || null
+        logo_url: nextLogoUrl || null,
+        ...Object.fromEntries(Object.entries(redes).map(([key, value]) => [key, value.trim() || null])),
       }).eq('id', session.user.id);
 
       if (error) throw error;
@@ -181,6 +202,29 @@ export default function MiPerfilPage() {
                   <p className="text-[10px] text-gray-500">Formatos permitidos: JPG, JPEG, PNG, WEBP. La app comprime a WEBP automáticamente.</p>
                   {(logoPreview || logoUrl) && <button type="button" onClick={() => eliminarImagenPerfil("logo")} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Eliminar logo</button>}
                 </div>
+              </div>
+            </div>
+
+            <div className="mb-8 rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a] p-4">
+              <div className="mb-4">
+                <p className="text-xs font-black uppercase tracking-widest text-[#D4A017]">Redes sociales del organizador</p>
+                <p className="mt-1 text-[10px] font-bold text-gray-500">Se mostraran unicamente en la pagina publica de tus torneos. Usa enlaces completos con https://.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {([
+                  ["facebook_url", "Facebook"],
+                  ["instagram_url", "Instagram"],
+                  ["whatsapp_url", "WhatsApp"],
+                  ["tiktok_url", "TikTok"],
+                  ["youtube_url", "YouTube"],
+                  ["website_url", "Sitio web"],
+                  ["other_social_url", "Otro enlace"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                    {label}
+                    <input type="url" value={redes[key]} onChange={e => setRedes(actual => ({ ...actual, [key]: e.target.value }))} className="mt-1 w-full rounded-xl border border-[#2E2E2E] bg-[#141414] p-3 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-[#D4A017]" placeholder={`https://...`} />
+                  </label>
+                ))}
               </div>
             </div>
 

@@ -24,6 +24,8 @@ export default function CajaFuerteSaaS() {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null);
   const [monto, setMonto] = useState("");
+  const [facturaId, setFacturaId] = useState<string | null>(null);
+  const [metodoPago, setMetodoPago] = useState("transferencia");
   const [concepto, setConcepto] = useState("Suscripción Mensual Pro");
   const [notas, setNotas] = useState("");
   const [errorCarga, setErrorCarga] = useState("");
@@ -72,8 +74,12 @@ export default function CajaFuerteSaaS() {
 
   const abrirModalCobro = (cliente: any) => {
     setClienteSeleccionado(cliente);
-    setMonto("29.99");
+    const facturaPendiente = (cliente.facturas || []).find((factura: any) => factura.status !== "paid" && factura.status !== "cancelled");
+    setFacturaId(facturaPendiente?.id || null);
+    setMonto(facturaPendiente ? Number(facturaPendiente.balance ?? facturaPendiente.amount ?? 0).toFixed(2) : "29.99");
+    if (facturaPendiente?.concept) setConcepto(facturaPendiente.concept);
     setNotas("");
+    setMetodoPago("transferencia");
     setMostrarModal(true);
   };
 
@@ -89,9 +95,11 @@ export default function CajaFuerteSaaS() {
         credentials: 'include',
         body: JSON.stringify({
           organizer_id: clienteSeleccionado.id,
+          invoice_id: facturaId,
           amount: Number(monto),
           concept: concepto,
           notes: notas,
+          payment_method: metodoPago,
         }),
       });
 
@@ -169,22 +177,26 @@ export default function CajaFuerteSaaS() {
                 <th className="p-4">Organizador / Cliente</th>
                 <th className="p-4 text-center">Estado del SaaS</th>
                 <th className="p-4 text-center">Torneos</th>
-                <th className="p-4 text-center">Total Facturado</th>
+                <th className="p-4 text-center">Facturado</th>
+                <th className="p-4 text-center">Abonado</th>
+                <th className="p-4 text-center">Pendiente</th>
                 <th className="p-4 text-right">Acción Contable</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E2E2E]">
-              {clientes.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">No hay clientes registrados aún.</td></tr> : clientes.map(c => (
+              {clientes.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-gray-500 italic">No hay clientes registrados aún.</td></tr> : clientes.map(c => (
                 <tr key={c.id} className="hover:bg-[#141414] transition-colors">
                   <td className="p-4">
                     <p className="font-bold text-white uppercase">{c.full_name || 'Sin Nombre'}</p>
                     <p className="text-[10px] text-gray-500 font-mono mt-0.5">{c.email}</p>
                   </td>
                   <td className="p-4 text-center">
-                    {c.saas_status === 'active' ? <span className="bg-green-900/20 text-green-500 border border-green-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Solvente</span> : <span className="bg-red-900/20 text-red-500 border border-red-900/50 text-[9px] font-black uppercase px-2 py-1 rounded animate-pulse">En Mora</span>}
+                    {(c.facturacionStatus === 'paid' || c.facturacionStatus === 'active') ? <span className="bg-green-900/20 text-green-500 border border-green-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Pagado</span> : c.facturacionStatus === 'partial' ? <span className="bg-yellow-900/20 text-yellow-500 border border-yellow-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Abonado</span> : <span className="bg-red-900/20 text-red-500 border border-red-900/50 text-[9px] font-black uppercase px-2 py-1 rounded animate-pulse">{c.facturacionStatus === 'overdue' ? 'Vencido' : 'Pendiente'}</span>}
                   </td>
                   <td className="p-4 text-center text-gray-400 font-black">{c.max_tournaments}</td>
-                  <td className="p-4 text-center text-[#D4A017] font-mono font-black">${c.totalPagado.toFixed(2)}</td>
+                    <td className="p-4 text-center text-[#D4A017] font-mono font-black">${Number(c.totalFacturado || 0).toFixed(2)}</td>
+                    <td className="p-4 text-center text-green-400 font-mono font-black">${Number(c.totalPagado || 0).toFixed(2)}</td>
+                    <td className="p-4 text-center text-red-400 font-mono font-black">${Number(c.saldoPendiente || 0).toFixed(2)}</td>
                   <td className="p-4 text-right">
                     <button onClick={() => abrirModalCobro(c)} className="bg-[#D4A017] text-black hover:bg-yellow-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(212,160,23,0.3)]">
                       Cobrar Plan
@@ -237,6 +249,21 @@ export default function CajaFuerteSaaS() {
             </div>
 
             <form onSubmit={asentarPagoSaaS} className="p-6 space-y-5">
+              {(clienteSeleccionado?.facturas || []).filter((factura: any) => !['paid', 'cancelled'].includes(factura.status)).length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Cuenta por cobrar</label>
+                  <select value={facturaId || ""} onChange={(e) => {
+                    const nextInvoice = clienteSeleccionado.facturas.find((factura: any) => factura.id === e.target.value);
+                    setFacturaId(e.target.value || null);
+                    if (nextInvoice) {
+                      setConcepto(nextInvoice.concept || "Licencia Game Legal");
+                      setMonto(Number(nextInvoice.balance ?? nextInvoice.amount ?? 0).toFixed(2));
+                    }
+                  }} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none">
+                    {clienteSeleccionado.facturas.filter((factura: any) => !['paid', 'cancelled'].includes(factura.status)).map((factura: any) => <option key={factura.id} value={factura.id}>{factura.invoice_number} · {factura.concept} · saldo ${Number(factura.balance ?? factura.amount ?? 0).toFixed(2)}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Plan / Concepto</label>
                 <input type="text" value={concepto} onChange={(e) => setConcepto(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none transition-colors" required />
@@ -244,6 +271,16 @@ export default function CajaFuerteSaaS() {
               <div>
                 <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Monto Recibido ($)</label>
                 <input type="number" step="0.01" min="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white font-mono text-2xl p-4 rounded-xl focus:border-[#D4A017] outline-none transition-colors" required />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Método de pago</label>
+                <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} className="w-full mt-1 bg-[#0a0a0a] border border-[#2E2E2E] text-white p-3 rounded-xl focus:border-[#D4A017] outline-none">
+                  <option value="efectivo">Efectivo</option>
+                  <option value="transferencia">Transferencia</option>
+                  <option value="deposito">Depósito</option>
+                  <option value="otro">Otro</option>
+                </select>
+                {facturaId && <p className="mt-1 text-[10px] text-gray-500">Este pago se aplicará a la factura pendiente del cliente.</p>}
               </div>
               <div>
                 <label className="text-[10px] font-bold text-[#D4A017] uppercase tracking-widest">Notas Contables (Opcional)</label>

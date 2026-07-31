@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { useTournamentData } from "./useTournamentData";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
+import { SidebarItem } from "@/components/premium-ui";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -218,12 +219,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <nav className="flex-1 p-2.5 space-y-0.5 mt-1 overflow-y-auto lg:overflow-visible">
           {MENU.filter(item => perfilUsuario?.role === "superadmin" || !["/dashboard/roles", "/dashboard/auditoria"].includes(item.href)).map(item => (
-            <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
-              className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-black tracking-wide transition-all ${pathname === item.href ? "bg-gradient-to-r from-[#D4A017] to-yellow-300 text-black shadow-[0_8px_24px_rgba(212,160,23,0.28)]" : "text-[#9A9A9A] hover:bg-white/5 hover:text-white hover:border-[#D4A017]/20 border border-transparent"}`}>
-              <motion.span whileHover={{ x: 2 }} whileTap={{ scale: 0.98 }} className="flex w-full items-center gap-2">
-                <Icon path={item.icon} size={15} /> <span className="truncate">{item.label}</span>
-              </motion.span>
-            </Link>
+            <SidebarItem
+              key={item.href}
+              href={item.href}
+              active={pathname === item.href}
+              icon={<Icon path={item.icon} size={15} />}
+              label={item.label}
+              onClick={() => setSidebarOpen(false)}
+            />
           ))}
           
           {perfilUsuario?.role === 'superadmin' && (

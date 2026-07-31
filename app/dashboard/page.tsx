@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useTournamentData } from "./useTournamentData";
-import { AnimatedPage, AnimatedStatCard, PremiumCard, PosterPreviewCard } from "@/components/premium-ui";
+import { AnimatedPage, AnimatedStatCard, MatchCard, PremiumCard, PosterPreviewCard } from "@/components/premium-ui";
 
 type Standing = {
   id: string;
@@ -175,13 +175,13 @@ export default function DashboardInicio() {
           </div>
           <div className="space-y-3">
             {dashboard.upcoming.length === 0 ? <p className="rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a] p-4 text-sm font-bold text-gray-500">No hay proximos encuentros programados.</p> : dashboard.upcoming.map(match => (
-              <div key={match.id} className="grid grid-cols-1 gap-3 rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a] p-4 md:grid-cols-[1fr_auto] md:items-center">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black uppercase text-white">{match.home?.name || "Local"} vs {match.away?.name || "Visitante"}</p>
-                  <p className="mt-1 text-xs font-bold text-gray-500">Fecha {match.matchday || "-"} · {match.court_name || "Cancha por definir"}</p>
-                </div>
-                <span className="rounded-xl border border-[#D4A017]/35 bg-[#D4A017]/10 px-3 py-2 text-xs font-black text-[#D4A017]">{match.match_date ? new Date(match.match_date).toLocaleString("es-EC") : "Sin hora"}</span>
-              </div>
+              <MatchCard
+                key={match.id}
+                home={match.home?.name || "Local"}
+                away={match.away?.name || "Visitante"}
+                meta={`Fecha ${match.matchday || "-"} · ${match.court_name || "Cancha por definir"}`}
+                status={match.match_date ? new Date(match.match_date).toLocaleString("es-EC") : "Sin hora"}
+              />
             ))}
           </div>
         </PremiumCard>
@@ -212,10 +212,15 @@ export default function DashboardInicio() {
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Ultimos resultados</p>
           <div className="mt-5 space-y-3">
             {dashboard.latest.length === 0 ? <p className="text-sm font-bold text-gray-500">Aun no existen resultados finalizados.</p> : dashboard.latest.map(match => (
-              <div key={match.id} className="rounded-2xl border border-[#2E2E2E] bg-[#0a0a0a] p-4">
-                <p className="text-sm font-black uppercase text-white">{match.home?.name || "Local"} {match.home_goals ?? 0} - {match.away_goals ?? 0} {match.away?.name || "Visitante"}</p>
-                <p className="mt-1 text-xs font-bold text-gray-500">Fecha {match.matchday || "-"} · Finalizado</p>
-              </div>
+              <MatchCard
+                key={match.id}
+                home={match.home?.name || "Local"}
+                away={match.away?.name || "Visitante"}
+                homeScore={match.home_goals ?? 0}
+                awayScore={match.away_goals ?? 0}
+                meta={`Fecha ${match.matchday || "-"} · Finalizado`}
+                status="Resultado"
+              />
             ))}
           </div>
         </PremiumCard>
