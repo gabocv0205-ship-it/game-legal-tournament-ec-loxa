@@ -25,7 +25,7 @@ export async function waitForPosterImages(root: HTMLElement) {
         const finish = () => resolve();
         image.addEventListener("load", finish, { once: true });
         image.addEventListener("error", finish, { once: true });
-        window.setTimeout(finish, 5000);
+        window.setTimeout(finish, 2500);
       });
     }
 
@@ -39,13 +39,16 @@ export async function waitForPosterImages(root: HTMLElement) {
 
 async function waitForPosterFonts() {
   if (typeof document !== "undefined" && document.fonts?.ready) {
-    await document.fonts.ready;
+    await Promise.race([
+      document.fonts.ready,
+      new Promise<void>(resolve => window.setTimeout(resolve, 900)),
+    ]);
   }
 }
 
 function waitForNextPaint() {
   return new Promise<void>(resolve => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    requestAnimationFrame(() => resolve());
   });
 }
 
@@ -56,7 +59,7 @@ export async function capturePoster(root: HTMLElement, options: PosterCaptureOpt
 
   const width = options.width ?? root.scrollWidth;
   const height = options.height ?? root.scrollHeight;
-  const maxDimension = options.maxDimension ?? 2560;
+  const maxDimension = options.maxDimension ?? 2048;
   const requestedScale = options.scale ?? 2;
   const adaptiveScale = Math.min(requestedScale, maxDimension / Math.max(width, height));
   const scale = Math.max(1, adaptiveScale);
@@ -84,7 +87,7 @@ export async function downloadPosterCanvas(
   options: PosterDownloadOptions = {},
 ) {
   const preferredFormat = options.format ?? "webp";
-  const quality = options.quality ?? 0.92;
+  const quality = options.quality ?? 0.88;
   const preferredMime = preferredFormat === "webp" ? "image/webp" : "image/png";
   let actualBlob: Blob | null = null;
 

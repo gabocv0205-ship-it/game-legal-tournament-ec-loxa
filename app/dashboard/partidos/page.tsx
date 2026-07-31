@@ -95,7 +95,7 @@ export default function PartidosPage() {
   const [appUrl, setAppUrl] = useState("");
   const [fondoPosterUrl, setFondoPosterUrl] = useState("");
   const [usarFondoPersonalizado, setUsarFondoPersonalizado] = useState(true);
-  const posterFontFamily = '"Segoe UI", Arial, Helvetica, sans-serif';
+  const posterFontFamily = 'Arial, "Helvetica Neue", "Segoe UI", sans-serif';
 
   const [partidoActivo, setPartidoActivo] = useState<any>(null);
   const [jugadores, setJugadores] = useState<any[]>([]);
