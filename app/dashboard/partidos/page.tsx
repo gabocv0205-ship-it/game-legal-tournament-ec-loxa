@@ -975,7 +975,10 @@ export default function PartidosPage() {
       const canvas = await capturePoster(capturaRef.current, { backgroundColor: "#0a0a0a", scale: 2 });
       capturaRef.current.style.display = "none";
       await downloadPosterCanvas(canvas, "Poster_Calendario");
-    } catch (e) { alert("Error"); } finally { setLoading(false); }
+    } catch (error) {
+      console.error("Error al generar el póster del calendario", error);
+      alert(`No se pudo generar el póster: ${error instanceof Error ? error.message : "intenta nuevamente"}`);
+    } finally { setLoading(false); }
   };
 
   const descargarPosterJornada = async () => {
@@ -989,7 +992,8 @@ export default function PartidosPage() {
       await downloadPosterCanvas(canvas, `Poster-${tituloPosterJornada.replace(/\s+/g, "-")}-${configuracion.tournament_year}`);
     } catch (error) {
       posterNode.style.display = "none";
-      alert("No se pudo generar el poster de la jornada.");
+      console.error("Error al generar el póster de la jornada", error);
+      alert(`No se pudo generar el póster de la jornada: ${error instanceof Error ? error.message : "intenta nuevamente"}`);
     } finally {
       setLoading(false);
     }
@@ -1762,7 +1766,7 @@ export default function PartidosPage() {
             </button>
 
             {/* BOTÓN POSTER */}
-            <button onClick={descargarPosterJornada} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
+            <button type="button" onClick={descargarPosterJornada} disabled={loading || partidosFiltrados.length === 0} className="bg-transparent border border-[#D4A017] text-[#D4A017] hover:bg-[#D4A017] hover:text-black font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all flex items-center gap-2">
               📸 Póster
             </button>
             <button onClick={imprimirPlanillaEstandar} className="bg-gray-800 border border-gray-600 text-white hover:bg-gray-700 font-black uppercase text-xs px-4 py-2 rounded shadow-lg transition-all">

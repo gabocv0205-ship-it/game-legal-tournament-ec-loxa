@@ -245,8 +245,9 @@ export default function EstadisticasPage() {
       const alto = poster.scrollHeight;
       const canvas = await capturePoster(poster, { backgroundColor: "#f4f7f2", scale: 3, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
       await downloadPosterCanvas(canvas, `Posiciones-${nombreTorneo}-${anioTorneo}`);
-    } catch {
-      alert("No se pudo generar el póster de posiciones.");
+    } catch (error) {
+      console.error("Error al generar el póster de posiciones", error);
+      alert(`No se pudo generar el póster de posiciones: ${error instanceof Error ? error.message : "intenta nuevamente"}`);
     } finally {
       poster.style.width = previousStyle.width;
       poster.style.minWidth = previousStyle.minWidth;
@@ -261,8 +262,9 @@ export default function EstadisticasPage() {
     try {
       const canvas = await capturePoster(poster, { backgroundColor: "#f6f8f5", scale: 3, width: 1080, height: 1350, windowWidth: 1080, windowHeight: 1350 });
       await downloadPosterCanvas(canvas, `Goleadores-${nombreTorneo}-${anioTorneo}`);
-    } catch {
-      alert("No se pudo generar el poster de goleadores.");
+    } catch (error) {
+      console.error("Error al generar el póster de goleadores", error);
+      alert(`No se pudo generar el póster de goleadores: ${error instanceof Error ? error.message : "intenta nuevamente"}`);
     } finally {
       setExportando(false);
     }
@@ -452,7 +454,7 @@ export default function EstadisticasPage() {
              <h3 className="text-white font-black uppercase tracking-widest text-sm flex items-center gap-2">
                <span>⚽</span> Máximos Artilleros
              </h3>
-             <button onClick={descargarGoleadores} disabled={exportando || goleadores.length === 0} className="px-4 py-2 rounded-lg bg-[#D4A017] text-black text-[10px] font-black uppercase tracking-widest hover:bg-yellow-400 disabled:opacity-50">
+             <button type="button" onClick={descargarGoleadores} disabled={exportando || goleadores.length === 0} className="px-4 py-2 rounded-lg bg-[#D4A017] text-black text-[10px] font-black uppercase tracking-widest hover:bg-yellow-400 disabled:opacity-50">
                {exportando ? "Generando..." : "Descargar poster"}
              </button>
           </div>

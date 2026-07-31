@@ -86,15 +86,38 @@ export async function downloadPosterCanvas(
   const preferredFormat = options.format ?? "webp";
   const quality = options.quality ?? 0.92;
   const preferredMime = preferredFormat === "webp" ? "image/webp" : "image/png";
-  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, preferredMime, quality));
-  const actualBlob = blob || await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
-  if (!actualBlob) throw new Error("No se pudo preparar el archivo gráfico.");
+  let actualBlob: Blob | null = null;
 
-  const extension = actualBlob.type === "image/webp" ? "webp" : "png";
-  const url = URL.createObjectURL(actualBlob);
+  try {
+    actualBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, preferredMime, quality));
+  } catch {
+    actualBlob = null;
+  }
+
+  if (!actualBlob) {
+    try {
+      actualBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+    } catch {
+      actualBlob = null;
+    }
+  }
+
   const link = document.createElement("a");
+  let url = "";
+  let extension = "png";
+  if (actualBlob) {
+    extension = actualBlob.type === "image/webp" ? "webp" : "png";
+    url = URL.createObjectURL(actualBlob);
+  } else {
+    // Last-resort path for browsers whose canvas encoder does not expose toBlob.
+    url = canvas.toDataURL("image/png");
+  }
+
   link.href = url;
   link.download = `${filenameBase}.${extension}`;
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  link.remove();
+  if (actualBlob) window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
