@@ -33,7 +33,6 @@ export default function EquiposPage() {
     identification: true,
     jerseyNumber: true,
     status: true,
-    statistics: true,
   });
   const [estadoEquipoEditandoId, setEstadoEquipoEditandoId] = useState<string | null>(null);
   const [estadoEquipo, setEstadoEquipo] = useState("active");
@@ -464,7 +463,6 @@ export default function EquiposPage() {
                   ["identification", "Identificacion"],
                   ["jerseyNumber", "Dorsal"],
                   ["status", "Estado"],
-                  ["statistics", "Estadisticas"],
                 ] as const).map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 text-xs font-bold text-[var(--admin-text)]">
                     <input type="checkbox" checked={opcionesCarnets[key]} onChange={e => setOpcionesCarnets(prev => ({ ...prev, [key]: e.target.checked }))} className="h-4 w-4 accent-[#D4A017]" />

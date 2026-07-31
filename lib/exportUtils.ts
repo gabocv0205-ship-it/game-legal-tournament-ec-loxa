@@ -110,7 +110,6 @@ export type TeamPlayerCardsReport = {
     identification?: boolean;
     jerseyNumber?: boolean;
     status?: boolean;
-    statistics?: boolean;
   };
 };
 
@@ -197,7 +196,6 @@ function playerCardsHtml(report: TeamPlayerCardsReport) {
     identification: true,
     jerseyNumber: true,
     status: true,
-    statistics: true,
     ...report.options,
   };
   const cards = report.rows.length
@@ -208,13 +206,9 @@ function playerCardsHtml(report: TeamPlayerCardsReport) {
       const identification = options.identification ? `<p><strong>Identificacion:</strong> ${escapeHtml(row.identification)}</p>` : "";
       const jersey = options.jerseyNumber ? `<p><strong>Dorsal:</strong> ${escapeHtml(row.jerseyNumber)}</p>` : "";
       const status = options.status ? `<span class="status">${escapeHtml(row.status)}</span>` : "";
-      const statistics = options.statistics
-        ? `<div class="stats"><span>Goles <b>${row.goals}</b></span><span>TA <b>${row.yellowCards}</b></span><span>TR <b>${row.redCards}</b></span><span>PJ <b>${row.matchesPlayed}</b></span></div>`
-        : "";
       return `<article class="card">
         <div class="card-top"><div class="team-mark">${report.teamShieldUrl ? `<img src="${escapeHtml(report.teamShieldUrl)}" alt="Escudo" />` : "GL"}</div><span class="card-label">GAME LEGAL<br/>CARNET OFICIAL</span></div>
         <div class="player-main">${photo}<div class="player-copy"><h2>${escapeHtml(row.fullName)}</h2>${identification}${jersey}${status}</div></div>
-        ${statistics}
         ${row.eligibilityReason ? `<p class="reason">${escapeHtml(row.eligibilityReason)}</p>` : ""}
         <div class="card-footer"><span>${escapeHtml(report.teamName)}</span><span>${escapeHtml(report.tournamentName)}</span></div>
       </article>`;
@@ -244,8 +238,6 @@ function playerCardsHtml(report: TeamPlayerCardsReport) {
     .player-copy p { margin: 2px 0; color: #536274; font-size: 9px; }
     .player-copy strong { color: #1b2a3b; }
     .status { display: inline-block; margin-top: 4px; padding: 3px 7px; border-radius: 999px; background: #e8f6ed; color: #146c37; font-size: 8px; font-weight: 900; text-transform: uppercase; }
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 2px 12px 8px; padding: 6px; border-radius: 7px; background: #e9eef4; color: #526274; font-size: 7px; text-align: center; text-transform: uppercase; }
-    .stats b { display: block; color: #101827; font-size: 12px; }
     .reason { margin: 0 12px 8px; color: #8a3a24; font-size: 8px; }
     .card-footer { display: flex; justify-content: space-between; gap: 8px; margin: 0 12px; padding: 7px 0 8px; border-top: 1px solid #dce3eb; color: #6a7786; font-size: 7px; text-transform: uppercase; }
     .empty { padding: 30px; color: #64748b; text-align: center; }
@@ -274,8 +266,8 @@ export function exportTeamPlayerCardsPdf(report: TeamPlayerCardsReport, filename
 export function exportTeamPlayerCardsZip(report: TeamPlayerCardsReport, filename: string) {
   const html = playerCardsHtml(report);
   const csv = [
-    ["#", "Jugador", "Identificacion", "Dorsal", "Estado", "Partidos", "Goles", "Amarillas", "Rojas"],
-    ...report.rows.map(row => [row.index, row.fullName, row.identification, row.jerseyNumber, row.status, row.matchesPlayed, row.goals, row.yellowCards, row.redCards]),
+    ["#", "Jugador", "Identificacion", "Dorsal", "Estado"],
+    ...report.rows.map(row => [row.index, row.fullName, row.identification, row.jerseyNumber, row.status]),
   ].map(row => row.map(escapeCsv).join(",")).join("\r\n");
   const zip = createZip([
     { name: "carnets.html", content: html },
