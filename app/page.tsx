@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link';
+import { PublicSpotlightCard } from "@/components/public-ui";
 
 export default function PortalPrincipal() {
   const router = useRouter();
@@ -28,7 +29,10 @@ export default function PortalPrincipal() {
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
 
-        const { data: tourneys } = await supabase.from("tournaments").select("*").order("created_at", { ascending: false });
+        const { data: tourneys } = await supabase
+          .from("tournaments")
+          .select("id,name,slug,status,created_at")
+          .order("created_at", { ascending: false });
         
         if (tourneys && tourneys.length > 0) {
           const visibles = tourneys.filter((torneo: any) => !["finished", "archived", "deleted"].includes(String(torneo.status || "active")));
@@ -51,22 +55,31 @@ export default function PortalPrincipal() {
     const ring = document.getElementById('cursorRing');
     let mouseX = 0, mouseY = 0, ringX = 0, ringY = 0;
     let rafId = 0;
-    const canUseCustomCursor = window.matchMedia("(pointer: fine)").matches;
+    let cursorAnimationActive = false;
+    const canUseCustomCursor = window.matchMedia("(pointer: fine) and (prefers-reduced-motion: no-preference)").matches;
     
     const moveCursor = (e: MouseEvent) => {
       mouseX = e.clientX; mouseY = e.clientY;
       if(dot) { dot.style.left = mouseX + 'px'; dot.style.top = mouseY + 'px'; }
+      if (!cursorAnimationActive) {
+        cursorAnimationActive = true;
+        rafId = requestAnimationFrame(animateRing);
+      }
     };
     
     const animateRing = () => {
       ringX += (mouseX - ringX) * 0.12;
       ringY += (mouseY - ringY) * 0.12;
       if(ring) { ring.style.left = ringX + 'px'; ring.style.top = ringY + 'px'; }
-      rafId = requestAnimationFrame(animateRing);
+      const distance = Math.abs(mouseX - ringX) + Math.abs(mouseY - ringY);
+      if (distance > 0.5) {
+        rafId = requestAnimationFrame(animateRing);
+      } else {
+        cursorAnimationActive = false;
+      }
     };
     if (canUseCustomCursor) {
       document.addEventListener('mousemove', moveCursor);
-      rafId = requestAnimationFrame(animateRing);
     }
 
     const reveals = document.querySelectorAll('.reveal');
@@ -118,7 +131,10 @@ export default function PortalPrincipal() {
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
       <style dangerouslySetInnerHTML={{__html: `
         :root { --gold: #D4A017; --gold-light: #F5C842; --green: #1B6B2F; --green-light: #27A04A; --black: #0D0D0D; --dark: #141414; --dark2: #1C1C1C; --dark3: #242424; --white: #FFFFFF; --gray: #8A8A8A; --font-heading: system-ui, sans-serif; --font-display: impact, sans-serif; }
-        body { background: var(--black); color: var(--white); overflow-x: hidden; font-family: var(--font-heading); cursor: none;}
+        body { background: var(--black); color: var(--white); overflow-x: hidden; font-family: var(--font-heading); cursor: auto;}
+        @media (pointer: fine) and (prefers-reduced-motion: no-preference) {
+          body, .btn-primary, .modal-close { cursor: none; }
+        }
         .cursor-dot, .cursor-ring { position: fixed; pointer-events: none; z-index: 99999; transform: translate(-50%, -50%); }
         .cursor-dot { width: 8px; height: 8px; background: var(--gold); border-radius: 50%; }
         .cursor-ring { width: 36px; height: 36px; border: 2px solid rgba(212,160,23,0.5); border-radius: 50%; transition: width 0.3s, height 0.3s; }
@@ -175,7 +191,13 @@ export default function PortalPrincipal() {
           .btn-primary { width: 100%; text-align: center; }
           .section-label { font-size: 12px; letter-spacing: 2px; }
           .sponsors-track { gap: 16px; }
-          .sponsor-logo { padding: 12px 18px; font-size: 12px; }
+        .sponsor-logo { padding: 12px 18px; font-size: 12px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+          .reveal { opacity: 1 !important; transform: none !important; }
+          .topbar-marquee span, .sponsors-track { animation: none !important; transform: none !important; padding-left: 0; }
+          body, .btn-primary, .modal-close { cursor: auto !important; }
         }
       `}} />
 
@@ -216,7 +238,7 @@ export default function PortalPrincipal() {
               )}
             </div>
           </div>
-          <aside className="hero-panel reveal premium-motion-card" style={{ transitionDelay: '0.12s' }}>
+          <PublicSpotlightCard className="hero-panel reveal premium-motion-card" style={{ transitionDelay: '0.12s' }}>
             <div className="section-label">Centro publico</div>
             <h2 style={{ fontSize: 'clamp(24px, 4vw, 42px)', lineHeight: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Gestion deportiva en vivo</h2>
             <p style={{ color: 'var(--gray)', lineHeight: 1.7, fontSize: 14 }}>Consulta torneos, posiciones, goleadores, partidos y comunicados desde una experiencia limpia y preparada para cualquier pantalla.</p>
@@ -226,7 +248,7 @@ export default function PortalPrincipal() {
               <div className="hero-mini-card"><strong>24/7</strong><span>Consulta en linea</span></div>
               <div className="hero-mini-card"><strong>GL</strong><span>Identidad oficial</span></div>
             </div>
-          </aside>
+          </PublicSpotlightCard>
         </div>
       </section>
 
@@ -248,7 +270,7 @@ export default function PortalPrincipal() {
                  ) : (
                    torneosActivos.map((torneo, index) => (
                      <Link href={`/torneo/${torneo.slug}`} key={torneo.id} style={{ textDecoration: 'none' }}>
-                       <div className="tournament-card premium-motion-card" style={{ transitionDelay: `${Math.min(index * 35, 180)}ms` }}>
+                       <PublicSpotlightCard className="tournament-card premium-motion-card" style={{ transitionDelay: `${Math.min(index * 35, 180)}ms` }}>
                          <div>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                              <h3 className="tournament-title"><i className="fa fa-trophy"></i> {torneo.name}</h3>
@@ -259,7 +281,7 @@ export default function PortalPrincipal() {
                          <div style={{ marginTop: '20px', borderTop: '1px solid var(--dark3)', paddingTop: '15px', color: 'var(--gold)', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
                            Ver Estadísticas Completas <i className="fa fa-arrow-right"></i>
                          </div>
-                       </div>
+                       </PublicSpotlightCard>
                      </Link>
                    ))
                  )}
