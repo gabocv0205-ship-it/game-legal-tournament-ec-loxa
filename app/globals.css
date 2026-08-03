@@ -130,6 +130,20 @@ textarea:focus {
   transform: translateZ(0);
 }
 
+/* Los lienzos exportables mantienen su propia paleta, independiente del tema del dashboard. */
+.poster-export-canvas {
+  color: #ffffff !important;
+  color-scheme: dark;
+}
+
+.poster-export-canvas .text-white {
+  color: #ffffff !important;
+}
+
+.poster-export-canvas .text-black {
+  color: #000000 !important;
+}
+
 .match-action-button {
   display: inline-flex;
   min-height: 38px;

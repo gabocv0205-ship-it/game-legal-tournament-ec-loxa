@@ -21,6 +21,7 @@ const Icons = {
   calendar: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
   dollar: "M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
   chart: "M3 3v18h18M18 17V9M13 17V5M8 17v-3",
+  settings: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.42 1.42-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2v-.48a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.42-1.42.06-.06A1.7 1.7 0 0 0 9.4 15a1.7 1.7 0 0 0-1.56-1.03H7v-2h.84A1.7 1.7 0 0 0 9.4 11a1.7 1.7 0 0 0-.34-1.88L9 9.06l1.42-1.42.06.06A1.7 1.7 0 0 0 12.36 8.04 1.7 1.7 0 0 0 13.39 6.48V6h2v.48a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.42 1.42-.06.06A1.7 1.7 0 0 0 19.4 11c.22.62.8 1.03 1.46 1.03H21v2h-.14A1.7 1.7 0 0 0 19.4 15z",
   bars: "M3 12h18M3 6h18M3 18h18",
   alert: "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
   eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
@@ -252,9 +253,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Soporte WhatsApp
             </a>
           )}
-          <Link href="/dashboard/configuracion" onClick={() => setSidebarOpen(false)} className={`w-full flex items-center justify-center gap-2 px-2.5 py-2 border border-[#D4A017] rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${pathname === "/dashboard/configuracion" ? "bg-[#D4A017] text-black" : "text-[#D4A017] hover:bg-[#D4A017] hover:text-black"}`}>
-            <Icon path={Icons.chart} size={16}/> Configurar Torneo
-          </Link>
         </div>
       </motion.aside>
 
@@ -298,6 +296,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            <Link
+              href="/dashboard/configuracion"
+              onClick={() => setSidebarOpen(false)}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-wide transition-colors ${pathname === "/dashboard/configuracion" ? "border-[#D4A017] bg-[#D4A017] text-black" : "border-[#D4A017]/60 bg-[#D4A017]/10 text-[#F3D27A] hover:bg-[#D4A017] hover:text-black"}`}
+              aria-label="Configurar torneo"
+              title="Configurar torneo"
+            >
+              <Icon path={Icons.settings} size={16} />
+              <span className="hidden lg:inline">Configuración</span>
+            </Link>
             <Link
               href="/"
               className="inline-flex items-center gap-2 rounded-xl border border-[#D4A017]/60 bg-[#D4A017]/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-[#F3D27A] transition-colors hover:bg-[#D4A017] hover:text-black"

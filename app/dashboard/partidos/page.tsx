@@ -1705,7 +1705,7 @@ export default function PartidosPage() {
             </form>
 
             {fasesVisibles.length > 0 && (
-              <div ref={bracketPosterRef} className="relative z-10 rounded-2xl border border-blue-400/30 bg-gradient-to-b from-[#081a46] via-[#07122d] to-[#050914] p-5 overflow-x-auto" style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(rgba(4,12,38,.82), rgba(4,12,38,.94)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+              <div ref={bracketPosterRef} className="poster-export-canvas relative z-10 rounded-2xl border border-blue-400/30 bg-gradient-to-b from-[#081a46] via-[#07122d] to-[#050914] p-5 overflow-x-auto" style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(rgba(4,12,38,.3), rgba(4,12,38,.68)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                 <div className="text-center mb-7">
                   <p className="text-blue-300 text-[10px] uppercase tracking-[0.35em] font-black">Cuadro eliminatorio oficial</p>
                   <h3 className="text-white text-2xl font-black uppercase mt-2">{torneoNombre} · {configuracion.tournament_year}</h3>
@@ -1912,8 +1912,8 @@ export default function PartidosPage() {
 
       <div style={{ display: "none" }} ref={jornadaPosterRef}>
         <div
-          className="relative w-[1080px] min-h-[1440px] overflow-hidden bg-[#06183a] px-10 py-9 text-white"
-          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(135deg, rgba(3,16,46,.82), rgba(4,24,58,.92)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 10% 20%, rgba(212,160,23,.32), transparent 24%), radial-gradient(circle at 92% 70%, rgba(212,160,23,.24), transparent 22%), linear-gradient(145deg, #03102c, #063b78 52%, #020817)", fontFamily: posterFontFamily }}
+          className="poster-export-canvas relative w-[1080px] min-h-[1440px] overflow-hidden bg-[#06183a] px-10 py-9 text-white"
+          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(135deg, rgba(3,16,46,.28), rgba(4,24,58,.62)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 10% 20%, rgba(212,160,23,.32), transparent 24%), radial-gradient(circle at 92% 70%, rgba(212,160,23,.24), transparent 22%), linear-gradient(145deg, #03102c, #063b78 52%, #020817)", fontFamily: posterFontFamily }}
         >
           <div className="absolute inset-6 rounded-[28px] border-4 border-white/85" />
           <div className="absolute inset-10 rounded-[20px] border border-[#D4A017]/55" />
@@ -1934,7 +1934,7 @@ export default function PartidosPage() {
               <section key={dia} className="space-y-2">
                 <div className="flex items-center gap-3">
                   <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
-                  <h2 className="rounded-full bg-[#D4A017] px-5 py-1.5 text-sm font-black uppercase tracking-widest text-black shadow-lg">
+                  <h2 className="rounded-full bg-[#D4A017] px-5 py-1.5 text-sm font-black uppercase tracking-widest text-[#071735] shadow-lg">
                     {new Date(`${dia}T12:00:00-05:00`).toLocaleDateString("es-EC", { weekday: "long", day: "2-digit", month: "long" })}
                   </h2>
                   <div className="h-[3px] flex-1 bg-gradient-to-r from-transparent via-[#D4A017] to-transparent" />
@@ -1999,8 +1999,8 @@ export default function PartidosPage() {
           ============================================================================== */}
       <div style={{ display: "none" }} ref={capturaRef}>
         <div
-          className="bg-[#0a0a0a] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-[#D4A017]"
-          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(rgba(10,10,10,.78), rgba(10,10,10,.9)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+          className="poster-export-canvas bg-[#0a0a0a] p-10 w-[800px] font-sans relative overflow-hidden border-8 border-[#D4A017]"
+          style={fondoPosterUrl && usarFondoPersonalizado ? { backgroundImage: `linear-gradient(rgba(10,10,10,.3), rgba(10,10,10,.65)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
         >
           <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A017]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
           <div className="flex justify-between items-start mb-10 relative z-10 border-b border-[#2E2E2E] pb-6">

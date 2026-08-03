@@ -49,6 +49,17 @@ export default function ConfiguracionPage() {
   const [posterUrl, setPosterUrl] = useState("");
   const [fondoPartidosUrl, setFondoPartidosUrl] = useState("");
   const [auspiciantes, setAuspiciantes] = useState("");
+  const [redesSociales, setRedesSociales] = useState({
+    facebook_url: "",
+    instagram_url: "",
+    whatsapp_url: "",
+    tiktok_url: "",
+    youtube_url: "",
+    website_url: "",
+    other_social_url: "",
+  });
+  const [propietarioPerfilId, setPropietarioPerfilId] = useState<string | null>(null);
+  const [usuarioActualId, setUsuarioActualId] = useState<string | null>(null);
   const [bannerArchivo, setBannerArchivo] = useState<File | null>(null);
   const [posterArchivo, setPosterArchivo] = useState<File | null>(null);
   const [fondoPartidosArchivo, setFondoPartidosArchivo] = useState<File | null>(null);
@@ -67,6 +78,26 @@ export default function ConfiguracionPage() {
       const data = await getAccessibleTournament(supabase, activeId);
       if (data) {
         setTorneoId(data.id);
+        const { data: { user } } = await supabase.auth.getUser();
+        setUsuarioActualId(user?.id || null);
+        const ownerId = (data as any).user_id || user?.id || null;
+        setPropietarioPerfilId(ownerId);
+        if (ownerId) {
+          const { data: profileSocials, error: profileSocialsError } = await supabase
+            .from("profiles")
+            .select("facebook_url, instagram_url, whatsapp_url, tiktok_url, youtube_url, website_url, other_social_url")
+            .eq("id", ownerId)
+            .maybeSingle();
+          if (!profileSocialsError && profileSocials) setRedesSociales({
+            facebook_url: profileSocials.facebook_url || "",
+            instagram_url: profileSocials.instagram_url || "",
+            whatsapp_url: profileSocials.whatsapp_url || "",
+            tiktok_url: profileSocials.tiktok_url || "",
+            youtube_url: profileSocials.youtube_url || "",
+            website_url: profileSocials.website_url || "",
+            other_social_url: profileSocials.other_social_url || "",
+          });
+        }
         setNombre(data.name || "");
         setFormato(data.format || "todos_contra_todos");
         setPremio1(data.prize_first || "");
@@ -216,6 +247,16 @@ export default function ConfiguracionPage() {
 
       if (error) throw error;
 
+      // Los enlaces pertenecen al perfil del cliente y el portal publico los
+      // resuelve por propietario, evitando duplicarlos en cada torneo.
+      if (propietarioPerfilId && propietarioPerfilId === usuarioActualId) {
+        const { error: socialError } = await supabase
+          .from("profiles")
+          .update(redesSociales)
+          .eq("id", propietarioPerfilId);
+        if (socialError) throw socialError;
+      }
+
       alert("¡Configuración guardada con éxito!");
       cargarConfiguracion(); // Recargar datos frescos
       setReglamento(null); // Limpiar el input de archivo
@@ -347,6 +388,37 @@ export default function ConfiguracionPage() {
             className="w-full min-h-32 p-3 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl focus:border-[#D4A017] outline-none transition-all"
             placeholder={"Dra. Gina Calva - Notaria Primera Del Canton Loja\nCafeteria Coffee Time\nMister Copy"}
           />
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sky-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Redes sociales publicas</h3>
+          <p className="text-gray-500 text-xs">Estos enlaces pertenecen al cliente propietario y se publicaran automaticamente en el portal de este torneo. Usa direcciones completas con https://.</p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {([
+              ["facebook_url", "Facebook"],
+              ["instagram_url", "Instagram"],
+              ["whatsapp_url", "WhatsApp"],
+              ["tiktok_url", "TikTok"],
+              ["youtube_url", "YouTube"],
+              ["website_url", "Sitio web"],
+              ["other_social_url", "Otro enlace"],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                {label}
+                <input
+                  type="url"
+                  value={redesSociales[key]}
+                  onChange={e => setRedesSociales(prev => ({ ...prev, [key]: e.target.value }))}
+                  disabled={Boolean(propietarioPerfilId && propietarioPerfilId !== usuarioActualId)}
+                  className="mt-1 w-full rounded-xl border border-[#2e2e2e] bg-[#1c1c1c] p-3 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-[#D4A017] disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder="https://..."
+                />
+              </label>
+            ))}
+          </div>
+          {propietarioPerfilId && propietarioPerfilId !== usuarioActualId && (
+            <p className="text-[10px] font-bold text-amber-300">Estas redes pertenecen al cliente propietario. Solo ese cliente puede modificarlas desde su sesión.</p>
+          )}
         </div>
 
         <div className="space-y-4">
