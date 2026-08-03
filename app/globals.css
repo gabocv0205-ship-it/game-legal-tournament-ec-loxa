@@ -144,6 +144,67 @@ textarea:focus {
   color: #000000 !important;
 }
 
+/* El poster es una pieza grafica independiente del tema del dashboard. */
+.admin-premium-shell .poster-export-canvas,
+.admin-premium-shell .poster-export-canvas .text-white {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.38);
+}
+
+.admin-premium-shell .poster-export-canvas [class*="bg-black/70"] {
+  background-color: rgba(0, 0, 0, 0.72) !important;
+}
+
+.admin-premium-shell .poster-export-canvas [class*="text-gray-400"] {
+  color: #cbd5e1 !important;
+}
+
+.admin-premium-shell .poster-export-canvas [class*="text-gray-300"] {
+  color: #dbe4ef !important;
+}
+
+.dashboard-alert {
+  font-weight: 800;
+  line-height: 1.35;
+  text-shadow: none;
+}
+
+.dashboard-alert p {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+:root[data-admin-theme="dark"] .dashboard-alert,
+:root:not([data-admin-theme]) .dashboard-alert {
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-admin-theme="light"] .dashboard-alert-suspended {
+  background: #fff8e1 !important;
+  border-color: #d4a017 !important;
+  color: #5a4100 !important;
+}
+
+:root[data-admin-theme="light"] .dashboard-alert-suspended p {
+  color: #765b09 !important;
+}
+
+:root[data-admin-theme="light"] .dashboard-alert-eligible {
+  background: #eaf8ef !important;
+  border-color: #1b9b56 !important;
+  color: #126238 !important;
+}
+
+:root[data-admin-theme="light"] .dashboard-alert-eligible p {
+  color: #247548 !important;
+}
+
+:root[data-admin-theme="light"] .dashboard-alert-debt {
+  background: #fff0f0 !important;
+  border-color: #c93b3b !important;
+  color: #8b2020 !important;
+}
+
 .match-action-button {
   display: inline-flex;
   min-height: 38px;

@@ -130,7 +130,7 @@ export default function DashboardInicio() {
               <span className="rounded-full border border-[#D4A017]/35 bg-[#D4A017]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Inicio inteligente</span>
               <span className="rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-green-400">{dashboard.stage}</span>
             </div>
-            <h1 className="break-words text-4xl font-black uppercase leading-none tracking-tight text-white md:text-6xl">{torneoActual?.name || tournamentName || "Torneo Oficial"}</h1>
+            <h1 className="break-words text-3xl font-black uppercase leading-[1.08] tracking-tight text-white antialiased md:text-5xl">{torneoActual?.name || tournamentName || "Torneo Oficial"}</h1>
             <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-gray-400">Vista ejecutiva del torneo: estado deportivo, alertas, proximos encuentros y avance general en un solo lugar.</p>
           </div>
           <PosterPreviewCard>
@@ -189,7 +189,7 @@ export default function DashboardInicio() {
         <PremiumCard className="p-5 md:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Novedades automaticas</p>
           <div className="mt-4 rounded-3xl border border-[#D4A017]/30 bg-gradient-to-br from-[#1C1C1C] to-[#0a0a0a] p-6 min-h-36 flex items-center">
-            <p className="text-xl font-black leading-8 text-white">{activeNews || "Sin novedades criticas por ahora."}</p>
+            <p className="text-lg font-black leading-7 tracking-tight text-white antialiased md:text-xl">{activeNews || "Sin novedades criticas por ahora."}</p>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <AlertList title="Suspendidos" items={disciplinaryAlerts.suspended} empty="Sin suspendidos" />

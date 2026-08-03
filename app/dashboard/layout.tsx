@@ -200,19 +200,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         <div className="px-2.5 pt-2 space-y-1.5">
           {tournamentId && !pathname.startsWith('/superadmin') && stats.suspended > 0 && (
-            <div className="bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
+            <div className="dashboard-alert dashboard-alert-suspended bg-[#D4A017]/20 border border-[#D4A017]/50 text-[#F5C842] px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
               <div className="flex items-center gap-2"><Icon path={Icons.alert} size={14} /> <span>Fecha {stats.nextMatchday}: {stats.suspended} suspendido(s)</span></div>
               <p className="line-clamp-2 text-[8px] mt-1 text-yellow-100">{disciplinaryAlerts.suspended.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
             </div>
           )}
           {tournamentId && !pathname.startsWith('/superadmin') && disciplinaryAlerts.eligibleAgain.length > 0 && (
-            <div className="bg-green-900/30 border border-green-500/50 text-green-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
+            <div className="dashboard-alert dashboard-alert-eligible bg-green-900/30 border border-green-500/50 text-green-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
               <div>Fecha {stats.nextMatchday}: ya puede(n) jugar</div>
               <p className="line-clamp-2 text-[8px] mt-1 text-green-200">{disciplinaryAlerts.eligibleAgain.map((item: any) => `${item.name} (${item.team})`).join(", ")}</p>
             </div>
           )}
           {tournamentId && !pathname.startsWith('/superadmin') && stats.debts > 0 && (
-            <div className="flex items-center gap-2 bg-red-900/40 border border-red-500/50 text-red-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
+            <div className="dashboard-alert dashboard-alert-debt flex items-center gap-2 bg-red-900/40 border border-red-500/50 text-red-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold">
               <Icon path={Icons.alert} size={14} /> <span>{stats.debts} equipo(s) con deudas</span>
             </div>
           )}
