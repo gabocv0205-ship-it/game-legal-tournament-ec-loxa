@@ -40,6 +40,7 @@ create index if not exists players_tournament_team_idx
 
 alter table public.players
   add column if not exists photo_url text,
+  add column if not exists jersey_number integer,
   add column if not exists eligibility_status text default 'active',
   add column if not exists eligibility_reason text,
   add column if not exists eligibility_updated_at timestamptz,
@@ -62,6 +63,9 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'players_cedula_required') then
     alter table public.players add constraint players_cedula_required check (length(btrim(cedula)) > 0) not valid;
   end if;
+  if not exists (select 1 from pg_constraint where conname = 'players_jersey_number_range') then
+    alter table public.players add constraint players_jersey_number_range check (jersey_number is null or jersey_number between 1 and 99) not valid;
+  end if;
 end $$;
 
 do $$
@@ -75,6 +79,20 @@ begin
     create unique index if not exists players_tournament_cedula_unique_idx
       on public.players (tournament_id, lower(btrim(cedula)))
       where cedula is not null and btrim(cedula) <> '';
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from public.players
+    where jersey_number is not null
+    group by tournament_id, team_id, jersey_number
+    having count(*) > 1
+  ) then
+    create unique index if not exists players_tournament_team_jersey_unique_idx
+      on public.players (tournament_id, team_id, jersey_number)
+      where jersey_number is not null;
   end if;
 end $$;
 
@@ -182,7 +200,8 @@ create or replace function public.register_tournament_player(
   p_tournament_id uuid,
   p_team_id uuid,
   p_full_name text,
-  p_cedula text
+  p_cedula text,
+  p_jersey_number integer
 )
 returns public.players
 language plpgsql
@@ -194,6 +213,9 @@ declare
   v_player public.players;
   v_cedula text := lower(btrim(p_cedula));
 begin
+  if p_jersey_number is null or p_jersey_number < 1 or p_jersey_number > 99 then
+    raise exception 'El dorsal debe ser un numero entero entre 1 y 99';
+  end if;
   if not public.can_manage_tournament_media(p_tournament_id::text) then
     raise exception 'No tienes permiso para administrar este torneo';
   end if;
@@ -216,8 +238,8 @@ begin
     raise exception 'El equipo alcanzó el límite configurado de jugadores';
   end if;
 
-  insert into public.players (tournament_id, team_id, full_name, cedula)
-  values (p_tournament_id, p_team_id, btrim(p_full_name), btrim(p_cedula))
+  insert into public.players (tournament_id, team_id, full_name, cedula, jersey_number)
+  values (p_tournament_id, p_team_id, btrim(p_full_name), btrim(p_cedula), p_jersey_number)
   returning * into v_player;
   return v_player;
 end;
@@ -226,7 +248,8 @@ $$;
 create or replace function public.update_tournament_player(
   p_player_id uuid,
   p_full_name text,
-  p_cedula text
+  p_cedula text,
+  p_jersey_number integer
 )
 returns public.players
 language plpgsql
@@ -238,6 +261,9 @@ declare
   v_player public.players;
   v_cedula text := lower(btrim(p_cedula));
 begin
+  if p_jersey_number is null or p_jersey_number < 1 or p_jersey_number > 99 then
+    raise exception 'El dorsal debe ser un numero entero entre 1 y 99';
+  end if;
   select * into v_existing from public.players where id = p_player_id;
   if v_existing.id is null or not public.can_manage_tournament_media(v_existing.tournament_id::text) then
     raise exception 'No tienes permiso para modificar este jugador';
@@ -256,7 +282,7 @@ begin
     raise exception 'Esta cédula ya está registrada en otro equipo del torneo';
   end if;
 
-  update public.players set full_name = btrim(p_full_name), cedula = btrim(p_cedula)
+  update public.players set full_name = btrim(p_full_name), cedula = btrim(p_cedula), jersey_number = p_jersey_number
   where id = p_player_id returning * into v_player;
   return v_player;
 end;
@@ -279,11 +305,21 @@ begin
 end;
 $$;
 
-revoke all on function public.register_tournament_player(uuid, uuid, text, text) from public, anon;
-revoke all on function public.update_tournament_player(uuid, text, text) from public, anon;
+revoke all on function public.register_tournament_player(uuid, uuid, text, text, integer) from public, anon;
+revoke all on function public.update_tournament_player(uuid, text, text, integer) from public, anon;
+
+do $$
+begin
+  if to_regprocedure('public.register_tournament_player(uuid,uuid,text,text)') is not null then
+    execute 'revoke all on function public.register_tournament_player(uuid, uuid, text, text) from public, anon, authenticated';
+  end if;
+  if to_regprocedure('public.update_tournament_player(uuid,text,text)') is not null then
+    execute 'revoke all on function public.update_tournament_player(uuid, text, text) from public, anon, authenticated';
+  end if;
+end $$;
 revoke all on function public.delete_tournament_player(uuid) from public, anon;
-grant execute on function public.register_tournament_player(uuid, uuid, text, text) to authenticated;
-grant execute on function public.update_tournament_player(uuid, text, text) to authenticated;
+grant execute on function public.register_tournament_player(uuid, uuid, text, text, integer) to authenticated;
+grant execute on function public.update_tournament_player(uuid, text, text, integer) to authenticated;
 grant execute on function public.delete_tournament_player(uuid) to authenticated;
 
 -- Las escrituras pasan únicamente por funciones atómicas con validación de tenant.

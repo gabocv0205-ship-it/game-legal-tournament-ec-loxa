@@ -225,10 +225,10 @@ function playerCardsHtml(report: TeamPlayerCardsReport) {
     .heading p { margin: 4px 0 0; color: #5b6878; font-size: 10px; }
     .heading .date { color: #7b5a00; font-size: 9px; text-align: right; }
     .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .card { min-height: 214px; page-break-inside: avoid; break-inside: avoid; overflow: hidden; border: 1px solid #d4a017; border-radius: 12px; background: linear-gradient(145deg, #ffffff, #f4f7fb); box-shadow: 0 3px 10px rgba(16, 24, 39, .1); }
+    .card { min-height: 220px; page-break-inside: avoid; break-inside: avoid; overflow: hidden; border: 1px solid #d4a017; border-radius: 12px; background: linear-gradient(145deg, #ffffff, #f4f7fb); box-shadow: 0 3px 10px rgba(16, 24, 39, .1); }
     .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: #101827; color: #fff; border-bottom: 3px solid #d4a017; }
-    .team-mark { width: 34px; height: 34px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: #fff; color: #101827; font-weight: 900; font-size: 10px; }
-    .team-mark img { width: 100%; height: 100%; object-fit: contain; }
+    .team-mark { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; overflow: hidden; border: 1px solid #d4a017; border-radius: 10px; padding: 4px; background: #fff; color: #101827; font-weight: 900; font-size: 10px; }
+    .team-mark img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
     .card-label { color: #f5c842; font-size: 7px; font-weight: 900; letter-spacing: .12em; line-height: 1.35; text-align: right; }
     .player-main { display: flex; align-items: center; gap: 10px; padding: 12px 12px 7px; }
     .player-photo { width: 68px; height: 78px; flex: 0 0 68px; object-fit: cover; border: 2px solid #d4a017; border-radius: 8px; background: #e6ebf1; }

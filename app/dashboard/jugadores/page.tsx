@@ -24,6 +24,7 @@ export default function JugadoresPage() {
 
   const [nombre, setNombre] = useState("");
   const [cedula, setCedula] = useState("");
+  const [dorsal, setDorsal] = useState("");
   const [equipoId, setEquipoId] = useState("");
   const [loading, setLoading] = useState(false);
   const [cargandoDatos, setCargandoDatos] = useState(true);
@@ -31,6 +32,7 @@ export default function JugadoresPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nombreEditado, setNombreEditado] = useState("");
   const [cedulaEditada, setCedulaEditada] = useState("");
+  const [dorsalEditado, setDorsalEditado] = useState("");
   const [estadoEditandoId, setEstadoEditandoId] = useState<string | null>(null);
   const [estadoJugadorManual, setEstadoJugadorManual] = useState("active");
   const [motivoEstadoJugador, setMotivoEstadoJugador] = useState("");
@@ -135,17 +137,29 @@ export default function JugadoresPage() {
     try {
       const nombreLimpio = nombre.trim();
       const cedulaLimpia = cedula.trim();
+      const dorsalNumero = Number(dorsal.trim());
       if (!nombreLimpio || !cedulaLimpia) throw new Error("La cedula y el nombre completo son obligatorios.");
+      if (!Number.isInteger(dorsalNumero) || dorsalNumero < 1 || dorsalNumero > 99) {
+        throw new Error("El dorsal es obligatorio y debe ser un numero entero entre 1 y 99.");
+      }
+      if (jugadores.some((jugador) => jugador.team_id === equipoId && Number(jugador.jersey_number) === dorsalNumero)) {
+        throw new Error("Ese dorsal ya esta asignado a otro jugador de este equipo.");
+      }
 
       const { error } = await supabase.rpc("register_tournament_player", {
         p_tournament_id: torneoId,
         p_team_id: equipoId,
         p_full_name: nombreLimpio,
         p_cedula: cedulaLimpia,
+        p_jersey_number: dorsalNumero,
       });
 
       if (error) {
-        if (error.message.includes("unique") || error.message.includes("cedula")) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes("dorsal") || errorMessage.includes("jersey")) {
+          throw new Error("Ese dorsal ya esta asignado a otro jugador de este equipo.");
+        }
+        if (errorMessage.includes("unique") || errorMessage.includes("cedula")) {
           throw new Error("Esta cedula ya esta registrada en el torneo actual.");
         }
         throw error;
@@ -153,6 +167,7 @@ export default function JugadoresPage() {
 
       setNombre("");
       setCedula("");
+      setDorsal("");
       cargarDatos();
       alert("Jugador registrado con exito.");
     } catch (error: any) {
@@ -175,14 +190,27 @@ export default function JugadoresPage() {
 
   const guardarEdicion = async (id: string) => {
     try {
+      const jugadorActual = jugadores.find((jugador) => jugador.id === id);
+      const dorsalNumero = Number(dorsalEditado.trim());
+      if (!Number.isInteger(dorsalNumero) || dorsalNumero < 1 || dorsalNumero > 99) {
+        throw new Error("El dorsal es obligatorio y debe ser un numero entero entre 1 y 99.");
+      }
+      if (jugadores.some((jugador) => jugador.id !== id && jugador.team_id === jugadorActual?.team_id && Number(jugador.jersey_number) === dorsalNumero)) {
+        throw new Error("Ese dorsal ya esta asignado a otro jugador de este equipo.");
+      }
       const { error } = await supabase.rpc("update_tournament_player", {
         p_player_id: id,
         p_full_name: nombreEditado.trim(),
         p_cedula: cedulaEditada.trim(),
+        p_jersey_number: dorsalNumero,
       });
 
       if (error) {
-        if (error.message.includes("unique") || error.message.includes("cedula")) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes("dorsal") || errorMessage.includes("jersey")) {
+          throw new Error("Ese dorsal ya esta asignado a otro jugador de este equipo.");
+        }
+        if (errorMessage.includes("unique") || errorMessage.includes("cedula")) {
           throw new Error("Esta cedula ya pertenece a otro jugador en este torneo.");
         }
         throw error;
@@ -355,13 +383,13 @@ export default function JugadoresPage() {
         <strong className="text-xs uppercase tracking-widest">{plantillaAutomatica ? "Control estricto activo" : "Plantilla oficial opcional"}</strong>
         <p className="mt-1">
           {plantillaAutomatica
-            ? `Cada equipo admite maximo ${maxJugadoresEquipo} jugadores oficiales. Una cedula no puede pertenecer a dos equipos del torneo.`
-            : "Puedes registrar jugadores oficiales sin limite configurado. Las planillas abiertas por partido permanecen disponibles."}
+            ? `Cada equipo admite maximo ${maxJugadoresEquipo} jugadores oficiales. Una cedula no puede pertenecer a dos equipos del torneo y cada dorsal es unico dentro de su equipo.`
+            : "Puedes registrar jugadores oficiales sin limite configurado. Cada dorsal es unico dentro de su equipo y las planillas abiertas por partido permanecen disponibles."}
         </p>
       </div>
 
       <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-6 shadow-lg">
-        <form onSubmit={guardarJugador} className="grid grid-cols-1 items-end gap-4 md:grid-cols-3">
+        <form onSubmit={guardarJugador} className="grid grid-cols-1 items-end gap-4 md:grid-cols-4">
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Cedula / Pasaporte</label>
             <input type="text" value={cedula} onChange={(e) => setCedula(e.target.value)} required className="mt-1 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white focus:border-[#D4A017] focus:outline-none" placeholder="Ej: 1101234567" />
@@ -369,6 +397,10 @@ export default function JugadoresPage() {
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Nombre Completo</label>
             <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} required className="mt-1 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white focus:border-[#D4A017] focus:outline-none" placeholder="Ej: Lionel Messi" />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Dorsal</label>
+            <input type="number" min="1" max="99" step="1" inputMode="numeric" value={dorsal} onChange={(e) => setDorsal(e.target.value)} required className="mt-1 w-full rounded-xl border border-[#2E2E2E] bg-[#0a0a0a] p-3 text-white focus:border-[#D4A017] focus:outline-none" placeholder="Ej: 10" />
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Asignar a Club</label>
@@ -381,7 +413,7 @@ export default function JugadoresPage() {
               ))}
             </select>
           </div>
-          <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#D4A017] py-3 font-black uppercase text-black shadow-[0_0_15px_rgba(212,160,23,0.3)] transition-all hover:bg-yellow-500 md:col-span-3">
+          <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#D4A017] py-3 font-black uppercase text-black shadow-[0_0_15px_rgba(212,160,23,0.3)] transition-all hover:bg-yellow-500 md:col-span-4">
             {loading ? "Guardando..." : "Registrar Jugador Oficial"}
           </button>
         </form>
@@ -434,14 +466,16 @@ export default function JugadoresPage() {
                         <PlayerAvatar jugador={jugador} preview={previewsFoto[jugador.id]} size={64} />
                         <div className="min-w-0 flex-1">
                           {enEdicion ? (
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                               <input type="text" value={cedulaEditada} onChange={(e) => setCedulaEditada(e.target.value)} className="rounded-lg border border-[#D4A017] bg-[#0a0a0a] p-2 text-sm text-white outline-none" />
                               <input type="text" value={nombreEditado} onChange={(e) => setNombreEditado(e.target.value)} className="rounded-lg border border-[#D4A017] bg-[#0a0a0a] p-2 text-sm text-white outline-none" />
+                              <input type="number" min="1" max="99" step="1" inputMode="numeric" value={dorsalEditado} onChange={(e) => setDorsalEditado(e.target.value)} className="rounded-lg border border-[#D4A017] bg-[#0a0a0a] p-2 text-sm text-white outline-none" aria-label="Dorsal" />
                             </div>
                           ) : (
                             <>
                               <p className="truncate text-lg font-black uppercase text-white">{jugador.full_name}</p>
                               <p className="font-mono text-xs text-gray-400">ID: {jugador.cedula}</p>
+                              <p className="mt-1 text-xs font-black uppercase tracking-widest text-[#D4A017]">Dorsal #{jugador.jersey_number || "-"}</p>
                               <span className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${jugador.eligibility_status && jugador.eligibility_status !== "active" ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-green-500/30 bg-green-500/10 text-green-300"}`}>
                                 {etiquetaEstadoJugador(jugador)}
                               </span>
@@ -460,7 +494,7 @@ export default function JugadoresPage() {
                             <>
                               <button onClick={() => setJugadorPerfil(jugador)} className="rounded-full bg-[#D4A017] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-black hover:bg-yellow-500">Perfil</button>
                               <button onClick={() => abrirEstadoJugador(jugador)} className="rounded-full bg-red-500/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-300 hover:bg-red-500/25">Estado</button>
-                              <button onClick={() => { setEditandoId(jugador.id); setNombreEditado(jugador.full_name); setCedulaEditada(jugador.cedula); }} className="rounded-full bg-[#D4A017]/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[#D4A017] hover:bg-[#D4A017]/25">Editar</button>
+                              <button onClick={() => { setEditandoId(jugador.id); setNombreEditado(jugador.full_name); setCedulaEditada(jugador.cedula); setDorsalEditado(String(jugador.jersey_number || "")); }} className="rounded-full bg-[#D4A017]/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[#D4A017] hover:bg-[#D4A017]/25">Editar</button>
                               <button onClick={() => eliminarJugador(jugador.id)} className="rounded-full bg-red-500/15 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 hover:bg-red-500/25">Eliminar</button>
                             </>
                           )}
