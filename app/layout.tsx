@@ -21,8 +21,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" data-admin-theme="light" data-public-theme="light" suppressHydrationWarning>
-      <body className="bg-[#eef8ef] text-[#06140c]">
+    <html lang="es" data-admin-theme="light" data-public-theme="dark" suppressHydrationWarning>
+      <body className="bg-[#0a0a0a] text-white">
         <PwaRegister />
         {children}
       </body>

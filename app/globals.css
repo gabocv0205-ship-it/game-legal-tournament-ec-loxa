@@ -48,8 +48,8 @@
 
 /* CSS de emergencia para asegurar el fondo general */
 body {
-  background-color: #eef8ef;
-  color: #06140c;
+  background-color: #0a0a0a;
+  color: #ffffff;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
