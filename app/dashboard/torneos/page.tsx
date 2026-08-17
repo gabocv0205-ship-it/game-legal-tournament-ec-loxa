@@ -160,11 +160,22 @@ export default function GestorTorneos() {
     if (!window.confirm(`¡ATENCIÓN! ¿Deseas ELIMINAR el torneo "${nombre}"?\n\nEsta acción lo ocultará de tu panel para liberar espacio en tu plan, pero los datos se conservarán internamente por seguridad referencial.`)) return;
     setLoading(true);
     try {
-      const { error } = await supabase.from('tournaments').update({ status: 'deleted' }).eq('id', id);
-      if (error) throw error;
-      cargarDatos();
+      const response = await fetch(`/api/tournaments/${encodeURIComponent(id)}/archive`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "No se pudo archivar el torneo.");
+      setTorneos(current => current.filter(torneo => torneo.id !== id));
+      if (localStorage.getItem("activeTournamentId") === id) {
+        localStorage.removeItem("activeTournamentId");
+        localStorage.removeItem("activeTournamentName");
+        window.dispatchEvent(new Event("tournamentChanged"));
+      }
+      alert(result.message || "Torneo archivado correctamente.");
     } catch (err: any) {
-      alert('Error al eliminar: ' + err.message);
+      alert('No se pudo archivar el torneo: ' + err.message);
+    } finally {
       setLoading(false);
     }
   };

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link'; 
 import { calculateStandings, normalizeTournamentConfig } from '@/lib/tournamentEngine';
+import { SponsorMarquee } from "@/components/SponsorMarquee";
 
 export default function PortalTorneoDinamico() {
   const router = useRouter();
@@ -680,11 +681,7 @@ export default function PortalTorneoDinamico() {
       <section style={{ padding: '60px 20px', background: 'var(--dark2)', borderTop: '1px solid var(--dark3)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', overflow: 'hidden' }}>
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
-          <div className="sponsors-track reveal">
-            {[...auspiciantesTorneo, ...auspiciantesTorneo].map((sponsor, index) => (
-              <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>
-            ))}
-          </div>
+          <SponsorMarquee sponsors={auspiciantesTorneo} className="reveal" />
           {Object.entries(redesSociales).some(([key, value]) => key.endsWith("_url") && Boolean(value)) && (
             <div className="reveal" style={{ marginTop: '28px', textAlign: 'center' }}>
               <p style={{ color: 'var(--gray)', fontSize: '11px', fontWeight: 800, letterSpacing: '2px', textTransform: 'uppercase' }}>Canales oficiales del organizador</p>

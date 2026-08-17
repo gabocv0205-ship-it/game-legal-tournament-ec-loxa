@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link';
 import { PublicSpotlightCard } from "@/components/public-ui";
+import { SponsorMarquee } from "@/components/SponsorMarquee";
 
 const WHATSAPP_NUMBER = "593960553548";
 
@@ -13,6 +14,7 @@ export default function PortalPrincipal() {
 
   const [torneosActivos, setTorneosActivos] = useState<any[]>([]);
   const [visitas, setVisitas] = useState(0);
+  const [estadisticasPublicas, setEstadisticasPublicas] = useState({ activeTournaments: 0, registeredTeams: 0, playedMatches: 0, goals: 0 });
   const [torneoDestacado, setTorneoDestacado] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sesionActiva, setSesionActiva] = useState(false);
@@ -47,11 +49,28 @@ export default function PortalPrincipal() {
   };
 
   useEffect(() => {
+    let disposed = false;
+    const refrescarEstadisticas = async () => {
+      try {
+        const response = await fetch("/api/public/overview", { cache: "no-store" });
+        if (!response.ok) return;
+        const summary = await response.json();
+        if (!disposed) setEstadisticasPublicas({
+          activeTournaments: Number(summary.activeTournaments || 0),
+          registeredTeams: Number(summary.registeredTeams || 0),
+          playedMatches: Number(summary.playedMatches || 0),
+          goals: Number(summary.goals || 0),
+        });
+      } catch {
+        // The landing page remains usable if public metrics are temporarily unavailable.
+      }
+    };
     async function inicializarPortal() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSesionActiva(Boolean(session));
         void registrarConversion("landing_view");
+        void refrescarEstadisticas();
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
@@ -73,6 +92,16 @@ export default function PortalPrincipal() {
       }
     }
     inicializarPortal();
+
+    // Realtime is used when Supabase replication is enabled; the interval is a
+    // low-cost fallback for projects where public realtime is disabled.
+    const overviewChannel = supabase.channel("public-overview")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, refrescarEstadisticas)
+      .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, refrescarEstadisticas)
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, refrescarEstadisticas)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, refrescarEstadisticas)
+      .subscribe();
+    const statsTimer = window.setInterval(refrescarEstadisticas, 45_000);
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSesionActiva(Boolean(session));
@@ -116,6 +145,9 @@ export default function PortalPrincipal() {
     reveals.forEach(el => observer.observe(el));
 
     return () => {
+      disposed = true;
+      window.clearInterval(statsTimer);
+      void supabase.removeChannel(overviewChannel);
       if (canUseCustomCursor) document.removeEventListener('mousemove', moveCursor);
       if (rafId) cancelAnimationFrame(rafId);
       observer.disconnect();
@@ -311,10 +343,11 @@ export default function PortalPrincipal() {
             <h2 style={{ fontSize: 'clamp(24px, 4vw, 42px)', lineHeight: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Gestion deportiva en vivo</h2>
             <p style={{ color: 'var(--gray)', lineHeight: 1.7, fontSize: 14 }}>Consulta torneos, posiciones, goleadores, partidos y comunicados desde una experiencia limpia y preparada para cualquier pantalla.</p>
             <div className="hero-panel-grid">
-              <div className="hero-mini-card"><strong>{torneosActivos.length}</strong><span>Torneos activos</span></div>
+              <div className="hero-mini-card"><strong>{estadisticasPublicas.activeTournaments}</strong><span>Torneos activos</span></div>
+              <div className="hero-mini-card"><strong>{estadisticasPublicas.registeredTeams}</strong><span>Equipos registrados</span></div>
+              <div className="hero-mini-card"><strong>{estadisticasPublicas.playedMatches}</strong><span>Partidos jugados</span></div>
+              <div className="hero-mini-card"><strong>{estadisticasPublicas.goals}</strong><span>Goles anotados</span></div>
               <div className="hero-mini-card"><strong>{visitas || 0}</strong><span>Visitas publicas</span></div>
-              <div className="hero-mini-card"><strong>24/7</strong><span>Consulta en linea</span></div>
-              <div className="hero-mini-card"><strong>GL</strong><span>Identidad oficial</span></div>
             </div>
           </PublicSpotlightCard>
         </div>
@@ -457,8 +490,7 @@ export default function PortalPrincipal() {
       <section style={{ padding: '60px 20px', background: 'var(--dark2)', borderTop: '1px solid var(--dark3)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', overflow: 'hidden' }}>
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
-          <div className="sponsors-track reveal">
-            {[
+          <SponsorMarquee className="reveal" sponsors={[
               "⚖️ Dra. Gina Calva - Notaría Primera Del Cantón Loja",
   "👨‍⚖️ Dr. Alex Ávila",
   "📚 Game-Legal Estudio Jurídico Virtual",
@@ -475,8 +507,7 @@ export default function PortalPrincipal() {
   "🍿 Botanitas Express",
   "🌴 Torneos Calib",
   "💳 Multipagos San Sebastián"
-            ].map((sponsor, index) => <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>)}
-          </div>
+            ]} />
         </div>
       </section>
 

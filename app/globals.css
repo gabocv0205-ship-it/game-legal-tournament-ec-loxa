@@ -2,10 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Reusable sponsor ribbon: CSS animation avoids carousel JavaScript and re-renders. */
+.sponsor-marquee {
+  overflow: hidden;
+  width: 100%;
+  padding: 28px 0;
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+
+.sponsor-marquee-track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 18px;
+  animation: sponsor-marquee-scroll 30s linear infinite;
+  will-change: transform;
+}
+
+.sponsor-marquee:hover .sponsor-marquee-track,
+.sponsor-marquee:focus-within .sponsor-marquee-track {
+  animation-play-state: paused;
+}
+
+.sponsor-marquee-item {
+  flex: 0 0 auto;
+  border: 1px solid rgba(212, 160, 23, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #d7d7d7;
+  padding: 12px 20px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+@keyframes sponsor-marquee-scroll {
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sponsor-marquee { overflow-x: auto; mask-image: none; }
+  .sponsor-marquee-track { animation: none; width: max-content; }
+}
+
 /* CSS de emergencia para asegurar el fondo general */
 body {
-  background-color: #0a0a0a;
-  color: #ffffff;
+  background-color: #eef8ef;
+  color: #06140c;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -14,7 +58,7 @@ body {
 input[type="date"],
 input[type="datetime-local"],
 input[type="time"] {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /* Solución Definitiva: Fuerza a que TODAS las casillas tengan el diseño Dark de GAME-LEGAL */
@@ -43,8 +87,7 @@ textarea:focus {
   color-scheme: light;
 }
 
-:root[data-admin-theme="dark"],
-:root:not([data-admin-theme]) {
+:root[data-admin-theme="dark"] {
   --admin-bg: #050806;
   --admin-bg-2: #0a0d0b;
   --admin-surface: rgba(15, 20, 17, 0.94);
@@ -61,6 +104,7 @@ textarea:focus {
   --admin-shadow: 0 26px 80px rgba(0, 0, 0, 0.34);
 }
 
+:root,
 :root[data-admin-theme="light"] {
   --admin-bg: #eef8ef;
   --admin-bg-2: #ffffff;

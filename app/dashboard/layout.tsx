@@ -37,7 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { stats, disciplinaryAlerts, tournamentId, refetch } = useTournamentData();
-  const [adminTheme, setAdminTheme] = useState<"dark" | "light">("dark");
+  const [adminTheme, setAdminTheme] = useState<"dark" | "light">("light");
   
   // ==========================================
   // CEREBRO SAAS (Control de Perfil y Deudas)
@@ -49,10 +49,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [nombreTorneoActivo, setNombreTorneoActivo] = useState<string>("Cargando...");
 
   useEffect(() => {
-    const storedTheme = localStorage.getItem("gamelegal-admin-theme");
-    const nextTheme = storedTheme === "light" ? "light" : "dark";
-    setAdminTheme(nextTheme);
-    document.documentElement.dataset.adminTheme = nextTheme;
+    // Every application entry begins in daylight mode. Users can still choose
+    // dark mode for their current session from the header control.
+    localStorage.setItem("gamelegal-admin-theme", "light");
+    setAdminTheme("light");
+    document.documentElement.dataset.adminTheme = "light";
   }, []);
 
   const cambiarTemaAdmin = () => {

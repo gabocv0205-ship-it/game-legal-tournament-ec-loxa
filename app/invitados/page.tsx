@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { SponsorMarquee } from "@/components/SponsorMarquee";
 
 export default function PortalInvitados() {
   const [tabla, setTabla] = useState<any[]>([]);
@@ -196,8 +197,7 @@ export default function PortalInvitados() {
       <section style={{ padding: '60px 20px', background: 'var(--dark2)', borderTop: '1px solid var(--dark3)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', overflow: 'hidden' }}>
           <div className="section-label" style={{ justifyContent: 'center' }}>Auspiciantes Oficiales</div>
-          <div className="sponsors-track reveal">
-            {[
+          <SponsorMarquee className="reveal" sponsors={[
               "Dra. Gina Calva - Notaría Primera Del Cantón Loja",
               "Dr. Alex Ávila",
               "Game-Legal Estudio Jurídico Virtual",
@@ -214,8 +214,7 @@ export default function PortalInvitados() {
               "Botanitas Express",
               "Torneos Calib",
               "Multipagos San Sebastián",
-            ].map((sponsor, index) => <div className="sponsor-logo" key={`${sponsor}-${index}`}>{sponsor}</div>)}
-          </div>
+            ]} />
         </div>
       </section>
 
