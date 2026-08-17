@@ -250,7 +250,7 @@ export default function SorteoPage() {
             🎲 Sortear
           </button>
           <button onClick={() => setModoPresentacion(true)} disabled={loading} className="bg-[#1C1C1C] text-[#E7C36B] border border-[#D4A017]/50 font-black uppercase text-xs px-4 py-2 rounded hover:bg-[#D4A017] hover:text-black transition-all">
-            PresentaciÃ³n
+            Presentación
           </button>
           <button onClick={limpiarSorteo} disabled={loading} className="bg-red-900/30 text-red-500 border border-red-900 font-black uppercase text-xs px-4 py-2 rounded hover:bg-red-900 hover:text-white transition-all">
             Limpiar
@@ -427,7 +427,7 @@ export default function SorteoPage() {
           <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-6">
             <div className="flex items-center justify-between border-b border-[#D4A017]/40 pb-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4A017]">Modo presentaciÃ³n</p>
+                <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4A017]">Modo presentación</p>
                 <h2 className="text-4xl font-black uppercase tracking-widest">{nombreTorneo}</h2>
               </div>
               <button onClick={() => setModoPresentacion(false)} className="rounded-xl border border-white/20 px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-200 hover:bg-white hover:text-black">Cerrar</button>
@@ -441,7 +441,7 @@ export default function SorteoPage() {
                   Iniciar sorteo
                 </button>
                 <div className="mt-8">
-                  <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4A017]">RevelaciÃ³n</p>
+                  <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4A017]">Revelación</p>
                   <h3 className="mt-3 text-3xl font-black uppercase tracking-widest">{equipoRevelado?.name || "En espera"}</h3>
                   <p className="mt-2 text-xl font-black text-gray-300">{grupoRevelado || "Sin grupo asignado"}</p>
                 </div>
@@ -451,7 +451,7 @@ export default function SorteoPage() {
                   <div key={grupo.letra} className="rounded-3xl border border-[#D4A017]/45 bg-[#0B1220]/90 p-5 shadow-2xl">
                     <h3 className="mb-4 text-center text-xl font-black uppercase tracking-[0.25em] text-[#E7C36B]">Grupo {grupo.letra}</h3>
                     <div className="space-y-3">
-                      {grupo.equipos.length === 0 ? <p className="py-6 text-center text-sm text-gray-500">VacÃ­o</p> : grupo.equipos.map(equipo => (
+                      {grupo.equipos.length === 0 ? <p className="py-6 text-center text-sm text-gray-500">Vacío</p> : grupo.equipos.map(equipo => (
                         <div key={equipo.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-3">
                           {equipo.shield_url ? <Image src={equipo.shield_url} alt={`Escudo de ${equipo.name}`} width={38} height={38} unoptimized className="h-10 w-10 object-contain" /> : <div className="h-10 w-10 rounded-full bg-white/10" />}
                           <span className="text-base font-black uppercase tracking-wide">{equipo.name}</span>

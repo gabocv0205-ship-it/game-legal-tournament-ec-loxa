@@ -163,6 +163,24 @@ export default function PortalPrincipal() {
         .reveal.visible { opacity: 1; transform: translateY(0); }
         .sponsors-track { display: flex; width: max-content; gap: 40px; animation: marquee 20s linear infinite !important; animation-play-state: running !important; padding: 40px 0; will-change: transform;}
         .sponsor-logo { padding: 15px 30px; border: 1px solid var(--dark3); border-radius: 8px; color: var(--gray); font-weight: bold; white-space: nowrap; }
+        .value-section { padding: clamp(58px, 8vw, 96px) 20px; background: linear-gradient(180deg, var(--black), var(--dark)); border-top: 1px solid var(--dark3); }
+        .value-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 34px; }
+        .value-card { min-height: 190px; border: 1px solid rgba(212,160,23,.22); border-radius: 22px; padding: 26px; background: linear-gradient(145deg, rgba(28,28,28,.92), rgba(14,14,14,.96)); box-shadow: 0 18px 45px rgba(0,0,0,.2); }
+        .value-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: rgba(212,160,23,.14); color: var(--gold-light); font-size: 18px; margin-bottom: 18px; }
+        .value-card h3 { color: var(--white); font-size: 18px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px; }
+        .value-card p { color: var(--gray); font-size: 14px; line-height: 1.7; margin: 0; }
+        .steps-section { padding: clamp(56px, 7vw, 82px) 20px; background: var(--dark2); border-top: 1px solid var(--dark3); }
+        .steps-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 30px; }
+        .step-card { display: flex; gap: 15px; align-items: flex-start; padding: 22px; border-radius: 18px; background: rgba(13,13,13,.72); border: 1px solid var(--dark3); }
+        .step-number { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--gold); color: var(--black); font-weight: 900; }
+        .step-card strong { display: block; color: var(--white); text-transform: uppercase; font-size: 13px; letter-spacing: 1px; margin-bottom: 6px; }
+        .step-card span { color: var(--gray); font-size: 12px; line-height: 1.6; }
+        .sales-cta { margin: 0 auto; max-width: 1200px; padding: clamp(28px, 5vw, 48px); border: 1px solid rgba(212,160,23,.5); border-radius: 26px; background: radial-gradient(circle at 90% 20%, rgba(212,160,23,.2), transparent 35%), linear-gradient(135deg, #162718, #111); display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+        .sales-cta h2 { margin: 0 0 8px; color: var(--white); font-size: clamp(22px, 4vw, 36px); line-height: 1.1; text-transform: uppercase; }
+        .sales-cta p { margin: 0; color: #b4c2b6; line-height: 1.6; max-width: 650px; }
+        .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(212,160,23,.65); color: var(--gold-light); padding: 12px 20px; border-radius: 6px; font-size: 12px; font-weight: 900; text-transform: uppercase; white-space: nowrap; transition: .25s; }
+        .btn-secondary:hover { background: var(--gold); color: var(--black); transform: translateY(-2px); }
+        @media (max-width: 760px) { .value-grid, .steps-grid { grid-template-columns: 1fr; } .sales-cta { align-items: flex-start; flex-direction: column; } .btn-secondary { width: 100%; } }
 
         .section-wrap { padding: clamp(56px, 7vw, 88px) 20px; }
         .section-inner { max-width: 1200px; margin: 0 auto; }
@@ -227,9 +245,10 @@ export default function PortalPrincipal() {
                 </button>
               ) : (
                 <button onClick={() => setShowLogin(true)} className="btn-primary">
-                  <i className="fa fa-shield-halved"></i> Acceso Administrador
+                  <i className="fa fa-shield-halved"></i> Quiero organizar mi torneo
                 </button>
               )}
+              <a href="#como-funciona" className="btn-secondary"><i className="fa fa-play"></i> Como funciona</a>
             </div>
           </div>
           <PublicSpotlightCard className="hero-panel reveal premium-motion-card" style={{ transitionDelay: '0.12s' }}>
@@ -246,6 +265,32 @@ export default function PortalPrincipal() {
         </div>
       </section>
 
+      <section className="value-section" aria-labelledby="beneficios-title">
+        <div className="section-inner">
+          <div className="reveal">
+            <div className="section-label">Una plataforma, todo el campeonato</div>
+            <h2 id="beneficios-title" style={{ fontSize: 'clamp(30px, 5vw, 48px)', textTransform: 'uppercase', marginBottom: '10px' }}>Menos trabajo. <span className="text-gold">Mas control.</span></h2>
+            <p style={{ color: 'var(--gray)', maxWidth: '720px', lineHeight: 1.7 }}>Game-Legal reemplaza hojas dispersas, calculos manuales y grupos de mensajeria por una experiencia centralizada para organizadores, dirigentes y aficionados.</p>
+          </div>
+          <div className="value-grid">
+            <article className="value-card reveal"><div className="value-icon"><i className="fa fa-calendar-check"></i></div><h3>Organiza sin improvisar</h3><p>Configura el formato, grupos, canchas, horarios, sanciones y reglas antes de generar el calendario.</p></article>
+            <article className="value-card reveal" style={{ transitionDelay: '0.08s' }}><div className="value-icon"><i className="fa fa-chart-line"></i></div><h3>Decide con datos</h3><p>Consulta posiciones, goleadores, resultados, alertas disciplinarias y estados financieros desde un mismo lugar.</p></article>
+            <article className="value-card reveal" style={{ transitionDelay: '0.16s' }}><div className="value-icon"><i className="fa fa-share-nodes"></i></div><h3>Hazlo visible</h3><p>Comparte posters, grupos, partidos y la pagina publica del torneo con una imagen profesional.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="como-funciona" className="steps-section" aria-labelledby="steps-title">
+        <div className="section-inner">
+          <div className="reveal"><div className="section-label">Empieza en minutos</div><h2 id="steps-title" style={{ fontSize: 'clamp(28px, 5vw, 44px)', textTransform: 'uppercase' }}>Tu torneo, <span className="text-gold">paso a paso</span></h2></div>
+          <div className="steps-grid">
+            <div className="step-card reveal"><span className="step-number">1</span><div><strong>Configura</strong><span>Define identidad, modalidad, reglas, grupos y calendario.</span></div></div>
+            <div className="step-card reveal" style={{ transitionDelay: '0.08s' }}><span className="step-number">2</span><div><strong>Gestiona</strong><span>Registra equipos, jugadores, pagos, eventos y sanciones.</span></div></div>
+            <div className="step-card reveal" style={{ transitionDelay: '0.16s' }}><span className="step-number">3</span><div><strong>Publica</strong><span>Entrega a tu comunidad una experiencia en vivo y lista para compartir.</span></div></div>
+          </div>
+        </div>
+      </section>
+
       <section className="section-wrap" style={{ background: 'var(--dark)' }}>
         <div className="section-inner">
           <div className="reveal">
@@ -254,7 +299,7 @@ export default function PortalPrincipal() {
             <p style={{ color: 'var(--gray)' }}>Transparencia absoluta. Selecciona tu torneo para acceder a la base de datos oficial.</p>
           </div>
 
-          <div className="reveal" style={{ transitionDelay: '0.2s', marginTop: '40px' }}>
+          <div id="torneos" className="reveal" style={{ transitionDelay: '0.2s', marginTop: '40px' }}>
             {loading ? (
                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--gold)' }}>Cargando torneos...</div>
             ) : (
@@ -282,6 +327,13 @@ export default function PortalPrincipal() {
                </div>
             )}
           </div>
+        </div>
+      </section>
+
+      <section className="section-wrap" style={{ background: 'var(--black)' }}>
+        <div className="sales-cta reveal">
+          <div><h2>Convierte tu torneo en una experiencia profesional</h2><p>Te ayudamos a poner en marcha tu primer campeonato, cargar la identidad visual y dejar lista la pagina publica para tus equipos y auspiciantes.</p></div>
+          <a className="btn-primary" href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer"><i className="fa fa-whatsapp"></i> Solicitar demostracion</a>
         </div>
       </section>
 
