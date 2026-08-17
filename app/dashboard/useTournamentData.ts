@@ -9,8 +9,10 @@ export function useTournamentData() {
     players: [] as any[],
     teams: [] as any[],
     matches: [] as any[],
+    matchEvents: [] as any[],
     stats: { suspended: 0, debts: 0, nextMatchday: null as number | null },
     disciplinaryAlerts: { suspended: [] as any[], eligibleAgain: [] as any[] },
+    financialAlerts: [] as any[],
     loading: true,
     tournamentId: null as string | null,
     tournamentName: "",
@@ -25,14 +27,14 @@ export function useTournamentData() {
 
       // Never infer another client's tournament. Indicators only belong to the explicitly selected tournament.
       if (!activeId) {
-        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
+        setData({ players: [], teams: [], matches: [], matchEvents: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, financialAlerts: [], loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
         return;
       }
 
       const tournament = await getAccessibleTournament(supabase, activeId);
       if (!tournament) {
         clearActiveTournament();
-        setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
+        setData({ players: [], teams: [], matches: [], matchEvents: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, financialAlerts: [], loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
         return;
       }
 
@@ -82,7 +84,7 @@ export function useTournamentData() {
       const referee = Number(tournament?.referee_fee || 0);
       const yellow = Number(tournament?.yellow_card_fee || 0);
       const red = Number(tournament?.red_card_fee || 0);
-      const debts = teams.filter((team: any) => {
+      const financialAlerts = teams.map((team: any) => {
         const ledger = ledgerRes.data?.filter((entry: any) => entry.team_id === team.id) || [];
         if (ledger.length) {
           const charges = ledger
@@ -91,21 +93,24 @@ export function useTournamentData() {
           const paid = ledger
             .filter((entry: any) => ["payment", "reversal"].includes(entry.entry_type))
             .reduce((sum: number, entry: any) => sum + (entry.entry_type === "reversal" ? -1 : 1) * Number(entry.amount || 0), 0);
-          return charges - paid > 0;
+          return { id: team.id, name: team.name, team: `Saldo pendiente: $${(charges - paid).toFixed(2)}`, balance: charges - paid };
         }
         const paid = team.payments?.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0) || 0;
         const played = finished.filter((match: any) => match.home_team_id === team.id || match.away_team_id === team.id).length;
         const yellows = events.filter((event: any) => event.team_id === team.id && event.event_type === "amarilla").length;
         const reds = events.filter((event: any) => event.team_id === team.id && event.event_type === "roja").length;
-        return registration + played * referee + yellows * yellow + reds * red - paid > 0;
-      }).length;
+        const balance = registration + played * referee + yellows * yellow + reds * red - paid;
+        return { id: team.id, name: team.name, team: `Saldo pendiente: $${balance.toFixed(2)}`, balance };
+      }).filter((team: any) => team.balance > 0);
 
       setData({
         players,
         teams,
         matches,
-        stats: { suspended: suspendedAlerts.length, debts, nextMatchday },
+        matchEvents: events,
+        stats: { suspended: suspendedAlerts.length, debts: financialAlerts.length, nextMatchday },
         disciplinaryAlerts: { suspended: suspendedAlerts, eligibleAgain: eligibleAgainAlerts },
+        financialAlerts,
         loading: false,
         tournamentId: activeId,
         tournamentName: tournament?.name || activeName || "Torneo Oficial",
@@ -114,14 +119,32 @@ export function useTournamentData() {
       });
     } catch (error) {
       console.error("Error cargando datos del torneo:", error);
-      setData({ players: [], teams: [], matches: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
+      setData({ players: [], teams: [], matches: [], matchEvents: [], stats: { suspended: 0, debts: 0, nextMatchday: null }, disciplinaryAlerts: { suspended: [], eligibleAgain: [] }, financialAlerts: [], loading: false, tournamentId: null, tournamentName: "", tournamentPosterUrl: "", tournamentBannerUrl: "" });
     }
   }, []);
 
   useEffect(() => {
     fetchData();
     window.addEventListener("tournamentChanged", fetchData);
-    return () => window.removeEventListener("tournamentChanged", fetchData);
+    const activeId = localStorage.getItem("activeTournamentId");
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(fetchData, 350);
+    };
+    const channel = activeId ? supabase.channel(`tournament-dashboard-${activeId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "teams", filter: `tournament_id=eq.${activeId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `tournament_id=eq.${activeId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches", filter: `tournament_id=eq.${activeId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "financial_ledger", filter: `tournament_id=eq.${activeId}` }, scheduleRefresh)
+      // match_events belongs to a match; RLS limits events to the active user's scope.
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, scheduleRefresh)
+      .subscribe() : null;
+    return () => {
+      window.removeEventListener("tournamentChanged", fetchData);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, [fetchData]);
 
   return { ...data, refetch: fetchData };

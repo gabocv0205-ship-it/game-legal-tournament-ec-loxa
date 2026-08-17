@@ -46,45 +46,9 @@ function buildStandings(teams: any[], matches: any[]): Standing[] {
 }
 
 export default function DashboardInicio() {
-  const { players, teams, matches, stats, disciplinaryAlerts, loading, tournamentId, tournamentName, tournamentPosterUrl, tournamentBannerUrl } = useTournamentData();
+  const { players, teams, matches, matchEvents, stats, disciplinaryAlerts, financialAlerts, loading, tournamentId, tournamentName, tournamentPosterUrl, tournamentBannerUrl } = useTournamentData();
   const [misTorneos, setMisTorneos] = useState<any[]>([]);
   const [torneoActivoId, setTorneoActivoId] = useState<string | null>(null);
-  const [newsIndex, setNewsIndex] = useState(0);
-  const [resumenGestion, setResumenGestion] = useState({ activeTournaments: 0, teams: 0, playedMatches: 0, goals: 0 });
-
-  useEffect(() => {
-    let disposed = false;
-    const refrescarResumen = async () => {
-      try {
-        const response = await fetch("/api/dashboard/summary", { cache: "no-store", credentials: "include" });
-        if (!response.ok) return;
-        const summary = await response.json();
-        if (!disposed) setResumenGestion({
-          activeTournaments: Number(summary.activeTournaments || 0),
-          teams: Number(summary.teams || 0),
-          playedMatches: Number(summary.playedMatches || 0),
-          goals: Number(summary.goals || 0),
-        });
-      } catch {
-        // Existing tournament widgets remain available if the aggregate endpoint is unavailable.
-      }
-    };
-
-    void refrescarResumen();
-    const channel = supabase.channel("dashboard-management-summary")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, refrescarResumen)
-      .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, refrescarResumen)
-      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, refrescarResumen)
-      .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, refrescarResumen)
-      .subscribe();
-    const timer = window.setInterval(refrescarResumen, 45_000);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-      void supabase.removeChannel(channel);
-    };
-  }, []);
 
   useEffect(() => {
     const fetchTorneos = async () => {
@@ -109,8 +73,9 @@ export default function DashboardInicio() {
   };
 
   const dashboard = useMemo(() => {
-    const standings = buildStandings(teams || [], matches || []);
     const finished = (matches || []).filter((match: any) => match.status === "finished");
+    const groupFinished = finished.filter((match: any) => String(match.stage || "").toLowerCase().includes("grupo"));
+    const standings = buildStandings(teams || [], groupFinished.length ? groupFinished : finished);
     const pending = (matches || []).filter((match: any) => match.status !== "finished");
     const scheduledPending = pending.filter((match: any) => match.match_date);
     const unscheduled = pending.filter((match: any) => !match.match_date);
@@ -119,25 +84,21 @@ export default function DashboardInicio() {
     const progress = matches?.length ? Math.round((finished.length / matches.length) * 100) : 0;
     const leader = standings[0];
     const bestDefense = standings.filter(team => team.pj > 0).sort((a, b) => a.gc - b.gc || b.pts - a.pts)[0];
-    const topScorer = [...(players || [])].sort((a: any, b: any) => Number(b.goals || b.total_goals || 0) - Number(a.goals || a.total_goals || 0))[0];
-    const nextRound = stats?.nextMatchday ? `Fecha ${stats.nextMatchday}` : pending.length ? "Por programar" : "Completado";
+    const goalsByPlayer = (matchEvents || []).filter((event: any) => event.event_type === "gol" && event.player_id).reduce((totals: Map<string, number>, event: any) => {
+      totals.set(event.player_id, (totals.get(event.player_id) || 0) + 1);
+      return totals;
+    }, new Map<string, number>());
+    const topScorer = (players || []).map((player: any) => ({ ...player, tournamentGoals: goalsByPlayer.get(player.id) || 0 }))
+      .filter((player: any) => player.tournamentGoals > 0)
+      .sort((a: any, b: any) => b.tournamentGoals - a.tournamentGoals || String(a.full_name || "").localeCompare(String(b.full_name || "")))[0];
+    const latestMatchday = latest[0]?.matchday || null;
+    const latestPlayedLabel = latest[0]
+      ? `Fecha ${latestMatchday || "-"} finalizada${latest[0].match_date ? ` - ${new Date(latest[0].match_date).toLocaleDateString("es-EC")}` : ""}`
+      : "Aún no hay fechas finalizadas";
     const stage = pending.length === 0 && matches?.length ? "Torneo finalizado" : stats?.nextMatchday ? "Fase activa" : tournamentId ? "Preparacion" : "Sin torneo seleccionado";
-    const news = [
-      stats?.suspended ? `${stats.suspended} jugador(es) suspendidos para la siguiente fecha.` : "",
-      stats?.debts ? `${stats.debts} equipo(s) con alertas financieras.` : "",
-      upcoming[0] ? `Proximo partido: ${upcoming[0].home?.name || "Local"} vs ${upcoming[0].away?.name || "Visitante"}.` : "",
-      leader ? `${leader.name} lidera la tabla con ${leader.pts} punto(s).` : "",
-      latest[0] ? `Ultimo resultado: ${latest[0].home?.name || "Local"} ${latest[0].home_goals ?? 0} - ${latest[0].away_goals ?? 0} ${latest[0].away?.name || "Visitante"}.` : "",
-    ].filter(Boolean);
 
-    return { standings, finished, pending, unscheduled, upcoming, latest, progress, leader, bestDefense, topScorer, nextRound, stage, news };
-  }, [matches, players, stats, teams, tournamentId]);
-
-  useEffect(() => {
-    if (!dashboard.news.length) return;
-    const timer = setInterval(() => setNewsIndex(index => (index + 1) % dashboard.news.length), 4500);
-    return () => clearInterval(timer);
-  }, [dashboard.news.length]);
+    return { standings, finished, pending, unscheduled, upcoming, latest, progress, leader, bestDefense, topScorer, latestPlayedLabel, stage };
+  }, [matchEvents, matches, players, stats, teams, tournamentId]);
 
   if (loading) return <div className="p-10 text-center font-black text-[#D4A017] animate-pulse">Sincronizando centro de control...</div>;
 
@@ -154,8 +115,6 @@ export default function DashboardInicio() {
   }
 
   const torneoActual = misTorneos.find(t => t.id === torneoActivoId);
-  const activeNews = dashboard.news[newsIndex % Math.max(1, dashboard.news.length)];
-
   return (
     <AnimatedPage className="mx-auto max-w-7xl space-y-6">
       <PremiumCard className="p-6 md:p-8">
@@ -191,19 +150,6 @@ export default function DashboardInicio() {
         </div>
       </PremiumCard>
 
-      <PremiumCard className="p-5 md:p-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div><p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Resumen sincronizado</p><h2 className="mt-1 text-xl font-black uppercase text-white">Gestión de torneos</h2></div>
-          <p className="text-xs font-bold text-gray-500">Actualización automática</p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <AnimatedStatCard label="Vigentes" value={resumenGestion.activeTournaments} sub="Torneos activos" tone="green" />
-          <AnimatedStatCard label="Equipos" value={resumenGestion.teams} sub="Registrados" />
-          <AnimatedStatCard label="Jugados" value={resumenGestion.playedMatches} sub="Partidos finalizados" tone="blue" />
-          <AnimatedStatCard label="Goles" value={resumenGestion.goals} sub="Registrados oficialmente" tone="green" />
-        </div>
-      </PremiumCard>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <AnimatedStatCard label="Equipos" value={teams.length} sub="Inscritos" />
         <AnimatedStatCard label="Jugadores" value={players.length} sub="Registrados" tone="blue" />
@@ -217,7 +163,7 @@ export default function DashboardInicio() {
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Estado del torneo</p>
-              <h2 className="text-2xl font-black uppercase text-white">{dashboard.nextRound}</h2>
+              <h2 className="text-2xl font-black uppercase text-white">{dashboard.latestPlayedLabel}</h2>
             </div>
             <span className="rounded-full bg-[#D4A017] px-3 py-1 text-[10px] font-black uppercase text-black">{dashboard.progress}%</span>
           </div>
@@ -236,13 +182,13 @@ export default function DashboardInicio() {
 
         <PremiumCard className="p-5 md:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Novedades automaticas</p>
-          <div className="mt-4 rounded-3xl border border-[#D4A017]/30 bg-gradient-to-br from-[#1C1C1C] to-[#0a0a0a] p-6 min-h-36 flex items-center">
-            <p className="text-lg font-black leading-7 tracking-tight text-white antialiased md:text-xl">{activeNews || "Sin novedades criticas por ahora."}</p>
-          </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <AlertList title="Suspendidos" items={disciplinaryAlerts.suspended} empty="Sin suspendidos" />
+            <AlertList title="Saldos pendientes" items={financialAlerts} empty="Sin equipos con deuda" />
             <AlertList title="Habilitados" items={disciplinaryAlerts.eligibleAgain} empty="Sin retornos" />
+            <AlertList title="Próximos partidos" items={dashboard.upcoming.map((match: any) => ({ id: match.id, name: `${match.home?.name || "Local"} vs ${match.away?.name || "Visitante"}`, team: `Fecha ${match.matchday || "-"}` }))} empty="Sin partidos programados" />
           </div>
+          {dashboard.latest[0] && <p className="mt-4 rounded-2xl border border-[#D4A017]/25 bg-[#D4A017]/5 p-4 text-sm font-black text-white">Último resultado: {dashboard.latest[0].home?.name || "Local"} {dashboard.latest[0].home_goals ?? 0} - {dashboard.latest[0].away_goals ?? 0} {dashboard.latest[0].away?.name || "Visitante"}.</p>}
         </PremiumCard>
       </div>
 
@@ -252,7 +198,7 @@ export default function DashboardInicio() {
           <div className="mt-5 space-y-4">
             <Highlight label="Lider de tabla" value={dashboard.leader?.name || "Sin datos"} detail={dashboard.leader ? `${dashboard.leader.pts} pts · GD ${dashboard.leader.gd}` : "Pendiente"} shield={dashboard.leader?.shield_url} />
             <Highlight label="Mejor defensa" value={dashboard.bestDefense?.name || "Sin datos"} detail={dashboard.bestDefense ? `${dashboard.bestDefense.gc} goles en contra` : "Pendiente"} shield={dashboard.bestDefense?.shield_url} />
-            <Highlight label="Goleador" value={dashboard.topScorer?.full_name || "Sin datos"} detail={`${Number(dashboard.topScorer?.goals || dashboard.topScorer?.total_goals || 0)} gol(es)`} shield={dashboard.topScorer?.teams?.shield_url} />
+            <Highlight label="Goleador" value={dashboard.topScorer?.full_name || "Sin datos"} detail={`${Number(dashboard.topScorer?.tournamentGoals || 0)} gol(es)`} shield={dashboard.topScorer?.teams?.shield_url} />
           </div>
         </PremiumCard>
 
