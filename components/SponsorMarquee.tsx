@@ -13,7 +13,7 @@ export function SponsorMarquee({ sponsors, className = "" }: SponsorMarqueeProps
 
   return (
     <div className={`sponsor-marquee ${className}`} aria-label="Auspiciantes oficiales">
-      <div className="sponsor-marquee-track">
+      <div className="sponsor-marquee-track sponsor-track">
         {loopItems.map((sponsor, index) => <span className="sponsor-marquee-item" key={`${sponsor}-${index}`}>{sponsor}</span>)}
       </div>
     </div>

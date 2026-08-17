@@ -50,6 +50,41 @@ export default function DashboardInicio() {
   const [misTorneos, setMisTorneos] = useState<any[]>([]);
   const [torneoActivoId, setTorneoActivoId] = useState<string | null>(null);
   const [newsIndex, setNewsIndex] = useState(0);
+  const [resumenGestion, setResumenGestion] = useState({ activeTournaments: 0, teams: 0, playedMatches: 0, goals: 0 });
+
+  useEffect(() => {
+    let disposed = false;
+    const refrescarResumen = async () => {
+      try {
+        const response = await fetch("/api/dashboard/summary", { cache: "no-store", credentials: "include" });
+        if (!response.ok) return;
+        const summary = await response.json();
+        if (!disposed) setResumenGestion({
+          activeTournaments: Number(summary.activeTournaments || 0),
+          teams: Number(summary.teams || 0),
+          playedMatches: Number(summary.playedMatches || 0),
+          goals: Number(summary.goals || 0),
+        });
+      } catch {
+        // Existing tournament widgets remain available if the aggregate endpoint is unavailable.
+      }
+    };
+
+    void refrescarResumen();
+    const channel = supabase.channel("dashboard-management-summary")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, refrescarResumen)
+      .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, refrescarResumen)
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, refrescarResumen)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, refrescarResumen)
+      .subscribe();
+    const timer = window.setInterval(refrescarResumen, 45_000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchTorneos = async () => {
@@ -153,6 +188,19 @@ export default function DashboardInicio() {
               </div>
             </div>
           </PosterPreviewCard>
+        </div>
+      </PremiumCard>
+
+      <PremiumCard className="p-5 md:p-6">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div><p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4A017]">Resumen sincronizado</p><h2 className="mt-1 text-xl font-black uppercase text-white">Gestión de torneos</h2></div>
+          <p className="text-xs font-bold text-gray-500">Actualización automática</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <AnimatedStatCard label="Vigentes" value={resumenGestion.activeTournaments} sub="Torneos activos" tone="green" />
+          <AnimatedStatCard label="Equipos" value={resumenGestion.teams} sub="Registrados" />
+          <AnimatedStatCard label="Jugados" value={resumenGestion.playedMatches} sub="Partidos finalizados" tone="blue" />
+          <AnimatedStatCard label="Goles" value={resumenGestion.goals} sub="Registrados oficialmente" tone="green" />
         </div>
       </PremiumCard>
 

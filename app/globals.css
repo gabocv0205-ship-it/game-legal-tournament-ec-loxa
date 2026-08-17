@@ -15,7 +15,7 @@
   width: max-content;
   align-items: center;
   gap: 18px;
-  animation: sponsor-marquee-scroll 30s linear infinite;
+  animation: sponsor-marquee-scroll 30s linear infinite !important;
   will-change: transform;
 }
 
