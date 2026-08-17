@@ -1,10 +1,14 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 
 export default function ConfiguracionPage() {
+  const router = useRouter();
   const [torneoId, setTorneoId] = useState<string | null>(null);
+  const [mostrarOnboarding, setMostrarOnboarding] = useState(false);
+  const [continuarDespuesDeGuardar, setContinuarDespuesDeGuardar] = useState(false);
   
   // Datos Generales
   const [nombre, setNombre] = useState("");
@@ -78,6 +82,7 @@ export default function ConfiguracionPage() {
       const data = await getAccessibleTournament(supabase, activeId);
       if (data) {
         setTorneoId(data.id);
+        setMostrarOnboarding(!data.configuration_completed && localStorage.getItem(`onboardingDismissed:${data.id}`) !== "true");
         const { data: { user } } = await supabase.auth.getUser();
         setUsuarioActualId(user?.id || null);
         const ownerId = (data as any).user_id || user?.id || null;
@@ -258,6 +263,11 @@ export default function ConfiguracionPage() {
       }
 
       alert("¡Configuración guardada con éxito!");
+      if (continuarDespuesDeGuardar) {
+        localStorage.setItem(`onboardingDismissed:${torneoId}`, "true");
+        router.push("/dashboard/equipos");
+        return;
+      }
       cargarConfiguracion(); // Recargar datos frescos
       setReglamento(null); // Limpiar el input de archivo
       setBannerArchivo(null);
@@ -276,11 +286,32 @@ export default function ConfiguracionPage() {
       <h2 className="text-3xl font-black text-white uppercase tracking-wider">Configuración del Torneo</h2>
       <p className="text-gray-400 text-sm">Define el formato, premios, valores financieros y reglamento oficial.</p>
 
+      {mostrarOnboarding && torneoId && (
+        <aside className="rounded-2xl border border-[#D4A017]/50 bg-gradient-to-r from-[#2b2108] to-[#141414] p-5 shadow-xl">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D4A017]">Primer torneo: configuración guiada</p>
+              <h3 className="mt-1 text-xl font-black text-white">Completa estos cuatro pasos antes de crear equipos</h3>
+              <p className="mt-2 max-w-3xl text-sm text-gray-300">Esta configuración será la base del calendario, planillas, sanciones, finanzas y fases finales.</p>
+            </div>
+            <button type="button" onClick={() => { localStorage.setItem(`onboardingDismissed:${torneoId}`, "true"); setMostrarOnboarding(false); }} className="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">Ocultar guía</button>
+          </div>
+          <ol className="mt-5 grid gap-3 md:grid-cols-4">
+            {[
+              ["1", "Datos y formato", "Nombre, modalidad y estructura de grupos", "#datos-principales"],
+              ["2", "Programación", "Fechas, canchas, duración y descansos", "#programacion"],
+              ["3", "Identidad", "Banner, póster y auspiciantes opcionales", "#identidad-visual"],
+              ["4", "Guardar y equipos", "Confirma y registra los participantes", "#guardar-configuracion"],
+            ].map(([step, title, description, anchor]) => <li key={step} className="rounded-xl border border-[#D4A017]/20 bg-black/20 p-3"><a href={anchor} className="block"><span className="inline-grid h-6 w-6 place-items-center rounded-full bg-[#D4A017] text-xs font-black text-black">{step}</span><strong className="mt-2 block text-sm text-white">{title}</strong><span className="mt-1 block text-xs leading-5 text-gray-400">{description}</span></a></li>)}
+          </ol>
+        </aside>
+      )}
+
       <form onSubmit={guardarConfiguracion} className="space-y-8 bg-[#141414] p-8 rounded-2xl border border-[#2E2E2E] shadow-2xl">
         
         {/* SECCIÓN 1: DATOS GENERALES */}
         <div className="space-y-4">
-          <h3 className="text-[#D4A017] font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2 flex items-center gap-2">
+          <h3 id="datos-principales" className="scroll-mt-24 text-[#D4A017] font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2 flex items-center gap-2">
             <i className="fa fa-trophy"></i> Datos Principales
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -338,7 +369,7 @@ export default function ConfiguracionPage() {
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-purple-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Programación Automática</h3>
+          <h3 id="programacion" className="scroll-mt-24 text-purple-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Programación Automática</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <NumberField label="Canchas disponibles" value={numCanchas} onChange={setNumCanchas} />
             <div>
@@ -370,7 +401,7 @@ export default function ConfiguracionPage() {
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-pink-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Identidad Visual del Torneo</h3>
+          <h3 id="identidad-visual" className="scroll-mt-24 text-pink-400 font-black uppercase tracking-widest text-sm border-b border-[#2E2E2E] pb-2">Identidad Visual del Torneo</h3>
           <p className="text-gray-500 text-xs">Selecciona cualquier publicidad, diseño, eslogan o fotografía. La aplicación la optimiza automáticamente antes de publicarla.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <ImageUpload label="Banner principal (horizontal)" currentUrl={bannerUrl} file={bannerArchivo} onChange={setBannerArchivo} />
@@ -522,10 +553,15 @@ export default function ConfiguracionPage() {
         </div>
 
         {/* BOTÓN GUARDAR */}
-        <div className="pt-4 border-t border-[#2E2E2E]">
-          <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black font-black uppercase tracking-widest rounded-xl hover:scale-[1.01] transition-transform shadow-[0_0_20px_rgba(212,160,23,0.3)] text-lg">
+        <div id="guardar-configuracion" className="pt-4 border-t border-[#2E2E2E] scroll-mt-24">
+          <button type="submit" disabled={loading} onClick={() => setContinuarDespuesDeGuardar(false)} className="w-full py-4 bg-gradient-to-r from-[#D4A017] to-yellow-600 text-black font-black uppercase tracking-widest rounded-xl hover:scale-[1.01] transition-transform shadow-[0_0_20px_rgba(212,160,23,0.3)] text-lg">
             {loading ? "Actualizando Base de Datos..." : "Guardar Configuración Oficial"}
           </button>
+          {mostrarOnboarding && (
+            <button type="submit" disabled={loading} onClick={() => setContinuarDespuesDeGuardar(true)} className="mt-3 w-full rounded-xl border border-[#D4A017]/70 bg-[#1c1c1c] py-3 text-sm font-black uppercase tracking-widest text-[#D4A017] transition-colors hover:bg-[#D4A017] hover:text-black">
+              Guardar y continuar a equipos
+            </button>
+          )}
         </div>
 
       </form>

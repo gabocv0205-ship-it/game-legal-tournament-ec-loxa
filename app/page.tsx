@@ -1,9 +1,12 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import Link from 'next/link';
 import { PublicSpotlightCard } from "@/components/public-ui";
+
+const WHATSAPP_NUMBER = "593960553548";
 
 export default function PortalPrincipal() {
   const router = useRouter();
@@ -20,11 +23,35 @@ export default function PortalPrincipal() {
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
+  const torneoDemo = useMemo(() => torneosActivos.find((torneo) =>
+    String(torneo.name || "").toLocaleLowerCase().includes("champions loxa 2026")
+  ) || null, [torneosActivos]);
+
+  const registrarConversion = async (eventType: string, payload: Record<string, unknown> = {}) => {
+    try {
+      const storageKey = "gameLegalCommercialVisitor";
+      let visitorKey = window.localStorage.getItem(storageKey);
+      if (!visitorKey) {
+        visitorKey = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        window.localStorage.setItem(storageKey, visitorKey);
+      }
+      await supabase.from("commercial_events").insert({
+        event_type: eventType,
+        visitor_key: visitorKey,
+        page_path: window.location.pathname,
+        payload,
+      });
+    } catch {
+      // La analitica nunca debe bloquear la navegacion ni el contacto comercial.
+    }
+  };
+
   useEffect(() => {
     async function inicializarPortal() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSesionActiva(Boolean(session));
+        void registrarConversion("landing_view");
         await supabase.from("status_visits").insert([{}]);
         const { count } = await supabase.from("status_visits").select("*", { count: "exact", head: true });
         if (count) setVisitas(count);
@@ -180,6 +207,28 @@ export default function PortalPrincipal() {
         .sales-cta p { margin: 0; color: #b4c2b6; line-height: 1.6; max-width: 650px; }
         .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(212,160,23,.65); color: var(--gold-light); padding: 12px 20px; border-radius: 6px; font-size: 12px; font-weight: 900; text-transform: uppercase; white-space: nowrap; transition: .25s; }
         .btn-secondary:hover { background: var(--gold); color: var(--black); transform: translateY(-2px); }
+        .demo-section { padding: clamp(56px, 7vw, 90px) 20px; background: radial-gradient(circle at 18% 0%, rgba(27,107,47,.18), transparent 34%), var(--black); border-top: 1px solid var(--dark3); }
+        .demo-grid { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 24px; align-items: stretch; }
+        .demo-card, .plan-card, .showcase-card { border:1px solid var(--dark3); background:linear-gradient(145deg, rgba(28,28,28,.96), rgba(9,9,9,.96)); border-radius:22px; overflow:hidden; }
+        .demo-card { padding: clamp(24px, 4vw, 38px); display:flex; flex-direction:column; justify-content:center; min-height:330px; }
+        .demo-card h2 { margin:0 0 14px; color:var(--white); font-size:clamp(28px, 4vw, 46px); line-height:1; text-transform:uppercase; }
+        .demo-card p { color:var(--gray); line-height:1.7; margin:0 0 24px; max-width:560px; }
+        .demo-proof { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+        .demo-proof span { border:1px solid rgba(212,160,23,.25); padding:11px; color:#d9d9d9; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; border-radius:10px; }
+        .showcase-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:16px; margin-top:30px; }
+        .showcase-card { aspect-ratio: .78; position:relative; box-shadow:0 16px 38px rgba(0,0,0,.22); }
+        .showcase-card img { width:100%; height:100%; object-fit:cover; transition:transform .35s ease; }
+        .showcase-card:hover img { transform:scale(1.04); }
+        .showcase-caption { position:absolute; inset:auto 0 0; padding:35px 14px 14px; color:var(--white); font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:1.1px; background:linear-gradient(transparent, rgba(0,0,0,.93)); }
+        .plans-section { padding:clamp(56px, 7vw, 90px) 20px; background:var(--dark2); border-top:1px solid var(--dark3); }
+        .plans-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:18px; margin-top:30px; }
+        .plan-card { padding:26px; display:flex; flex-direction:column; min-height:370px; }
+        .plan-card.featured { border-color:var(--gold); box-shadow:0 18px 48px rgba(212,160,23,.13); transform:translateY(-8px); }
+        .plan-kicker { color:var(--gold); font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:2px; }
+        .plan-card h3 { color:var(--white); margin:10px 0 8px; font-size:28px; text-transform:uppercase; }
+        .plan-card p { color:var(--gray); font-size:14px; line-height:1.6; min-height:68px; }
+        .plan-list { list-style:none; padding:0; margin:18px 0 26px; color:#d2d2d2; font-size:13px; line-height:1.8; flex:1; }
+        .plan-list li::before { content:'✓'; color:var(--gold); margin-right:8px; font-weight:900; }
         @media (max-width: 760px) { .value-grid, .steps-grid { grid-template-columns: 1fr; } .sales-cta { align-items: flex-start; flex-direction: column; } .btn-secondary { width: 100%; } }
 
         .section-wrap { padding: clamp(56px, 7vw, 88px) 20px; }
@@ -211,6 +260,7 @@ export default function PortalPrincipal() {
           .sponsors-track { gap: 16px; }
         .sponsor-logo { padding: 12px 18px; font-size: 12px; }
         }
+        @media (max-width: 900px) { .demo-grid, .plans-grid { grid-template-columns:1fr; } .showcase-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } .plan-card.featured { transform:none; } }
       `}} />
 
       <div className="cursor-dot" id="cursorDot"></div>
@@ -247,6 +297,11 @@ export default function PortalPrincipal() {
                 <button onClick={() => setShowLogin(true)} className="btn-primary">
                   <i className="fa fa-shield-halved"></i> Quiero organizar mi torneo
                 </button>
+              )}
+              {torneoDemo && (
+                <Link href={`/torneo/${torneoDemo.slug}`} onClick={() => void registrarConversion("demo_open", { tournament_id: torneoDemo.id, tournament_name: torneoDemo.name, source: "hero" })} className="btn-secondary">
+                  <i className="fa fa-eye"></i> Ver demo publica
+                </Link>
               )}
               <a href="#como-funciona" className="btn-secondary"><i className="fa fa-play"></i> Como funciona</a>
             </div>
@@ -291,6 +346,68 @@ export default function PortalPrincipal() {
         </div>
       </section>
 
+      <section className="demo-section" aria-labelledby="demo-title">
+        <div className="section-inner">
+          <div className="demo-grid reveal">
+            <article className="demo-card">
+              <div className="section-label">Explora antes de contratar</div>
+              <h2 id="demo-title">Demo publica<br /><span className="text-gold">Champions Loxa 2026</span></h2>
+              <p>Un torneo ficticio completamente configurado para que conozcas la experiencia real: grupos, calendario, posiciones, goleadores y la comunicacion visual para tus redes.</p>
+              {torneoDemo ? (
+                <Link href={`/torneo/${torneoDemo.slug}`} onClick={() => void registrarConversion("demo_open", { tournament_id: torneoDemo.id, tournament_name: torneoDemo.name, source: "demo_section" })} className="btn-primary" style={{ alignSelf: 'flex-start' }}>
+                  <i className="fa fa-arrow-up-right-from-square"></i> Explorar la demo
+                </Link>
+              ) : (
+                <a href="#torneos" className="btn-primary" style={{ alignSelf: 'flex-start' }}><i className="fa fa-trophy"></i> Ver torneos disponibles</a>
+              )}
+            </article>
+            <aside className="demo-card" style={{ background: 'linear-gradient(150deg, rgba(27,107,47,.55), rgba(10,10,10,.98))' }}>
+              <div className="section-label">Incluye</div>
+              <h3 style={{ color: 'var(--white)', fontSize: 25, textTransform: 'uppercase', margin: '0 0 22px' }}>Una experiencia completa</h3>
+              <div className="demo-proof"><span>Grupos y fixture</span><span>Tabla en vivo</span><span>Goleadores</span><span>Posters listos</span><span>Escudos reales</span><span>Vista movil</span></div>
+            </aside>
+          </div>
+
+          <div className="reveal" style={{ marginTop: 56 }}>
+            <div className="section-label">Resultados que puedes compartir</div>
+            <h2 style={{ fontSize: 'clamp(28px, 5vw, 44px)', textTransform: 'uppercase', margin: 0 }}>Material real de <span className="text-gold">Champions Loxa 2026</span></h2>
+            <p style={{ color: 'var(--gray)', lineHeight: 1.7 }}>Ejemplos generados por la plataforma con datos ficticios: posters, sorteo, tabla y goleadores.</p>
+          </div>
+          <div className="showcase-grid reveal" style={{ transitionDelay: '0.08s' }}>
+            {[
+              ["/showcase/champions-loxa-partidos.webp", "Poster de jornada"],
+              ["/showcase/champions-loxa-sorteo.jpg", "Sorteo y grupos"],
+              ["/showcase/champions-loxa-posiciones.webp", "Tabla de posiciones"],
+              ["/showcase/champions-loxa-goleadores.webp", "Goleadores"],
+            ].map(([src, label]) => (
+              <article className="showcase-card" key={src}>
+                <Image src={src} alt={label} width={540} height={720} sizes="(max-width: 900px) 50vw, 25vw" />
+                <div className="showcase-caption">{label}</div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="plans-section" aria-labelledby="planes-title">
+        <div className="section-inner">
+          <div className="reveal"><div className="section-label">Planes para cada organizador</div><h2 id="planes-title" style={{ fontSize: 'clamp(28px, 5vw, 44px)', textTransform: 'uppercase', margin: 0 }}>Elige el nivel que necesita <span className="text-gold">tu competencia</span></h2><p style={{ color: 'var(--gray)', lineHeight: 1.7 }}>Son propuestas comerciales flexibles. Define el valor final según número de equipos, duración y acompañamiento requerido.</p></div>
+          <div className="plans-grid">
+            {[
+              ["Basico", "Para ligas que empiezan a digitalizar su campeonato.", ["1 torneo activo", "Equipos, jugadores y fixture", "Resultados y tabla publica", "Soporte de puesta en marcha"]],
+              ["Profesional", "La opcion recomendada para un torneo con presencia y control total.", ["Todo lo del plan Basico", "Finanzas y estados de pago", "Posters, planillas y carnets", "Pagina publica personalizada", "Soporte prioritario"]],
+              ["Premium", "Para organizaciones con varios torneos y una operacion consolidada.", ["Todo lo del plan Profesional", "Multiples torneos y colaboradores", "Reportes y control comercial", "Identidad visual avanzada", "Acompanamiento preferencial"]],
+            ].map(([name, description, benefits], index) => (
+              <article className={`plan-card reveal ${index === 1 ? 'featured' : ''}`} key={String(name)} style={{ transitionDelay: `${index * 0.08}s` }}>
+                <div className="plan-kicker">{index === 1 ? 'Mas elegido' : 'Game Legal'}</div><h3>{name}</h3><p>{description}</p>
+                <ul className="plan-list">{(benefits as string[]).map((benefit) => <li key={benefit}>{benefit}</li>)}</ul>
+                <a className={index === 1 ? 'btn-primary' : 'btn-secondary'} href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hola, deseo conocer el plan ${name} de Game Legal.`)}`} target="_blank" rel="noopener noreferrer" onClick={() => void registrarConversion("whatsapp_lead_click", { source: "commercial_plan", plan: name })}>Solicitar propuesta</a>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="section-wrap" style={{ background: 'var(--dark)' }}>
         <div className="section-inner">
           <div className="reveal">
@@ -308,7 +425,7 @@ export default function PortalPrincipal() {
                    <p style={{ color: 'var(--gray)', padding: '20px' }}>Aún no hay torneos registrados en el sistema.</p>
                  ) : (
                    torneosActivos.map((torneo, index) => (
-                     <Link href={`/torneo/${torneo.slug}`} key={torneo.id} style={{ textDecoration: 'none' }}>
+                     <Link href={`/torneo/${torneo.slug}`} key={torneo.id} onClick={() => void registrarConversion("public_tournament_open", { tournament_id: torneo.id, tournament_name: torneo.name, source: "directory" })} style={{ textDecoration: 'none' }}>
                        <PublicSpotlightCard className="tournament-card premium-motion-card" style={{ transitionDelay: `${Math.min(index * 35, 180)}ms` }}>
                          <div>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -333,7 +450,7 @@ export default function PortalPrincipal() {
       <section className="section-wrap" style={{ background: 'var(--black)' }}>
         <div className="sales-cta reveal">
           <div><h2>Convierte tu torneo en una experiencia profesional</h2><p>Te ayudamos a poner en marcha tu primer campeonato, cargar la identidad visual y dejar lista la pagina publica para tus equipos y auspiciantes.</p></div>
-          <a className="btn-primary" href="https://wa.me/593960553548" target="_blank" rel="noopener noreferrer"><i className="fa fa-whatsapp"></i> Solicitar demostracion</a>
+          <a className="btn-primary" href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hola, deseo una demostracion de Game Legal.")}`} target="_blank" rel="noopener noreferrer" onClick={() => void registrarConversion("whatsapp_lead_click", { source: "landing_cta" })}><i className="fa fa-whatsapp"></i> Solicitar demostracion</a>
         </div>
       </section>
 

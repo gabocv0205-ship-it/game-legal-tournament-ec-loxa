@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 const Icon = ({ path, size = 20, className = "" }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
@@ -31,6 +32,7 @@ export default function BovedaSuperAdmin() {
   const [nuevaFechaVencimiento, setNuevaFechaVencimiento] = useState("");
   const [creandoCliente, setCreandoCliente] = useState(false);
   const [errorCarga, setErrorCarga] = useState("");
+  const [conversiones, setConversiones] = useState<Record<string, number>>({});
 
   useEffect(() => {
     cargarClientes();
@@ -44,6 +46,12 @@ export default function BovedaSuperAdmin() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los clientes');
       setClientes(data.clientes || []);
+      const tipos = ["landing_view", "demo_open", "public_tournament_open", "whatsapp_lead_click"];
+      const resultados = await Promise.all(tipos.map(async (eventType) => {
+        const { count } = await supabase.from("commercial_events").select("id", { count: "exact", head: true }).eq("event_type", eventType);
+        return [eventType, count || 0] as const;
+      }));
+      setConversiones(Object.fromEntries(resultados));
     } catch (error: any) {
       console.error("Error al cargar clientes:", error);
       setErrorCarga(error.message);
@@ -203,6 +211,15 @@ export default function BovedaSuperAdmin() {
           {errorCarga}
         </div>
       )}
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          ["Visitas landing", conversiones.landing_view || 0, "text-sky-400"],
+          ["Aperturas demo", conversiones.demo_open || 0, "text-violet-400"],
+          ["Torneos abiertos", conversiones.public_tournament_open || 0, "text-emerald-400"],
+          ["Contactos WhatsApp", conversiones.whatsapp_lead_click || 0, "text-[#D4A017]"],
+        ].map(([label, total, color]) => <div key={String(label)} className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-4 shadow-lg"><p className="text-[10px] font-black uppercase tracking-widest text-gray-500">{label}</p><p className={`mt-2 text-3xl font-black ${color}`}>{total}</p></div>)}
+      </section>
 
       <div className="bg-[#141414] rounded-2xl shadow-[0_0_30px_rgba(220,38,38,0.05)] border border-[#2E2E2E] overflow-hidden">
         <div className="overflow-x-auto">
