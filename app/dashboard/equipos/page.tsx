@@ -3,11 +3,12 @@ import React, { useState, useEffect } from "react";
 import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
-import { exportTeamInvitationSheetPdf, exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
+import { exportStandardInvitationSheetPdf, exportTeamInvitationSheetPdf, exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
 
 export default function EquiposPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [torneoNombre, setTorneoNombre] = useState("Torneo seleccionado");
+  const [cuposFichaInvitacion, setCuposFichaInvitacion] = useState(25);
   const [equipos, setEquipos] = useState<any[]>([]);
   const [nombre, setNombre] = useState("");
   const [escudo, setEscudo] = useState<File | null>(null);
@@ -53,7 +54,7 @@ export default function EquiposPage() {
         return;
       }
 
-      const tournament = await getAccessibleTournament(supabase, activeId, "id, name");
+      const tournament = await getAccessibleTournament(supabase, activeId, "id, name, max_players_per_team");
       if (!tournament) {
         clearActiveTournament();
         setEquipos([]);
@@ -65,6 +66,7 @@ export default function EquiposPage() {
       
       setTorneoId(activeId);
       setTorneoNombre((tournament as any).name || "Torneo seleccionado");
+      setCuposFichaInvitacion(Math.max(1, Number((tournament as any).max_players_per_team || 25)));
 
       try {
         const stored = localStorage.getItem(`gamelegal-carnets:${activeId}`);
@@ -435,6 +437,11 @@ export default function EquiposPage() {
     }
   };
 
+  const descargarFichaInvitacionEstandar = () => {
+    if (!torneoId) return alert("Selecciona un torneo antes de descargar la ficha.");
+    exportStandardInvitationSheetPdf(torneoNombre, "ficha-invitacion-estandar.pdf", cuposFichaInvitacion);
+  };
+
   const descargarCarnets = async (equipo: any) => {
     if (!torneoId) return alert("Selecciona un torneo antes de descargar los carnets.");
     setExportandoEquipoId(equipo.id);
@@ -469,6 +476,13 @@ export default function EquiposPage() {
     <div className="space-y-6">
       <h2 className="text-3xl font-black text-white uppercase tracking-wider">Gestión de Clubes</h2>
       <p className="text-gray-400 text-sm">Administra los equipos participantes del torneo seleccionado.</p>
+      <section className="flex flex-col gap-3 rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#D4A017]">Ficha estandar de invitacion</p>
+          <p className="mt-1 text-xs text-gray-400">Disponible antes de inscribir equipos. Incluye campos vacios para equipo, dirigente, contacto, identificacion y nombres de hasta {cuposFichaInvitacion} jugadores.</p>
+        </div>
+        <button type="button" onClick={descargarFichaInvitacionEstandar} disabled={!torneoId} className="shrink-0 rounded-xl border border-violet-400/60 bg-violet-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-violet-200 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50">Descargar ficha estandar</button>
+      </section>
       
       <section className="rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4 shadow-lg" aria-label="Configuracion de carnets">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -629,7 +643,7 @@ export default function EquiposPage() {
                 ) : (
                   <>
                     <button onClick={() => descargarPdfJugadores(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-blue-400 hover:text-blue-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "PDF jugadores"}</button>
-                    <button onClick={() => descargarFichaInvitacion(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-violet-300 hover:text-violet-200 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "Ficha invitacion"}</button>
+                    <button onClick={() => descargarFichaInvitacion(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-violet-300 hover:text-violet-200 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "Ficha registrada"}</button>
                     {carnetsHabilitados && <button onClick={() => descargarCarnets(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 hover:text-emerald-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : `Carnets ${formatoCarnets.toUpperCase()}`}</button>}
                     <button onClick={() => abrirEstadoEquipo(eq)} className="text-[10px] uppercase tracking-wider font-bold text-red-300 hover:text-red-200 transition-all">Estado</button>
                     <button onClick={() => { cancelarEdicion(); setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="text-[10px] uppercase tracking-wider font-bold text-[#D4A017] hover:text-yellow-300 transition-all">Editar</button>

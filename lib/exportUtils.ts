@@ -122,6 +122,7 @@ export type TeamInvitationSheetReport = {
   managerEmail?: string;
   generatedAt: string;
   rows: Array<Pick<TeamPlayerPdfRow, "index" | "fullName" | "identification">>;
+  blankSlots?: number;
 };
 
 export function exportTeamInvitationSheetPdf(report: TeamInvitationSheetReport, filename: string) {
@@ -129,8 +130,11 @@ export function exportTeamInvitationSheetPdf(report: TeamInvitationSheetReport, 
     ? `<img class="shield" src="${escapeHtml(report.teamShieldUrl)}" alt="Escudo de ${escapeHtml(report.teamName)}" />`
     : `<div class="shield placeholder">GL</div>`;
   const managerEmail = report.managerEmail ? `<p><strong>Correo:</strong> ${escapeHtml(report.managerEmail)}</p>` : "";
-  const rowsHtml = report.rows.length
-    ? report.rows.map(row => `<tr><td class="number">${row.index}</td><td>${escapeHtml(row.identification)}</td><td>${escapeHtml(row.fullName)}</td></tr>`).join("")
+  const rows = report.rows.length
+    ? report.rows
+    : Array.from({ length: Math.max(0, report.blankSlots || 0) }, (_, index) => ({ index: index + 1, identification: "", fullName: "" }));
+  const rowsHtml = rows.length
+    ? rows.map(row => `<tr><td class="number">${row.index}</td><td>${escapeHtml(row.identification)}</td><td>${escapeHtml(row.fullName)}</td></tr>`).join("")
     : `<tr><td colspan="3" class="empty">No existen jugadores registrados para este equipo en el torneo seleccionado.</td></tr>`;
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha de invitacion - ${escapeHtml(report.teamName)}</title><style>
     @page { size: A4 portrait; margin: 12mm; } * { box-sizing: border-box; } body { margin: 0; background: #f4f6f8; color: #152235; font-family: "Arial Nova Light", Inter, "Segoe UI", Arial, sans-serif; } .page { min-height: 100vh; border: 1px solid #d7dee8; background: #fff; padding: 16px; } .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-radius: 14px; padding: 16px; background: #101827; border-bottom: 5px solid #d4a017; color: #fff; } h1 { margin: 0; font-size: 20px; letter-spacing: .09em; text-transform: uppercase; } h2 { margin: 6px 0 0; color: #f5c842; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; } .header p { margin: 5px 0 0; color: #d9e0e9; font-size: 10px; } .shield { width: 70px; height: 70px; flex: 0 0 70px; border: 1px solid #d4a017; border-radius: 12px; padding: 6px; background: #fff; object-fit: contain; } .placeholder { display: grid; place-items: center; color: #101827; font-size: 20px; font-weight: 900; } .title { margin: 18px 0 8px; color: #172033; font-size: 15px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; } .manager { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; } .card { min-width: 0; border: 1px solid #dce3eb; border-radius: 10px; background: #f8fafc; padding: 11px 12px; } .label { margin: 0 0 4px; color: #6b7788; font-size: 8px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; } .value, .card p { margin: 0; color: #172033; font-size: 11px; line-height: 1.55; } .value { font-size: 13px; font-weight: 800; } table { width: 100%; border-collapse: collapse; overflow: hidden; border: 1px solid #dce3eb; border-radius: 10px; font-size: 10px; } th { padding: 8px; background: #101827; color: #f5c842; font-size: 8px; letter-spacing: .12em; text-align: left; text-transform: uppercase; } td { border-top: 1px solid #e1e6ed; padding: 8px; color: #172033; } tr:nth-child(even) td { background: #f8fafc; } .number { width: 40px; text-align: center; font-weight: 800; } .empty { padding: 20px; text-align: center; color: #6b7788; font-style: italic; } .footer { margin-top: 16px; border-top: 1px solid #dce3eb; padding-top: 10px; color: #6b7788; font-size: 8px; letter-spacing: .1em; text-align: center; text-transform: uppercase; } @media print { body { background: #fff; } .page { min-height: auto; border: 0; padding: 0; } .header, .card, tr { break-inside: avoid; page-break-inside: avoid; } }
@@ -141,6 +145,18 @@ export function exportTeamInvitationSheetPdf(report: TeamInvitationSheetReport, 
   popup.document.close();
   popup.focus();
   setTimeout(() => popup.print(), 250);
+}
+
+export function exportStandardInvitationSheetPdf(tournamentName: string, filename: string, playerSlots = 25) {
+  exportTeamInvitationSheetPdf({
+    tournamentName,
+    teamName: "____________________________",
+    managerName: "____________________________",
+    managerPhone: "____________________________",
+    generatedAt: new Date().toLocaleString("es-EC"),
+    rows: [],
+    blankSlots: playerSlots,
+  }, filename);
 }
 
 export function exportTeamPlayersPdf(report: TeamPlayersPdfReport, filename: string) {
