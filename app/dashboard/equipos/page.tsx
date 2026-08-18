@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
-import { exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
+import { exportTeamInvitationSheetPdf, exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
 
 export default function EquiposPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -401,6 +401,40 @@ export default function EquiposPage() {
     }
   };
 
+  const descargarFichaInvitacion = async (equipo: any) => {
+    if (!torneoId) return alert("Selecciona un torneo antes de descargar la ficha.");
+    setExportandoEquipoId(equipo.id);
+    try {
+      const { data: jugadores, error } = await supabase
+        .from("players")
+        .select("full_name, cedula, identification_number, document_number")
+        .eq("tournament_id", torneoId)
+        .eq("team_id", equipo.id)
+        .order("full_name", { ascending: true });
+      if (error) throw error;
+
+      const safeTeamName = String(equipo.name || "equipo").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      exportTeamInvitationSheetPdf({
+        tournamentName: torneoNombre,
+        teamName: equipo.name || "Equipo",
+        teamShieldUrl: equipo.shield_url || "",
+        managerName: equipo.manager_name || "",
+        managerPhone: `${equipo.manager_country_code || "+593"} ${equipo.manager_phone || ""}`.trim(),
+        managerEmail: equipo.manager_email || "",
+        generatedAt: new Date().toLocaleString("es-EC"),
+        rows: (jugadores || []).map((jugador: any, index: number) => ({
+          index: index + 1,
+          fullName: jugador.full_name || "Sin nombre",
+          identification: jugador.cedula || jugador.identification_number || jugador.document_number || "-",
+        })),
+      }, `ficha-invitacion-${safeTeamName || "equipo"}.pdf`);
+    } catch (error: any) {
+      alert("No se pudo generar la ficha de invitacion: " + (error.message || "Intenta nuevamente."));
+    } finally {
+      setExportandoEquipoId(null);
+    }
+  };
+
   const descargarCarnets = async (equipo: any) => {
     if (!torneoId) return alert("Selecciona un torneo antes de descargar los carnets.");
     setExportandoEquipoId(equipo.id);
@@ -595,6 +629,7 @@ export default function EquiposPage() {
                 ) : (
                   <>
                     <button onClick={() => descargarPdfJugadores(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-blue-400 hover:text-blue-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "PDF jugadores"}</button>
+                    <button onClick={() => descargarFichaInvitacion(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-violet-300 hover:text-violet-200 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "Ficha invitacion"}</button>
                     {carnetsHabilitados && <button onClick={() => descargarCarnets(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 hover:text-emerald-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : `Carnets ${formatoCarnets.toUpperCase()}`}</button>}
                     <button onClick={() => abrirEstadoEquipo(eq)} className="text-[10px] uppercase tracking-wider font-bold text-red-300 hover:text-red-200 transition-all">Estado</button>
                     <button onClick={() => { cancelarEdicion(); setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="text-[10px] uppercase tracking-wider font-bold text-[#D4A017] hover:text-yellow-300 transition-all">Editar</button>
