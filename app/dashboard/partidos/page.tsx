@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { capturePoster, downloadPosterCanvas } from "@/lib/posterExport";
 import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Clock3, Copy, Eye, FileText, MapPin, Plus } from "lucide-react";
-import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, getQualifiedTeams, getStageWinners, getSuspensionInfoForMatch, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
+import { calculateStandings, createDrawKnockoutFixtures, createGroupSequenceKnockoutFixtures, createKnockoutFixtures, createMatchdayFixtures, createSeededGroupDrawFixtures, getQualifiedTeams, getStageWinners, getSuspensionInfoForMatch, isGroupStageComplete, normalizeTournamentConfig, validateManualMatch, type TournamentConfig } from "@/lib/tournamentEngine";
 import { offlineStore } from "@/lib/offlineStore"; // <-- IMPORTACIÓN DEL MODO OFFLINE
 
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
@@ -450,8 +450,14 @@ export default function PartidosPage() {
       const previous = previousStage[faseGenerar];
       const winners = previous ? getStageWinners(partidos, equiposActivos(), previous) : [];
       const groups = calculateStandings(equiposActivos(), partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
-      const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
+      if (!winners.length && !isGroupStageComplete(equiposActivos(), partidos, idaYVuelta ? 2 : 1)) {
+        throw new Error("Aún hay partidos de fase de grupos pendientes. No se pueden generar llaves con una clasificación provisional.");
+      }
+      const qualified = winners.length ? winners : getQualifiedTeams(groups);
       if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados según las reglas del torneo.`);
+      if (!winners.length && configuracion.knockout_pairing_mode === "group_cross" && qualified.length !== count) {
+        throw new Error(`Hay ${qualified.length} clasificados por grupos. Selecciona la fase correspondiente para ${qualified.length} equipos antes de generar las llaves.`);
+      }
       const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
       if (configuracion.knockout_pairing_mode === "manual" && !winners.length) {
         throw new Error("La configuracion del torneo esta en cruces manuales. Usa el modo Manual para agregar cada cruce de esta fase.");
@@ -757,11 +763,19 @@ export default function PartidosPage() {
       const previous = previousStage[faseGenerar];
       const winners = previous ? getStageWinners(partidos, equiposActivos(), previous) : [];
       const groups = calculateStandings(equiposActivos(), partidos.filter(p => p.stage === "Fase de Grupos"), [], configuracion);
-      const qualified = (winners.length ? winners : getQualifiedTeams(groups)).slice(0, count);
+      if (!winners.length && !isGroupStageComplete(equiposActivos(), partidos, idaYVuelta ? 2 : 1)) {
+        throw new Error("Aún hay partidos de fase de grupos pendientes. El sorteo se habilita cuando todos tengan resultado oficial.");
+      }
+      const qualified = winners.length ? winners : getQualifiedTeams(groups);
       if (qualified.length < count) throw new Error(`Solo existen ${qualified.length} equipos clasificados para sortear ${faseGenerar}.`);
+      if (!winners.length && qualified.length !== count) {
+        throw new Error(`Hay ${qualified.length} clasificados por grupos. Selecciona la fase correspondiente para ${qualified.length} equipos antes de realizar el sorteo.`);
+      }
       const seed = Date.now();
       const legs = faseGenerar === "Final" ? configuracion.final_legs : configuracion.knockout_legs;
-      const fixtures = createDrawKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs, seed);
+      const fixtures = !winners.length
+        ? createSeededGroupDrawFixtures(groups, torneoId, faseGenerar, autoJornada, legs, seed)
+        : createDrawKnockoutFixtures(qualified, torneoId, faseGenerar, autoJornada, legs, seed);
       const duplicate = fixtures.some(f => partidos.some(p => p.stage === f.stage && [p.home_team_id, p.away_team_id].sort().join(":") === [f.home_team_id, f.away_team_id].sort().join(":")));
       if (duplicate) throw new Error("Las llaves de esta fase ya existen.");
       const matchesToInsert = distribuirPartidosEnHorarios(fixtures)

@@ -6,9 +6,11 @@ import {
   createGroupSequenceKnockoutFixtures,
   createKnockoutFixtures,
   createMatchdayFixtures,
+  createSeededGroupDrawFixtures,
   getSuspensionInfoForMatch,
   getStageWinners,
   getSuspendedPlayerIdsForMatch,
+  isGroupStageComplete,
   normalizeTournamentConfig,
   scheduleFixtures,
   validateManualMatch,
@@ -129,6 +131,29 @@ describe("motor deportivo", () => {
     const usados = fixtures.flatMap(match => [match.home_team_id, match.away_team_id]);
     expect(fixtures).toHaveLength(2);
     expect(new Set(usados).size).toBe(4);
+  });
+
+  it("sortea primeros contra segundos de grupos distintos", () => {
+    const groups = {
+      A: [{ id: "a1", name: "A1", group: "A", groupRank: 1, classificationStatus: "qualified" }, { id: "a2", name: "A2", group: "A", groupRank: 2, classificationStatus: "qualified" }],
+      B: [{ id: "b1", name: "B1", group: "B", groupRank: 1, classificationStatus: "qualified" }, { id: "b2", name: "B2", group: "B", groupRank: 2, classificationStatus: "qualified" }],
+      C: [{ id: "c1", name: "C1", group: "C", groupRank: 1, classificationStatus: "qualified" }, { id: "c2", name: "C2", group: "C", groupRank: 2, classificationStatus: "qualified" }],
+      D: [{ id: "d1", name: "D1", group: "D", groupRank: 1, classificationStatus: "qualified" }, { id: "d2", name: "D2", group: "D", groupRank: 2, classificationStatus: "qualified" }],
+    };
+    const fixtures = createSeededGroupDrawFixtures(groups, "t1", "Cuartos de Final", 4, 1, 12345);
+    expect(fixtures).toHaveLength(4);
+    expect(fixtures.every(match => match.home_team_id.endsWith("1") && match.away_team_id.endsWith("2") && match.home_team_id[0] !== match.away_team_id[0])).toBe(true);
+    expect(new Set(fixtures.flatMap(match => [match.home_team_id, match.away_team_id])).size).toBe(8);
+  });
+
+  it("no permite sortear eliminatorias con grupos incompletos", () => {
+    expect(isGroupStageComplete(groupedTeams, [
+      { status: "finished", stage: "Fase de Grupos", home_team_id: "a1", away_team_id: "a2" },
+    ])).toBe(false);
+    expect(isGroupStageComplete(groupedTeams, [
+      { status: "finished", stage: "Fase de Grupos", home_team_id: "a1", away_team_id: "a2" },
+      { status: "finished", stage: "Fase de Grupos", home_team_id: "b1", away_team_id: "b2" },
+    ])).toBe(true);
   });
 
   it("aplica doble amarilla y limpia amarillas de grupos en eliminatorias", () => {

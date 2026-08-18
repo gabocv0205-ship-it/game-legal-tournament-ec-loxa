@@ -266,6 +266,32 @@ export function getQualifiedTeams(groups: Record<string, any[]>, includeRepechag
     .sort(sortStandings);
 }
 
+/**
+ * Verifies that every configured group-stage pairing has a completed result.
+ * It prevents advancing teams from a provisional table.
+ */
+export function isGroupStageComplete(teams: any[], matches: any[], legs = 1) {
+  const matchesPerPair = Math.max(1, Math.min(2, Number(legs) || 1));
+  const groups = teams.reduce<Record<string, any[]>>((acc, team) => {
+    (acc[team.group_name || "General"] ||= []).push(team);
+    return acc;
+  }, {});
+  return Object.values(groups).every(group => {
+    for (let homeIndex = 0; homeIndex < group.length; homeIndex++) {
+      for (let awayIndex = homeIndex + 1; awayIndex < group.length; awayIndex++) {
+        const pair = [group[homeIndex].id, group[awayIndex].id].sort().join(":");
+        const completed = matches.filter(match =>
+          match.status === "finished"
+          && baseStage(match.stage) === "Fase de Grupos"
+          && [match.home_team_id, match.away_team_id].sort().join(":") === pair,
+        ).length;
+        if (completed < matchesPerPair) return false;
+      }
+    }
+    return true;
+  });
+}
+
 export function createMatchdayFixtures(teams: any[], existingMatches: any[], tournamentId: string, matchday: number, stage: string, options: { legs?: number } = {}) {
   const legs = Math.max(1, Math.min(2, Number(options.legs || 1)));
   const relevantMatches = existingMatches.filter((match) => match.stage === stage || (legs === 2 && match.stage === `${stage} (Vuelta)`));
@@ -442,6 +468,55 @@ export function createDrawKnockoutFixtures(qualified: any[], tournamentId: strin
     if (legs === 2) fixtures.push({ tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` });
   }
   return fixtures;
+}
+
+/**
+ * Draws group winners against runners-up from a different group. The seed is
+ * retained by the caller so the public draw can be audited and reproduced.
+ */
+export function createSeededGroupDrawFixtures(groups: Record<string, any[]>, tournamentId: string, stage: string, matchday: number, legs: number, seed = Date.now()) {
+  const winners = Object.values(groups)
+    .map(group => group.find(team => team.classificationStatus === "qualified" && Number(team.groupRank) === 1))
+    .filter(Boolean)
+    .sort((a, b) => String(a.group).localeCompare(String(b.group), "es", { numeric: true }));
+  const runnersUp = Object.values(groups)
+    .map(group => group.find(team => team.classificationStatus === "qualified" && Number(team.groupRank) === 2))
+    .filter(Boolean);
+
+  if (!winners.length || winners.length !== runnersUp.length) {
+    throw new Error("El sorteo requiere exactamente un primero y un segundo clasificado por cada grupo.");
+  }
+
+  let value = Math.max(1, Number(seed) || 1);
+  const random = () => {
+    value = (value * 9301 + 49297) % 233280;
+    return value / 233280;
+  };
+  const availableRunnersUp = [...runnersUp];
+  const pairs = winners.map((winner, index) => {
+    const validIndexes = availableRunnersUp
+      .map((runnerUp, runnerUpIndex) => ({ runnerUp, runnerUpIndex }))
+      .filter(({ runnerUp }) => runnerUp.group !== winner.group);
+    if (!validIndexes.length) {
+      throw new Error("No fue posible sortear cruces entre grupos distintos. Revisa la cantidad de grupos y clasificados.");
+    }
+    // Keep the final remaining runner-up valid for the final group winner.
+    const candidates = index === winners.length - 1 ? validIndexes : validIndexes.filter(({ runnerUp, runnerUpIndex }) => {
+      const remainingWinners = winners.slice(index + 1);
+      const remainingRunners = availableRunnersUp.filter((_, candidateIndex) => candidateIndex !== runnerUpIndex);
+      return remainingWinners.every(remainingWinner => remainingRunners.some(remainingRunner => remainingRunner.group !== remainingWinner.group));
+    });
+    const selected = (candidates.length ? candidates : validIndexes)[Math.floor(random() * (candidates.length || validIndexes.length))];
+    availableRunnersUp.splice(selected.runnerUpIndex, 1);
+    return [winner, selected.runnerUp] as const;
+  });
+
+  return pairs.flatMap(([home, away]) => {
+    const fixture = { tournament_id: tournamentId, home_team_id: home.id, away_team_id: away.id, matchday, stage };
+    return legs === 2
+      ? [fixture, { tournament_id: tournamentId, home_team_id: away.id, away_team_id: home.id, matchday: matchday + 1, stage: `${stage} (Vuelta)` }]
+      : [fixture];
+  });
 }
 
 export function getStageWinners(matches: any[], teams: any[], stage: string) {
