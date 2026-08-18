@@ -180,11 +180,26 @@ export default function GestorTorneos() {
     }
   };
 
-  const administrarTorneo = (torneoId: string, torneoNombre: string, configurado = true) => {
-    localStorage.setItem('activeTournamentId', torneoId);
-    localStorage.setItem('activeTournamentName', torneoNombre);
-    window.dispatchEvent(new Event('tournamentChanged'));
-    router.push(configurado ? '/dashboard' : '/dashboard/configuracion');
+  const administrarTorneo = async (torneo: any) => {
+    const torneoId = torneo.id;
+    const torneoNombre = torneo.name;
+    let configurado = Boolean(torneo.configuration_completed);
+    try {
+      // La demo es el entorno comercial permanente del propietario: al abrirla
+      // se reactiva sin borrar resultados, finanzas ni configuracion.
+      if (perfil?.role === 'superadmin' && esTorneoDemo(torneo) && torneo.status !== 'active') {
+        const { error } = await supabase.from('tournaments').update({ status: 'active' }).eq('id', torneoId);
+        if (error) throw error;
+        setTorneos(current => current.map(item => item.id === torneoId ? { ...item, status: 'active' } : item));
+        configurado = Boolean(torneo.configuration_completed);
+      }
+      localStorage.setItem('activeTournamentId', torneoId);
+      localStorage.setItem('activeTournamentName', torneoNombre);
+      window.dispatchEvent(new Event('tournamentChanged'));
+      router.push(configurado ? '/dashboard' : '/dashboard/configuracion');
+    } catch (error: any) {
+      alert(`No se pudo abrir el torneo de demostracion: ${error.message || 'verifica sus permisos.'}`);
+    }
   };
 
   const verPortalPublico = (slug: string) => {
@@ -230,6 +245,7 @@ export default function GestorTorneos() {
             const isFinished = t.status === 'finished';
             const isArchived = t.status === 'archived';
             const isActive = !isFinished && !isArchived;
+            const isDemo = esTorneoDemo(t);
 
             return (
               <PremiumCard key={t.id} className="p-6 group hover:border-[#D4A017]/60 transition-all duration-300 flex flex-col h-full">
@@ -237,7 +253,7 @@ export default function GestorTorneos() {
                 
                 {/* Controles de Gestión Rápida Supriores */}
                 <div className="absolute top-4 right-4 flex gap-2 z-20">
-                  {isActive && (
+                  {isActive && !isDemo && (
                     <button 
                       onClick={() => finalizarTorneo(t.id, t.name)} 
                       title="Finalizar Torneo" 
@@ -246,13 +262,13 @@ export default function GestorTorneos() {
                       <Icon path={Icons.check} size={14} />
                     </button>
                   )}
-                  <button 
+                  {!isDemo && <button
                     onClick={() => eliminarTorneo(t.id, t.name)} 
                     title="Eliminar Torneo" 
                     className="w-8 h-8 bg-[#1C1C1C] border border-[#2E2E2E] rounded-full flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-lg"
                   >
                     <Icon path={Icons.trash} size={14} />
-                  </button>
+                  </button>}
                 </div>
 
                 <div className="relative z-10 flex-1 mt-2">
@@ -279,6 +295,7 @@ export default function GestorTorneos() {
                     {perfil?.role === 'superadmin' && (
                       <span className="bg-red-900/30 text-red-500 border border-red-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Soporte Admin</span>
                     )}
+                    {isDemo && <span className="bg-blue-900/30 text-blue-300 border border-blue-500/40 text-[9px] font-black uppercase px-2 py-1 rounded">Demo editable</span>}
                     {isFinished && <span className="bg-green-900/30 text-green-500 border border-green-900/50 text-[9px] font-black uppercase px-2 py-1 rounded">Finalizado</span>}
                     {isArchived && <span className="bg-gray-800 text-gray-400 border border-gray-600 text-[9px] font-black uppercase px-2 py-1 rounded">Archivado Histórico</span>}
                     {isActive && <span className="bg-[#D4A017]/10 text-[#D4A017] border border-[#D4A017]/30 text-[9px] font-black uppercase px-2 py-1 rounded">Activo</span>}
@@ -287,7 +304,7 @@ export default function GestorTorneos() {
 
                 <div className="relative z-10 flex gap-3 mt-auto pt-4 border-t border-[#2E2E2E]">
                   <button 
-                    onClick={() => administrarTorneo(t.id, t.name, Boolean(t.configuration_completed))}
+                    onClick={() => void administrarTorneo(t)}
                     className="flex-1 bg-white/5 hover:bg-[#D4A017] hover:text-black text-white border border-[#D4A017]/15 hover:border-transparent py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                   >
                     <Icon path={Icons.settings} size={14} /> Gestionar
@@ -338,4 +355,9 @@ export default function GestorTorneos() {
 
     </AnimatedPage>
   );
+}
+
+function esTorneoDemo(torneo: any) {
+  return Boolean(torneo?.is_demo)
+    || String(torneo?.name || "").toLocaleLowerCase().includes("champions loxa 2026");
 }

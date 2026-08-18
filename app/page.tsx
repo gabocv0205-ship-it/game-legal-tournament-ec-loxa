@@ -63,7 +63,12 @@ export default function PortalPrincipal() {
           .order("created_at", { ascending: false });
         
         if (tourneys && tourneys.length > 0) {
-          const visibles = tourneys.filter((torneo: any) => !["finished", "archived", "deleted"].includes(String(torneo.status || "active")));
+          // The commercial demo remains visible even after a rehearsal closure.
+          // Deleted tournaments never return through RLS and are not revived here.
+          const visibles = tourneys.filter((torneo: any) => {
+            const isDemo = Boolean(torneo.is_demo) || String(torneo.name || "").toLocaleLowerCase().includes("champions loxa 2026");
+            return isDemo || !["finished", "archived", "deleted"].includes(String(torneo.status || "active"));
+          });
           setTorneosActivos(visibles);
           setTorneoDestacado(visibles[0] || null);
         }
