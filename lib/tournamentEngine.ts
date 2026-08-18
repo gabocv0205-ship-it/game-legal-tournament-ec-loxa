@@ -13,6 +13,7 @@ export type TournamentConfig = {
   football_modality: number;
   substitutes_count: number;
   final_venue: string;
+  venue_address: string;
   tournament_year: number;
   yellow_cards_for_suspension: number;
   yellow_suspension_matches: number;
@@ -39,6 +40,7 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   football_modality: 11,
   substitutes_count: 5,
   final_venue: "",
+  venue_address: "",
   tournament_year: new Date().getFullYear(),
   yellow_cards_for_suspension: 3,
   yellow_suspension_matches: 1,
@@ -75,6 +77,7 @@ export function normalizeTournamentConfig(source: any): TournamentConfig {
     football_modality: number("football_modality"),
     substitutes_count: number("substitutes_count", 0),
     final_venue: source?.final_venue || "",
+    venue_address: source?.venue_address || "",
     tournament_year: number("tournament_year", 2000),
     yellow_cards_for_suspension: number("yellow_cards_for_suspension"),
     yellow_suspension_matches: number("yellow_suspension_matches"),

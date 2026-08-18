@@ -46,6 +46,7 @@ export default function ConfiguracionPage() {
   const [numSuplentes, setNumSuplentes] = useState(5);
   const [tipoCambios, setTipoCambios] = useState("limited");
   const [canchaFinal, setCanchaFinal] = useState("");
+  const [direccionSede, setDireccionSede] = useState("");
   const [anioTorneo, setAnioTorneo] = useState(new Date().getFullYear());
   const [plantillaAutomatica, setPlantillaAutomatica] = useState(false);
   const [maxJugadoresEquipo, setMaxJugadoresEquipo] = useState(25);
@@ -137,6 +138,7 @@ export default function ConfiguracionPage() {
         setNumSuplentes(Number(data.substitutes_count ?? 5));
         setTipoCambios(data.substitution_rule || "limited");
         setCanchaFinal(data.final_venue || "");
+        setDireccionSede(data.venue_address || "");
         setAnioTorneo(Number(data.tournament_year || new Date().getFullYear()));
         setPlantillaAutomatica(Boolean(data.is_auto_template_enabled));
         setMaxJugadoresEquipo(Number(data.max_players_per_team || 25));
@@ -207,7 +209,7 @@ export default function ConfiguracionPage() {
       if (fondoPartidosArchivo) nuevoFondoPartidosUrl = await subirImagenTorneoSegura(fondoPartidosArchivo, "match-poster", torneoId, 1600);
 
       // Actualizar Base de Datos (incluyendo los rubros financieros)
-      const { error } = await supabase.from("tournaments").update({
+      const updatePayload: Record<string, unknown> = {
         name: nombre,
         format: formato,
         prize_first: premio1,
@@ -240,6 +242,7 @@ export default function ConfiguracionPage() {
         substitutes_count: numSuplentes,
         substitution_rule: tipoCambios,
         final_venue: canchaFinal || null,
+        venue_address: direccionSede.trim() || null,
         tournament_year: anioTorneo,
         is_auto_template_enabled: plantillaAutomatica,
         max_players_per_team: maxJugadoresEquipo,
@@ -248,7 +251,15 @@ export default function ConfiguracionPage() {
         match_poster_background_url: nuevoFondoPartidosUrl || null,
         tournament_sponsors: auspiciantes.split("\n").map(item => item.trim()).filter(Boolean),
         configuration_completed: true
-      }).eq("id", torneoId);
+      };
+      let { error } = await supabase.from("tournaments").update(updatePayload).eq("id", torneoId);
+      // If the optional migration has not been applied yet, preserve all
+      // existing configuration instead of failing the entire save operation.
+      if (error && String(error.message || "").includes("venue_address")) {
+        delete updatePayload.venue_address;
+        ({ error } = await supabase.from("tournaments").update(updatePayload).eq("id", torneoId));
+        if (!error) alert("La configuración se guardó. Ejecuta supabase/add_tournament_venue_address.sql para publicar la dirección en pósteres.");
+      }
 
       if (error) throw error;
 
@@ -391,6 +402,11 @@ export default function ConfiguracionPage() {
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sedes y canchas disponibles</label>
               <textarea value={canchaFinal} onChange={e => setCanchaFinal(e.target.value)} rows={3} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none" placeholder={"Ej: Estadio Monumental\nEstadio Casa Blanca\n\nO: Centro Deportivo La Sede"} />
               <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Una sede por linea para estadios diferentes. Si es una sola sede con varias canchas, usa el numero de canchas disponibles.</p>
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Direccion oficial de la sede (opcional)</label>
+              <input value={direccionSede} onChange={e => setDireccionSede(e.target.value)} className="w-full p-3 mt-1 bg-[#1c1c1c] text-white border border-[#2e2e2e] rounded-xl outline-none" placeholder="Ej: Av. Universitaria y calle 18 de Noviembre, Loja" />
+              <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Se publica en posters de jornada junto al nombre del estadio o sede.</p>
             </div>
             <NumberField label="Año del torneo" value={anioTorneo} onChange={setAnioTorneo} min={2000} />
             <NumberField label="Duración por partido (min)" value={duracionPartido} onChange={setDuracionPartido} min={15} />

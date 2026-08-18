@@ -1288,10 +1288,12 @@ export default function PartidosPage() {
     const sedes = String(configuracion.final_venue || "").split(/\r?\n|;/).map(sede => sede.trim()).filter(Boolean);
     return sedes.length > 1 ? `Sedes: ${sedes.join(" · ")}` : sedes[0] || "Lugar por confirmar";
   }, [partidosPoster, configuracion.final_venue]);
+  const direccionPoster = String(configuracion.venue_address || "").trim();
+  const filasAuspiciantesPoster = Math.ceil(Math.min(auspiciantesTorneo.length, 12) / 3);
   const alturaPosterJornada = useMemo(() => Math.max(
     1050,
-    550 + (partidosPoster.length * 150) + (diasPoster.length * 52) + (mostrarAuspiciantesPoster && auspiciantesTorneo.length ? 100 : 0),
-  ), [partidosPoster.length, diasPoster.length, mostrarAuspiciantesPoster, auspiciantesTorneo.length]);
+    550 + (partidosPoster.length * 150) + (diasPoster.length * 52) + (mostrarAuspiciantesPoster && auspiciantesTorneo.length ? 56 + (filasAuspiciantesPoster * 44) : 0),
+  ), [partidosPoster.length, diasPoster.length, mostrarAuspiciantesPoster, auspiciantesTorneo.length, filasAuspiciantesPoster]);
   const maxNombreEquipoPoster = useMemo(
     () => Math.max(0, ...partidosPoster.flatMap(partido => [String(partido.home?.name || "Local").length, String(partido.away?.name || "Visitante").length])),
     [partidosPoster]
@@ -1992,7 +1994,8 @@ export default function PartidosPage() {
           <div className="relative z-10 mt-8 flex items-end justify-between gap-6 border-t border-white/20 pt-4">
             <div>
               <p className="text-2xl font-black italic tracking-wide text-white drop-shadow-[0_4px_0_rgba(0,0,0,.65)]">{torneoNombre}</p>
-              <p className="mt-1 max-w-[680px] break-words text-sm font-black uppercase tracking-[0.16em] text-[#F5D36A] drop-shadow-[0_2px_0_rgba(0,0,0,.7)]">{ubicacionPoster}</p>
+              <p className="mt-1 max-w-[680px] break-words text-sm font-black uppercase tracking-[0.16em] text-[#F5D36A] drop-shadow-[0_2px_0_rgba(0,0,0,.7)]">Sede / estadio: {ubicacionPoster}</p>
+              {direccionPoster && <p className="mt-1 max-w-[680px] break-words text-[11px] font-black uppercase tracking-[0.12em] text-white drop-shadow-[0_2px_0_rgba(0,0,0,.8)]">Direccion: {direccionPoster}</p>}
             </div>
             <div className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-right">
               <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4A017]">Promocion oficial</p>
@@ -2000,11 +2003,11 @@ export default function PartidosPage() {
             </div>
           </div>
           {mostrarAuspiciantesPoster && auspiciantesTorneo.length > 0 && (
-            <div className="relative z-10 mt-4 rounded-xl border border-white/15 bg-black/30 p-3">
+            <div className="relative z-10 mt-4 rounded-xl border border-[#D4A017]/55 bg-[#f8f1dc] p-3 shadow-[0_12px_28px_rgba(0,0,0,.3)]">
               <p className="mb-2 text-center text-[9px] font-black uppercase tracking-[0.3em] text-[#D4A017]">Auspiciantes oficiales</p>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                {auspiciantesTorneo.map((sponsor, index) => (
-                  <span key={`${sponsor}-${index}`} className="rounded-full border border-[#D4A017]/40 bg-white/10 px-3 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">{sponsor}</span>
+              <div className="grid grid-cols-3 gap-2">
+                {auspiciantesTorneo.slice(0, 12).map((sponsor, index) => (
+                  <span key={`${sponsor}-${index}`} className="flex min-h-8 items-center justify-center rounded-md border border-[#9B7411]/35 bg-white px-2 py-1 text-center text-[8px] font-black uppercase leading-tight tracking-[0.08em] text-[#102216]">{sponsor}</span>
                 ))}
               </div>
             </div>
