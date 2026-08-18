@@ -60,7 +60,7 @@ export default function PartidosPage() {
   const [jornadaManual, setJornadaManual] = useState<number>(1);
   const [canchaManual, setCanchaManual] = useState("Cancha 1");
   const [faseManual, setFaseManual] = useState("Fase de Grupos");
-  const [grupoManual, setGrupoManual] = useState("Todos");
+  const [grupoManual, setGrupoManual] = useState("");
   const [manualEsVuelta, setManualEsVuelta] = useState(false);
   const [observacionesManual, setObservacionesManual] = useState("");
   const [manualPendientes, setManualPendientes] = useState<ManualMatchDraft[]>([]);
@@ -359,9 +359,10 @@ export default function PartidosPage() {
     if (manualEsVuelta && maxCrucesPorFase(faseManual) < 2) return alert("Este torneo no esta configurado para ida y vuelta en esta fase.");
     if (jornadaCulminada(jornadaManual, fasePartidoManual)) return alert(`La fecha ${jornadaManual} de ${fasePartidoManual} ya esta culminada. Crea una nueva fecha o edita otra jornada abierta.`);
     if (faseBase(fasePartidoManual) === "Fase de Grupos") {
+      if (!grupoManual) return alert("Selecciona primero el grupo que deseas programar.");
       const local = equipos.find(equipo => equipo.id === localId);
       const visitante = equipos.find(equipo => equipo.id === visitanteId);
-      if ((local?.group_name || "General") !== (visitante?.group_name || "General")) {
+      if ((local?.group_name || "General") !== grupoManual || (visitante?.group_name || "General") !== grupoManual) {
         return alert("En fase de grupos solo pueden enfrentarse equipos del mismo grupo.");
       }
     }
@@ -1314,8 +1315,9 @@ export default function PartidosPage() {
   );
   const tamanoNombrePoster = maxNombreEquipoPoster > 30 ? "text-[14px]" : maxNombreEquipoPoster > 22 ? "text-[17px]" : "text-[20px]";
   const gruposManual = Array.from(new Set(equipos.map(equipo => equipo.group_name || "General"))).sort();
-  const equiposManual = faseBase(faseManual) === "Fase de Grupos" && grupoManual !== "Todos"
-    ? equipos.filter(equipo => (equipo.group_name || "General") === grupoManual)
+  const esFaseGruposManual = faseBase(faseManual) === "Fase de Grupos";
+  const equiposManual = esFaseGruposManual
+    ? equipos.filter(equipo => Boolean(grupoManual) && (equipo.group_name || "General") === grupoManual)
     : equipos;
   const jornadasCulminadas = Array.from(new Map(
     partidos
@@ -1563,10 +1565,10 @@ export default function PartidosPage() {
               <p className="mt-1 text-sm font-bold text-blue-100">Agrega cada cruce con su propia fecha, hora y cancha. Todos quedan dentro de la misma jornada, aunque se jueguen sabado, domingo u otros dias. El automatico sigue disponible cuando quieres que el sistema arme los cruces.</p>
               <button type="button" onClick={() => setModoProgramacion("automatico")} className="mt-3 rounded-lg border border-[#D4A017]/50 bg-[#D4A017]/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#D4A017] hover:bg-[#D4A017] hover:text-black">Usar generador automatico</button>
             </div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Grupo</label><select value={grupoManual} onChange={e => { setGrupoManual(e.target.value); setLocalId(""); setVisitanteId(""); }} disabled={faseBase(faseManual) !== "Fase de Grupos"} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded disabled:opacity-60"><option value="Todos">Todos</option>{gruposManual.map(grupo => <option key={grupo} value={grupo}>Grupo {grupo}</option>)}</select></div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name} · Grupo {eq.group_name || "General"}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
-            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded"><option value="" disabled>Seleccionar...</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name} · Grupo {eq.group_name || "General"}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
-            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => { setFaseManual(e.target.value); setLocalId(""); setVisitanteId(""); }} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Grupo a programar</label><select value={grupoManual} onChange={e => { setGrupoManual(e.target.value); setLocalId(""); setVisitanteId(""); }} disabled={!esFaseGruposManual} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded disabled:opacity-60"><option value="">{esFaseGruposManual ? "Selecciona un grupo..." : "No aplica en eliminatorias"}</option>{gruposManual.map(grupo => <option key={grupo} value={grupo}>Grupo {grupo}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Local</label><select value={localId} onChange={e => setLocalId(e.target.value)} required disabled={esFaseGruposManual && !grupoManual} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded disabled:cursor-not-allowed disabled:opacity-50"><option value="" disabled>{esFaseGruposManual && !grupoManual ? "Primero selecciona un grupo" : "Seleccionar..."}</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name}{!esFaseGruposManual && ` · Grupo ${eq.group_name || "General"}`}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Visitante</label><select value={visitanteId} onChange={e => setVisitanteId(e.target.value)} required disabled={esFaseGruposManual && !grupoManual} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded disabled:cursor-not-allowed disabled:opacity-50"><option value="" disabled>{esFaseGruposManual && !grupoManual ? "Primero selecciona un grupo" : "Seleccionar..."}</option>{equiposManual.map(eq => <option key={eq.id} value={eq.id} disabled={!equipoActivo(eq)}>{eq.name}{!esFaseGruposManual && ` · Grupo ${eq.group_name || "General"}`}{!equipoActivo(eq) ? " - no habilitado" : ""}</option>)}</select></div>
+            <div><label className="text-xs font-bold text-gray-500 uppercase">Instancia</label><select value={faseManual} onChange={e => { setFaseManual(e.target.value); setGrupoManual(""); setLocalId(""); setVisitanteId(""); }} className="w-full p-3 mt-1 bg-[#1C1C1C] text-white border border-[#2E2E2E] rounded">{opcionesFase.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
             <label className="flex items-center gap-3 rounded border border-[#2E2E2E] bg-[#1C1C1C] p-3 text-xs font-bold uppercase text-gray-300">
               <input type="checkbox" checked={manualEsVuelta} onChange={e => setManualEsVuelta(e.target.checked)} className="h-4 w-4 accent-[#D4A017]" />
               Partido de vuelta
