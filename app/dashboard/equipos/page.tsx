@@ -4,6 +4,7 @@ import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 import { exportStandardInvitationSheetPdf, exportTeamInvitationSheetPdf, exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
+import { downloadRosterWordTemplate } from "@/lib/rosterTemplate";
 
 export default function EquiposPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
@@ -442,6 +443,11 @@ export default function EquiposPage() {
     exportStandardInvitationSheetPdf(torneoNombre, "ficha-invitacion-estandar.pdf", cuposFichaInvitacion);
   };
 
+  const descargarFichaWord = async () => {
+    if (!torneoId) return alert("Selecciona un torneo antes de descargar la ficha.");
+    await downloadRosterWordTemplate(torneoNombre, cuposFichaInvitacion);
+  };
+
   const descargarCarnets = async (equipo: any) => {
     if (!torneoId) return alert("Selecciona un torneo antes de descargar los carnets.");
     setExportandoEquipoId(equipo.id);
@@ -481,7 +487,7 @@ export default function EquiposPage() {
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#D4A017]">Ficha estandar de invitacion</p>
           <p className="mt-1 text-xs text-gray-400">Disponible antes de inscribir equipos. Incluye campos vacios para equipo, dirigente, contacto, identificacion y nombres de hasta {cuposFichaInvitacion} jugadores.</p>
         </div>
-        <button type="button" onClick={descargarFichaInvitacionEstandar} disabled={!torneoId} className="shrink-0 rounded-xl border border-violet-400/60 bg-violet-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-violet-200 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50">Descargar ficha estandar</button>
+        <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={descargarFichaWord} disabled={!torneoId} className="rounded-xl border border-violet-400/60 bg-violet-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-violet-200 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50">Word editable</button><button type="button" onClick={descargarFichaInvitacionEstandar} disabled={!torneoId} className="rounded-xl border border-[#D4A017]/60 bg-[#D4A017]/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-[#D4A017] transition hover:bg-[#D4A017]/20 disabled:cursor-not-allowed disabled:opacity-50">PDF imprimible</button></div>
       </section>
       
       <section className="rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4 shadow-lg" aria-label="Configuracion de carnets">

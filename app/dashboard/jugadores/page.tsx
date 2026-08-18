@@ -36,6 +36,11 @@ export default function JugadoresPage() {
   const [estadoEditandoId, setEstadoEditandoId] = useState<string | null>(null);
   const [estadoJugadorManual, setEstadoJugadorManual] = useState("active");
   const [motivoEstadoJugador, setMotivoEstadoJugador] = useState("");
+  const [archivoFicha, setArchivoFicha] = useState<File | null>(null);
+  const [leyendoFicha, setLeyendoFicha] = useState(false);
+  const [importandoFicha, setImportandoFicha] = useState(false);
+  const [equipoFichaId, setEquipoFichaId] = useState("");
+  const [vistaFicha, setVistaFicha] = useState<{ teamName: string; managerName: string; managerPhone: string; players: { identification: string; fullName: string; jerseyNumber: number }[] } | null>(null);
 
   useEffect(() => {
     cargarDatos();
@@ -320,6 +325,59 @@ export default function JugadoresPage() {
     suspensiones: 0,
   };
 
+  const leerFichaInscripcion = async () => {
+    if (!torneoId || !archivoFicha) return alert("Selecciona una ficha Word o PDF y un torneo activo.");
+    setLeyendoFicha(true);
+    try {
+      const form = new FormData();
+      form.append("tournament_id", torneoId);
+      form.append("file", archivoFicha);
+      const response = await fetch("/api/players/parse-roster", { method: "POST", credentials: "include", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "No se pudo leer la ficha.");
+      const normalizedName = String(result.teamName || "").trim().toLowerCase();
+      const matchedTeam = equipos.find(equipo => String(equipo.name || "").trim().toLowerCase() === normalizedName);
+      setEquipoFichaId(matchedTeam?.id || "");
+      setVistaFicha(result);
+    } catch (error: any) {
+      alert(error.message || "No se pudo leer la ficha.");
+      setVistaFicha(null);
+    } finally {
+      setLeyendoFicha(false);
+    }
+  };
+
+  const confirmarFichaInscripcion = async () => {
+    if (!torneoId || !vistaFicha || !equipoFichaId) return alert("Selecciona el equipo al que corresponde esta ficha.");
+    const ids = new Set<string>();
+    const dorsales = new Set<number>();
+    for (const player of vistaFicha.players) {
+      const id = player.identification.trim().toLowerCase();
+      if (!id || !player.fullName.trim() || !Number.isInteger(player.jerseyNumber) || player.jerseyNumber < 1 || player.jerseyNumber > 99) return alert("Corrige cedula, nombres y dorsal en la ficha antes de importarla.");
+      if (ids.has(id) || dorsales.has(player.jerseyNumber)) return alert("La ficha contiene cedulas o dorsales repetidos.");
+      ids.add(id); dorsales.add(player.jerseyNumber);
+    }
+    setImportandoFicha(true);
+    try {
+      const { data, error } = await supabase.rpc("import_tournament_roster", {
+        p_tournament_id: torneoId,
+        p_team_id: equipoFichaId,
+        p_manager_name: vistaFicha.managerName,
+        p_manager_phone: vistaFicha.managerPhone,
+        p_players: vistaFicha.players.map(player => ({ cedula: player.identification, full_name: player.fullName, jersey_number: player.jerseyNumber })),
+      });
+      if (error) throw error;
+      alert(`${data || vistaFicha.players.length} jugadores fueron registrados correctamente.`);
+      setArchivoFicha(null); setVistaFicha(null); setEquipoFichaId("");
+      await cargarDatos();
+    } catch (error: any) {
+      const message = String(error.message || "No se pudo importar la ficha.");
+      alert(`${message}${message.includes("import_tournament_roster") ? " Ejecuta primero supabase/import_tournament_roster.sql en Supabase SQL Editor." : ""}`);
+    } finally {
+      setImportandoFicha(false);
+    }
+  };
+
   const etiquetaEstadoJugador = (jugador: any) => {
     const status = jugador.eligibility_status || "active";
     if (status === "suspended") return "Suspendido";
@@ -418,6 +476,26 @@ export default function JugadoresPage() {
           </button>
         </form>
       </div>
+
+      <section className="rounded-2xl border border-violet-400/30 bg-violet-950/15 p-5">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">Importar ficha oficial</p>
+        <p className="mt-1 text-xs text-gray-400">Sube la plantilla oficial completada digitalmente en Word (.docx) o PDF con texto seleccionable. El archivo se procesa temporalmente y no se guarda.</p>
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-end">
+          <label className="min-w-0 flex-1 text-xs font-bold uppercase tracking-widest text-gray-400">Ficha completada
+            <input type="file" accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf" onChange={event => { setArchivoFicha(event.target.files?.[0] || null); setVistaFicha(null); }} className="mt-2 block w-full text-xs text-gray-400 file:mr-3 file:rounded-full file:border-0 file:bg-violet-400/15 file:px-3 file:py-2 file:text-xs file:font-bold file:text-violet-200" />
+          </label>
+          <button type="button" onClick={leerFichaInscripcion} disabled={!archivoFicha || leyendoFicha} className="rounded-xl border border-violet-300/60 bg-violet-400/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-violet-200 disabled:opacity-50">{leyendoFicha ? "Leyendo..." : "Leer ficha"}</button>
+        </div>
+        {vistaFicha && <div className="mt-4 rounded-xl border border-violet-300/25 bg-black/20 p-4">
+          <div className="grid gap-3 md:grid-cols-2"><p className="text-sm font-bold text-white">Equipo detectado: <span className="text-violet-200">{vistaFicha.teamName || "No identificado"}</span></p><p className="text-sm font-bold text-white">Dirigente: <span className="text-violet-200">{vistaFicha.managerName || "No identificado"}</span></p></div>
+          <label className="mt-3 block text-xs font-bold uppercase tracking-widest text-gray-400">Asignar ficha al equipo
+            <select value={equipoFichaId} onChange={event => setEquipoFichaId(event.target.value)} className="mt-1 w-full rounded-lg border border-[#2E2E2E] bg-[#0a0a0a] p-2 text-sm text-white"><option value="">Selecciona el equipo...</option>{equipos.map(equipo => <option key={equipo.id} value={equipo.id}>{equipo.name}</option>)}</select>
+          </label>
+          <p className="mt-3 text-xs font-bold text-violet-200">{vistaFicha.players.length} jugadores detectados. Confirma solo si los datos son correctos.</p>
+          <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-white/10"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-[#111] text-gray-400"><tr><th className="p-2">Cedula</th><th className="p-2">Nombre</th><th className="p-2">Dorsal</th></tr></thead><tbody>{vistaFicha.players.map((player, index) => <tr key={`${player.identification}-${index}`} className="border-t border-white/10 text-white"><td className="p-2">{player.identification}</td><td className="p-2">{player.fullName}</td><td className="p-2">{player.jerseyNumber}</td></tr>)}</tbody></table></div>
+          <button type="button" onClick={confirmarFichaInscripcion} disabled={!equipoFichaId || importandoFicha} className="mt-4 rounded-xl bg-violet-400 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-black disabled:opacity-50">{importandoFicha ? "Registrando..." : "Confirmar e importar nomina"}</button>
+        </div>}
+      </section>
 
       <div className="grid grid-cols-1 gap-3 rounded-2xl border border-[#2E2E2E] bg-[#141414] p-4 md:grid-cols-[1fr_280px]">
         <div>
