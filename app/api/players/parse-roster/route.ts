@@ -3,25 +3,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { rejectCrossOriginRequest } from "@/lib/security";
 import { getAccessibleTournament } from "@/lib/tenantAccess";
+import { parseRosterText } from "@/lib/rosterParser";
 
 export const runtime = "nodejs";
-
-function field(text: string, label: string) {
-  return text.match(new RegExp(`^\\s*${label}\\s*:\\s*(.+)$`, "im"))?.[1]?.replace(/_+/g, "").trim() || "";
-}
-
-function parseRoster(text: string) {
-  const lines = text.replace(/\r/g, "").split("\n").map(line => line.trim()).filter(Boolean);
-  const players = lines.flatMap(line => {
-    const columns = line.split("\t").map(value => value.trim()).filter(Boolean);
-    const match = columns.length >= 4
-      ? [columns[0], columns[1], columns[2], columns[3]]
-      : line.match(/^(\d{1,2})\s*[|;,-]\s*([A-Za-z0-9-]{6,20})\s*[|;,-]\s*(.{3,}?)\s*[|;,-]\s*(\d{1,2})$/)?.slice(1);
-    if (!match || !/^\d{1,2}$/.test(match[0]) || !/^[A-Za-z0-9-]{6,20}$/.test(match[1]) || !/^\d{1,2}$/.test(match[3])) return [];
-    return [{ identification: match[1], fullName: match[2].replace(/\s+/g, " ").trim(), jerseyNumber: Number(match[3]) }];
-  }).filter(player => player.jerseyNumber >= 1 && player.jerseyNumber <= 99);
-  return { teamName: field(text, "EQUIPO"), managerName: field(text, "DIRIGENTE"), managerPhone: field(text, "CELULAR"), players };
-}
 
 export async function POST(request: Request) {
   try {
@@ -50,7 +34,7 @@ export async function POST(request: Request) {
       const pdfParse: any = (await import("pdf-parse")).default;
       text = (await pdfParse(buffer)).text;
     } else return NextResponse.json({ error: "Usa la ficha oficial en formato Word (.docx) o PDF digital" }, { status: 400 });
-    const roster = parseRoster(text);
+    const roster = parseRosterText(text);
     if (!roster.players.length) return NextResponse.json({ error: "No se encontraron filas validas. Usa la plantilla oficial y completa cedula, nombre y dorsal." }, { status: 422 });
     return NextResponse.json(roster);
   } catch (error) {

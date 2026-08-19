@@ -410,7 +410,7 @@ export default function EquiposPage() {
     try {
       const { data: jugadores, error } = await supabase
         .from("players")
-        .select("full_name, cedula, identification_number, document_number")
+        .select("full_name, cedula, identification_number, document_number, jersey_number")
         .eq("tournament_id", torneoId)
         .eq("team_id", equipo.id)
         .order("full_name", { ascending: true });
@@ -429,6 +429,7 @@ export default function EquiposPage() {
           index: index + 1,
           fullName: jugador.full_name || "Sin nombre",
           identification: jugador.cedula || jugador.identification_number || jugador.document_number || "-",
+          jerseyNumber: String(jugador.jersey_number || "-"),
         })),
       }, `ficha-invitacion-${safeTeamName || "equipo"}.pdf`);
     } catch (error: any) {
@@ -640,7 +641,7 @@ export default function EquiposPage() {
               )}
               
               {/* Controles Editar/Eliminar */}
-              <div className="flex justify-end gap-3 border-t border-[#2E2E2E] pt-3 mt-1">
+              <div className="grid grid-cols-2 gap-2 border-t border-[#2E2E2E] pt-3 mt-1 sm:grid-cols-3">
                 {editandoId === eq.id ? (
                   <>
                     <button onClick={cancelarEdicion} className="text-[10px] uppercase tracking-wider font-bold text-gray-400 hover:text-white transition-all">Cancelar</button>
@@ -648,12 +649,12 @@ export default function EquiposPage() {
                   </>
                 ) : (
                   <>
-                    <button onClick={() => descargarPdfJugadores(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-blue-400 hover:text-blue-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "PDF jugadores"}</button>
-                    <button onClick={() => descargarFichaInvitacion(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-violet-300 hover:text-violet-200 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "Ficha registrada"}</button>
-                    {carnetsHabilitados && <button onClick={() => descargarCarnets(eq)} disabled={exportandoEquipoId === eq.id} className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 hover:text-emerald-300 transition-all disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : `Carnets ${formatoCarnets.toUpperCase()}`}</button>}
-                    <button onClick={() => abrirEstadoEquipo(eq)} className="text-[10px] uppercase tracking-wider font-bold text-red-300 hover:text-red-200 transition-all">Estado</button>
-                    <button onClick={() => { cancelarEdicion(); setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="text-[10px] uppercase tracking-wider font-bold text-[#D4A017] hover:text-yellow-300 transition-all">Editar</button>
-                    <button onClick={() => eliminarEquipo(eq.id, eq.shield_url)} className="text-[10px] uppercase tracking-wider font-bold text-red-500 hover:text-red-400 transition-all">Eliminar</button>
+                    <button onClick={() => descargarPdfJugadores(eq)} disabled={exportandoEquipoId === eq.id} className="min-h-10 rounded-lg border border-blue-400/25 bg-blue-500/5 px-2 py-2 text-[9px] uppercase leading-tight tracking-wider font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "PDF jugadores"}</button>
+                    <button onClick={() => descargarFichaInvitacion(eq)} disabled={exportandoEquipoId === eq.id} className="min-h-10 rounded-lg border border-violet-400/25 bg-violet-500/5 px-2 py-2 text-[9px] uppercase leading-tight tracking-wider font-bold text-violet-300 hover:bg-violet-500/10 disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "Ficha registrada"}</button>
+                    {carnetsHabilitados && <button onClick={() => descargarCarnets(eq)} disabled={exportandoEquipoId === eq.id} className="min-h-10 rounded-lg border border-emerald-400/25 bg-emerald-500/5 px-2 py-2 text-[9px] uppercase leading-tight tracking-wider font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : `Carnets ${formatoCarnets.toUpperCase()}`}</button>}
+                    <button onClick={() => abrirEstadoEquipo(eq)} className="min-h-10 rounded-lg border border-red-300/20 bg-red-500/5 px-2 py-2 text-[9px] uppercase tracking-wider font-bold text-red-300 hover:bg-red-500/10">Estado</button>
+                    <button onClick={() => { cancelarEdicion(); setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="min-h-10 rounded-lg border border-[#D4A017]/25 bg-[#D4A017]/5 px-2 py-2 text-[9px] uppercase tracking-wider font-bold text-[#D4A017] hover:bg-[#D4A017]/10">Editar</button>
+                    <button onClick={() => eliminarEquipo(eq.id, eq.shield_url)} className="min-h-10 rounded-lg border border-red-500/25 bg-red-500/5 px-2 py-2 text-[9px] uppercase tracking-wider font-bold text-red-500 hover:bg-red-500/10">Eliminar</button>
                   </>
                 )}
               </div>
