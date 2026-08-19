@@ -1338,3 +1338,8 @@ textarea:focus {
 .poster-export-light-canvas .position-poster-group {
   color-scheme: light;
 }
+
+.poster-export-light-canvas .position-poster-group-title {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72) !important;
+}

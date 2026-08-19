@@ -390,7 +390,7 @@ export default function EstadisticasPage() {
           {gruposOrdenados.map(([grupo, equipos]) => (
             <div key={grupo} className="position-poster-group overflow-hidden rounded-xl border border-[#12311f]/25 bg-white shadow-[0_14px_34px_rgba(15,23,42,.20)]">
               <div className="flex items-center justify-between border-b border-[#D4A017]/50 bg-[#102016] px-4 py-3">
-                <span className="text-lg font-black uppercase text-white">Grupo {grupo}</span>
+                <span className="position-poster-group-title text-lg font-black uppercase text-white">Grupo {grupo}</span>
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#E7C36B]">Clasificacion oficial</span>
               </div>
               <div className="grid grid-cols-[22px_28px_minmax(0,1fr)_24px_22px_22px_22px_25px_25px_29px_27px_34px] items-center gap-1 bg-[#e8efe9] px-3 py-2 text-center text-[8px] font-black uppercase text-[#405348]">
