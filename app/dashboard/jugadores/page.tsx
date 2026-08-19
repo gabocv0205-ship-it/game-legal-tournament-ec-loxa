@@ -5,9 +5,12 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
 import { compressImage, previewImage } from "@/lib/imageClient";
+import { exportStandardInvitationSheetPdf } from "@/lib/exportUtils";
+import { downloadRosterWordTemplate } from "@/lib/rosterTemplate";
 
 export default function JugadoresPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
+  const [torneoNombre, setTorneoNombre] = useState("Torneo seleccionado");
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [equipos, setEquipos] = useState<any[]>([]);
   const [eventos, setEventos] = useState<any[]>([]);
@@ -59,7 +62,7 @@ export default function JugadoresPage() {
       const tournament = await getAccessibleTournament(
         supabase,
         activeId,
-        "id, is_auto_template_enabled, max_players_per_team, yellow_cards_for_suspension, yellow_suspension_matches, red_suspension_matches",
+        "id, name, is_auto_template_enabled, max_players_per_team, yellow_cards_for_suspension, yellow_suspension_matches, red_suspension_matches",
       );
 
       if (!tournament) {
@@ -74,6 +77,7 @@ export default function JugadoresPage() {
       }
 
       setTorneoId(activeId);
+      setTorneoNombre(String(tournament.name || "Torneo seleccionado"));
       setPlantillaAutomatica(Boolean(tournament.is_auto_template_enabled));
       setMaxJugadoresEquipo(Number(tournament.max_players_per_team || 25));
       setReglas({
@@ -386,6 +390,16 @@ export default function JugadoresPage() {
     return "Activo";
   };
 
+  const descargarFichaPdf = () => {
+    if (!torneoId) return alert("Selecciona un torneo antes de descargar la ficha.");
+    exportStandardInvitationSheetPdf(torneoNombre, "ficha-inscripcion-jugadores.pdf", maxJugadoresEquipo);
+  };
+
+  const descargarFichaWord = async () => {
+    if (!torneoId) return alert("Selecciona un torneo antes de descargar la ficha.");
+    await downloadRosterWordTemplate(torneoNombre, maxJugadoresEquipo);
+  };
+
   const jugadoresFiltrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
     return jugadores.filter((jugador) => {
@@ -478,8 +492,10 @@ export default function JugadoresPage() {
       </div>
 
       <section className="rounded-2xl border border-violet-400/30 bg-violet-950/15 p-5">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">Importar ficha oficial</p>
-        <p className="mt-1 text-xs text-gray-400">Sube la plantilla oficial completada digitalmente en Word (.docx) o PDF con texto seleccionable. El archivo se procesa temporalmente y no se guarda.</p>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div><p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">Ficha oficial de jugadores</p><p className="mt-1 max-w-2xl text-xs text-gray-400">Descarga una sola plantilla, entrégala al dirigente y carga aquí el Word o PDF completado. Podrás revisar los datos y asignarlos al equipo antes de guardar.</p></div>
+          <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={descargarFichaWord} disabled={!torneoId} className="rounded-xl border border-violet-400/60 bg-violet-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-violet-200 disabled:opacity-50">Descargar Word</button><button type="button" onClick={descargarFichaPdf} disabled={!torneoId} className="rounded-xl border border-[#D4A017]/60 bg-[#D4A017]/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-[#D4A017] disabled:opacity-50">Descargar PDF</button></div>
+        </div>
         <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-end">
           <label className="min-w-0 flex-1 text-xs font-bold uppercase tracking-widest text-gray-400">Ficha completada
             <input type="file" accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf" onChange={event => { setArchivoFicha(event.target.files?.[0] || null); setVistaFicha(null); }} className="mt-2 block w-full text-xs text-gray-400 file:mr-3 file:rounded-full file:border-0 file:bg-violet-400/15 file:px-3 file:py-2 file:text-xs file:font-bold file:text-violet-200" />

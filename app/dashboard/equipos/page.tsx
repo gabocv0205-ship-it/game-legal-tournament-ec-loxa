@@ -3,13 +3,11 @@ import React, { useState, useEffect } from "react";
 import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
 import { clearActiveTournament, getAccessibleTournament } from "@/lib/tenantAccess";
-import { exportStandardInvitationSheetPdf, exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
-import { downloadRosterWordTemplate } from "@/lib/rosterTemplate";
+import { exportTeamPlayerCardsPdf, exportTeamPlayerCardsZip, exportTeamPlayersPdf, type TeamPlayerCardRow } from "@/lib/exportUtils";
 
 export default function EquiposPage() {
   const [torneoId, setTorneoId] = useState<string | null>(null);
   const [torneoNombre, setTorneoNombre] = useState("Torneo seleccionado");
-  const [cuposFichaInvitacion, setCuposFichaInvitacion] = useState(25);
   const [equipos, setEquipos] = useState<any[]>([]);
   const [nombre, setNombre] = useState("");
   const [escudo, setEscudo] = useState<File | null>(null);
@@ -28,11 +26,9 @@ export default function EquiposPage() {
   const [escudoEditado, setEscudoEditado] = useState<File | null>(null);
   const [previewEscudoEditado, setPreviewEscudoEditado] = useState("");
   const [exportandoEquipoId, setExportandoEquipoId] = useState<string | null>(null);
-  const [equipoCargaFicha, setEquipoCargaFicha] = useState<any>(null);
-  const [archivoCargaFicha, setArchivoCargaFicha] = useState<File | null>(null);
-  const [leyendoCargaFicha, setLeyendoCargaFicha] = useState(false);
-  const [guardandoCargaFicha, setGuardandoCargaFicha] = useState(false);
-  const [vistaCargaFicha, setVistaCargaFicha] = useState<{ teamName: string; managerName: string; managerPhone: string; players: { identification: string; fullName: string; jerseyNumber: number }[] } | null>(null);
+  const [equipoNomina, setEquipoNomina] = useState<any>(null);
+  const [jugadoresNomina, setJugadoresNomina] = useState<any[]>([]);
+  const [cargandoNomina, setCargandoNomina] = useState(false);
   const [carnetsHabilitados, setCarnetsHabilitados] = useState(true);
   const [formatoCarnets, setFormatoCarnets] = useState<"pdf" | "zip">("pdf");
   const [opcionesCarnets, setOpcionesCarnets] = useState({
@@ -60,7 +56,7 @@ export default function EquiposPage() {
         return;
       }
 
-      const tournament = await getAccessibleTournament(supabase, activeId, "id, name, max_players_per_team");
+      const tournament = await getAccessibleTournament(supabase, activeId, "id, name");
       if (!tournament) {
         clearActiveTournament();
         setEquipos([]);
@@ -72,7 +68,6 @@ export default function EquiposPage() {
       
       setTorneoId(activeId);
       setTorneoNombre((tournament as any).name || "Torneo seleccionado");
-      setCuposFichaInvitacion(Math.max(1, Number((tournament as any).max_players_per_team || 25)));
 
       try {
         const stored = localStorage.getItem(`gamelegal-carnets:${activeId}`);
@@ -409,62 +404,26 @@ export default function EquiposPage() {
     }
   };
 
-  const cerrarCargaFicha = () => {
-    setEquipoCargaFicha(null);
-    setArchivoCargaFicha(null);
-    setVistaCargaFicha(null);
-  };
-
-  const leerFichaEquipo = async () => {
-    if (!torneoId || !equipoCargaFicha || !archivoCargaFicha) return alert("Selecciona la ficha Word o PDF entregada por el dirigente.");
-    setLeyendoCargaFicha(true);
+  const abrirNominaEquipo = async (equipo: any) => {
+    if (!torneoId) return alert("Selecciona un torneo antes de consultar la nomina.");
+    setEquipoNomina(equipo);
+    setJugadoresNomina([]);
+    setCargandoNomina(true);
     try {
-      const form = new FormData();
-      form.append("tournament_id", torneoId);
-      form.append("file", archivoCargaFicha);
-      const response = await fetch("/api/players/parse-roster", { method: "POST", credentials: "include", body: form });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "No se pudo leer la ficha.");
-      setVistaCargaFicha(result);
-    } catch (error: any) {
-      alert(error.message || "No se pudo leer la ficha.");
-      setVistaCargaFicha(null);
-    } finally {
-      setLeyendoCargaFicha(false);
-    }
-  };
-
-  const confirmarCargaFicha = async () => {
-    if (!torneoId || !equipoCargaFicha || !vistaCargaFicha) return;
-    setGuardandoCargaFicha(true);
-    try {
-      const { data, error } = await supabase.rpc("import_tournament_roster", {
-        p_tournament_id: torneoId,
-        p_team_id: equipoCargaFicha.id,
-        p_manager_name: vistaCargaFicha.managerName,
-        p_manager_phone: vistaCargaFicha.managerPhone,
-        p_players: vistaCargaFicha.players.map(player => ({ cedula: player.identification, full_name: player.fullName, jersey_number: player.jerseyNumber })),
-      });
+      const { data, error } = await supabase
+        .from("players")
+        .select("id, full_name, cedula, jersey_number, eligibility_status, eligibility_reason")
+        .eq("tournament_id", torneoId)
+        .eq("team_id", equipo.id)
+        .order("full_name", { ascending: true });
       if (error) throw error;
-      alert(`${data || vistaCargaFicha.players.length} jugadores fueron registrados en ${equipoCargaFicha.name}.`);
-      cerrarCargaFicha();
-      await cargarEquipos();
+      setJugadoresNomina(data || []);
     } catch (error: any) {
-      const message = String(error.message || "No se pudo importar la ficha.");
-      alert(`${message}${message.includes("import_tournament_roster") ? " Ejecuta primero supabase/import_tournament_roster.sql en Supabase SQL Editor." : ""}`);
+      setEquipoNomina(null);
+      alert("No se pudo consultar la nomina: " + (error.message || "Intenta nuevamente."));
     } finally {
-      setGuardandoCargaFicha(false);
+      setCargandoNomina(false);
     }
-  };
-
-  const descargarFichaInvitacionEstandar = () => {
-    if (!torneoId) return alert("Selecciona un torneo antes de descargar la ficha.");
-    exportStandardInvitationSheetPdf(torneoNombre, "ficha-invitacion-estandar.pdf", cuposFichaInvitacion);
-  };
-
-  const descargarFichaWord = async () => {
-    if (!torneoId) return alert("Selecciona un torneo antes de descargar la ficha.");
-    await downloadRosterWordTemplate(torneoNombre, cuposFichaInvitacion);
   };
 
   const descargarCarnets = async (equipo: any) => {
@@ -501,14 +460,6 @@ export default function EquiposPage() {
     <div className="space-y-6">
       <h2 className="text-3xl font-black text-white uppercase tracking-wider">Gestión de Clubes</h2>
       <p className="text-gray-400 text-sm">Administra los equipos participantes del torneo seleccionado.</p>
-      <section className="flex flex-col gap-3 rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#D4A017]">Ficha estandar de invitacion</p>
-          <p className="mt-1 text-xs text-gray-400">Disponible antes de inscribir equipos. Incluye campos vacios para equipo, dirigente, contacto, identificacion y nombres de hasta {cuposFichaInvitacion} jugadores.</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={descargarFichaWord} disabled={!torneoId} className="rounded-xl border border-violet-400/60 bg-violet-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-violet-200 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50">Word editable</button><button type="button" onClick={descargarFichaInvitacionEstandar} disabled={!torneoId} className="rounded-xl border border-[#D4A017]/60 bg-[#D4A017]/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-[#D4A017] transition hover:bg-[#D4A017]/20 disabled:cursor-not-allowed disabled:opacity-50">PDF imprimible</button></div>
-      </section>
-      
       <section className="rounded-2xl border border-[#D4A017]/35 bg-[#141414] p-4 shadow-lg" aria-label="Configuracion de carnets">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -668,7 +619,7 @@ export default function EquiposPage() {
                 ) : (
                   <>
                     <button onClick={() => descargarPdfJugadores(eq)} disabled={exportandoEquipoId === eq.id} className="min-h-10 rounded-lg border border-blue-400/25 bg-blue-500/5 px-2 py-2 text-[9px] uppercase leading-tight tracking-wider font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : "PDF jugadores"}</button>
-                    <button onClick={() => { setEquipoCargaFicha(eq); setArchivoCargaFicha(null); setVistaCargaFicha(null); }} className="min-h-10 rounded-lg border border-violet-400/25 bg-violet-500/5 px-2 py-2 text-[9px] uppercase leading-tight tracking-wider font-bold text-violet-300 hover:bg-violet-500/10">Cargar ficha</button>
+                    <button onClick={() => abrirNominaEquipo(eq)} className="min-h-10 rounded-lg border border-violet-400/25 bg-violet-500/5 px-2 py-2 text-[9px] uppercase leading-tight tracking-wider font-bold text-violet-300 hover:bg-violet-500/10">Ver nomina</button>
                     {carnetsHabilitados && <button onClick={() => descargarCarnets(eq)} disabled={exportandoEquipoId === eq.id} className="min-h-10 rounded-lg border border-emerald-400/25 bg-emerald-500/5 px-2 py-2 text-[9px] uppercase leading-tight tracking-wider font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50">{exportandoEquipoId === eq.id ? "Generando..." : `Carnets ${formatoCarnets.toUpperCase()}`}</button>}
                     <button onClick={() => abrirEstadoEquipo(eq)} className="min-h-10 rounded-lg border border-red-300/20 bg-red-500/5 px-2 py-2 text-[9px] uppercase tracking-wider font-bold text-red-300 hover:bg-red-500/10">Estado</button>
                     <button onClick={() => { cancelarEdicion(); setEditandoId(eq.id); setNombreEditado(eq.name); setDirigenteEditado({ name: eq.manager_name || "", phone: eq.manager_phone || "", email: eq.manager_email || "", notes: eq.manager_notes || "" }); }} className="min-h-10 rounded-lg border border-[#D4A017]/25 bg-[#D4A017]/5 px-2 py-2 text-[9px] uppercase tracking-wider font-bold text-[#D4A017] hover:bg-[#D4A017]/10">Editar</button>
@@ -680,25 +631,15 @@ export default function EquiposPage() {
           ))
         )}
       </div>
-      {equipoCargaFicha && (
+      {equipoNomina && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-violet-400/40 bg-[#111827] p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">Cargar ficha del dirigente</p><h3 className="mt-1 text-xl font-black uppercase text-white">{equipoCargaFicha.name}</h3><p className="mt-1 text-xs text-gray-400">Acepta la plantilla oficial Word (.docx) o PDF digital. El archivo se procesa temporalmente y no se almacena.</p></div>
-              <button type="button" onClick={cerrarCargaFicha} className="rounded-lg border border-white/15 px-3 py-2 text-xs font-black text-gray-300 hover:bg-white/5">Cerrar</button>
+              <div><p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">Nomina registrada</p><h3 className="mt-1 text-xl font-black uppercase text-white">{equipoNomina.name}</h3><p className="mt-1 text-xs text-gray-400">Consulta de jugadores pertenecientes exclusivamente a este equipo y torneo.</p></div>
+              <button type="button" onClick={() => setEquipoNomina(null)} className="rounded-lg border border-white/15 px-3 py-2 text-xs font-black text-gray-300 hover:bg-white/5">Cerrar</button>
             </div>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="min-w-0 flex-1 text-xs font-bold uppercase tracking-widest text-gray-400">Ficha recibida
-                <input type="file" accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf" onChange={event => { setArchivoCargaFicha(event.target.files?.[0] || null); setVistaCargaFicha(null); }} className="mt-2 block w-full text-xs text-gray-300 file:mr-3 file:rounded-full file:border-0 file:bg-violet-400/15 file:px-3 file:py-2 file:text-xs file:font-bold file:text-violet-200" />
-              </label>
-              <button type="button" onClick={leerFichaEquipo} disabled={!archivoCargaFicha || leyendoCargaFicha} className="rounded-xl bg-violet-400 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-black disabled:opacity-50">{leyendoCargaFicha ? "Leyendo..." : "Leer y revisar"}</button>
-            </div>
-            {vistaCargaFicha && <div className="mt-5 rounded-xl border border-violet-300/25 bg-black/20 p-4">
-              <div className="grid gap-2 text-sm md:grid-cols-3"><p className="text-gray-300">Equipo escrito: <strong className="text-white">{vistaCargaFicha.teamName || "No identificado"}</strong></p><p className="text-gray-300">Dirigente: <strong className="text-white">{vistaCargaFicha.managerName || "No identificado"}</strong></p><p className="text-gray-300">Celular: <strong className="text-white">{vistaCargaFicha.managerPhone || "No identificado"}</strong></p></div>
-              <p className="mt-3 text-xs font-bold text-violet-200">{vistaCargaFicha.players.length} jugadores detectados para registrar en {equipoCargaFicha.name}.</p>
-              <div className="mt-2 max-h-64 overflow-auto rounded-lg border border-white/10"><table className="w-full table-fixed text-left text-xs"><thead className="sticky top-0 bg-[#111] text-gray-400"><tr><th className="w-[28%] p-2">Cedula</th><th className="w-[58%] p-2">Nombres</th><th className="w-[14%] p-2">Dorsal</th></tr></thead><tbody>{vistaCargaFicha.players.map((player, index) => <tr key={`${player.identification}-${index}`} className="border-t border-white/10 text-white"><td className="break-all p-2">{player.identification}</td><td className="break-words p-2">{player.fullName}</td><td className="p-2 text-center">{player.jerseyNumber}</td></tr>)}</tbody></table></div>
-              <button type="button" onClick={confirmarCargaFicha} disabled={guardandoCargaFicha} className="mt-4 w-full rounded-xl bg-[#D4A017] px-4 py-3 text-[10px] font-black uppercase tracking-wider text-black disabled:opacity-50">{guardandoCargaFicha ? "Registrando nomina..." : `Confirmar e importar en ${equipoCargaFicha.name}`}</button>
-            </div>}
+            {cargandoNomina ? <p className="py-12 text-center text-sm font-black uppercase tracking-widest text-violet-200">Consultando nomina...</p> : jugadoresNomina.length === 0 ? <div className="mt-5 rounded-xl border border-dashed border-white/15 p-8 text-center text-sm text-gray-400">Este equipo aun no tiene jugadores registrados. La ficha se carga desde el modulo Jugadores.</div> : <div className="mt-5 overflow-hidden rounded-xl border border-white/10"><table className="w-full table-fixed text-left text-xs"><thead className="bg-[#080d18] text-gray-400"><tr><th className="w-[12%] p-3 text-center">Dorsal</th><th className="w-[30%] p-3">Cedula</th><th className="w-[40%] p-3">Jugador</th><th className="w-[18%] p-3">Estado</th></tr></thead><tbody>{jugadoresNomina.map(player => <tr key={player.id} className="border-t border-white/10 text-white"><td className="p-3 text-center font-black text-[#D4A017]">#{player.jersey_number || "-"}</td><td className="break-all p-3 font-mono text-gray-300">{player.cedula || "-"}</td><td className="break-words p-3 font-bold uppercase">{player.full_name}</td><td className="p-3 text-[10px] font-black uppercase text-emerald-300">{estadoJugador(player)}</td></tr>)}</tbody></table></div>}
+            <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => descargarPdfJugadores(equipoNomina)} disabled={exportandoEquipoId === equipoNomina.id} className="rounded-xl border border-blue-400/40 bg-blue-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-blue-300 disabled:opacity-50">Descargar PDF</button><button type="button" onClick={() => setEquipoNomina(null)} className="rounded-xl bg-violet-400 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-black">Cerrar</button></div>
           </section>
         </div>
       )}

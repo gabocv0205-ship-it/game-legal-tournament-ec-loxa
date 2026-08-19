@@ -193,7 +193,7 @@ export default function SorteoPage() {
     };
     try {
       const posterWidth = 1440;
-      const posterHeight = 1920;
+      const posterHeight = 1800;
       poster.style.width = `${posterWidth}px`;
       poster.style.minWidth = `${posterWidth}px`;
       poster.style.height = `${posterHeight}px`;
@@ -224,10 +224,10 @@ export default function SorteoPage() {
   }));
   const equiposLibres = equipos.filter(e => !e.group_name);
   const maxEquiposPorGrupo = Math.max(1, ...equiposPorGrupo.map(grupo => grupo.equipos.length));
-  const columnasPoster = numGrupos <= 4 ? 2 : numGrupos <= 6 ? 3 : numGrupos <= 8 ? 4 : 5;
+  const columnasPoster = numGrupos <= 2 ? 1 : numGrupos <= 8 ? 2 : 3;
   const posterDenso = maxEquiposPorGrupo > 6 || numGrupos > 8;
   const posterCompacto = maxEquiposPorGrupo > 4 || numGrupos > 6;
-  const tamanoEscudo = posterDenso ? 28 : posterCompacto ? 32 : 36;
+  const tamanoEscudo = posterDenso ? 38 : posterCompacto ? 44 : 48;
   const posterFontFamily = '"Segoe UI", Arial, Helvetica, sans-serif';
 
   return (
@@ -384,18 +384,18 @@ export default function SorteoPage() {
           <p className="text-red-500 font-black text-base uppercase mt-1">Equipos y grupos del torneo</p>
         </div>
 
-        <div className={`relative grid flex-1 content-center ${posterDenso ? "gap-4" : posterCompacto ? "gap-5" : "gap-6"}`} style={{ gridTemplateColumns: `repeat(${columnasPoster}, minmax(0, 1fr))` }}>
+        <div className={`relative grid min-h-0 flex-1 auto-rows-fr content-stretch ${posterDenso ? "gap-4" : posterCompacto ? "gap-5" : "gap-6"}`} style={{ gridTemplateColumns: `repeat(${columnasPoster}, minmax(0, 1fr))` }}>
           {equiposPorGrupo.map(grupo => (
-            <div key={grupo.letra} className="min-w-0 bg-black/70 rounded-xl border border-[#D4A017]/75 overflow-hidden shadow-[0_16px_35px_rgba(0,0,0,.42)]">
-              <div className={`bg-[#D4A017] border-b border-[#F5C842] text-center ${posterDenso ? "py-2" : posterCompacto ? "py-2.5" : "py-3.5"}`}>
-                <h3 className={`text-black font-black uppercase ${posterDenso ? "text-lg" : "text-xl"}`}>Grupo {grupo.letra}</h3>
+            <div key={grupo.letra} className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border-2 border-[#D4A017]/85 bg-black/[0.78] shadow-[0_16px_35px_rgba(0,0,0,.42)]">
+              <div className={`shrink-0 border-b border-[#F5C842] bg-[#D4A017] text-center ${posterDenso ? "py-3" : posterCompacto ? "py-3.5" : "py-4"}`}>
+                <h3 className={`font-black uppercase tracking-wide text-black ${posterDenso ? "text-2xl" : "text-[28px]"}`}>Grupo {grupo.letra}</h3>
               </div>
-              <div className={posterDenso ? "p-2.5" : posterCompacto ? "p-3" : "p-4"}>
+              <div className={`flex flex-1 flex-col justify-center ${posterDenso ? "px-4 py-2" : posterCompacto ? "px-5 py-3" : "p-5"}`}>
                 {grupo.equipos.length === 0 ? (
                   <p className="text-gray-400 text-xs text-center italic py-4">Grupo vacío</p>
                 ) : (
                   grupo.equipos.map(equipo => (
-                    <div key={equipo.id} className={`relative flex items-center min-w-0 border-b border-white/15 last:border-0 ${posterDenso ? "gap-3 px-2 py-2" : posterCompacto ? "gap-3 px-2.5 py-2.5" : "gap-4 p-3"}`}>
+                    <div key={equipo.id} className={`relative flex min-w-0 items-center border-b border-white/20 last:border-0 ${posterDenso ? "gap-4 px-2 py-3" : posterCompacto ? "gap-4 px-2 py-3.5" : "gap-5 px-3 py-4"}`}>
                       <div className="shrink-0 flex items-center justify-center" style={{ width: tamanoEscudo, height: tamanoEscudo }}>
                         {equipo.shield_url ? (
                           // crossOrigin="anonymous" es vital para que html2canvas pueda capturar imágenes de Supabase
@@ -404,7 +404,7 @@ export default function SorteoPage() {
                           <div className="w-full h-full bg-[#2E2E2E] rounded-full flex items-center justify-center text-[9px]">🛡️</div>
                         )}
                       </div>
-                      <span className={`min-w-0 flex-1 text-white font-black uppercase leading-tight break-words ${posterDenso ? "text-sm" : posterCompacto ? "text-[15px]" : "text-base"}`}>{equipo.name}</span>
+                      <span className={`min-w-0 flex-1 break-words font-black uppercase leading-tight tracking-wide text-white [text-shadow:0_2px_4px_rgba(0,0,0,.95)] ${posterDenso ? "text-xl" : posterCompacto ? "text-[22px]" : "text-2xl"}`}>{equipo.name}</span>
                       {/* En la foto no queremos que salga el botón de borrar, pero se mantiene interactivo aquí */}
                       <button data-html2canvas-ignore onClick={() => cambiarGrupoManual(equipo.id, "Libre")} className="absolute right-1 top-1 text-red-500 hover:text-red-400 text-[8px]">✖</button>
                     </div>
