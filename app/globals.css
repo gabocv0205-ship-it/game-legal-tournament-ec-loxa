@@ -1315,3 +1315,26 @@ textarea:focus {
     width: 100%;
   }
 }
+
+/* Poster exports own their palette; dashboard light mode must never recolor them. */
+.poster-export-canvas .poster-group-card,
+.poster-export-canvas .poster-group-list,
+.poster-export-canvas .poster-group-row {
+  background-color: rgba(2, 8, 16, 0.9) !important;
+  color: #ffffff !important;
+}
+
+.poster-export-canvas .poster-group-header {
+  background-color: #d4a017 !important;
+  color: #050505 !important;
+}
+
+.poster-export-canvas .poster-group-name {
+  color: #ffffff !important;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.98) !important;
+}
+
+.poster-export-light-canvas,
+.poster-export-light-canvas .position-poster-group {
+  color-scheme: light;
+}

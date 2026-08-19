@@ -243,7 +243,7 @@ export default function EstadisticasPage() {
       poster.style.minWidth = "1080px";
       const ancho = poster.scrollWidth;
       const alto = poster.scrollHeight;
-      const canvas = await capturePoster(poster, { backgroundColor: "#f4f7f2", scale: 3, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
+      const canvas = await capturePoster(poster, { backgroundColor: "#f4f7f2", colorScheme: "light", scale: 3, width: ancho, height: alto, windowWidth: ancho, windowHeight: alto });
       await downloadPosterCanvas(canvas, `Posiciones-${nombreTorneo}-${anioTorneo}`);
     } catch (error) {
       console.error("Error al generar el póster de posiciones", error);
@@ -378,7 +378,7 @@ export default function EstadisticasPage() {
         </div>
       </div>
 
-      <div ref={posterPosicionesRef} className="relative overflow-hidden rounded-2xl border-[10px] border-[#C99A1A] p-10 bg-[#f4f7f2] text-[#111827]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(244,247,242,.9), rgba(244,247,242,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 12% 18%, rgba(212,160,23,.2), transparent 24%), radial-gradient(circle at 88% 84%, rgba(5,96,78,.18), transparent 24%), linear-gradient(145deg, #f8fbf7, #dde9e1 55%, #f8fbf7)", fontFamily: posterFontFamily }}>
+      <div ref={posterPosicionesRef} className="poster-export-light-canvas relative overflow-hidden rounded-2xl border-[10px] border-[#C99A1A] p-10 bg-[#f4f7f2] text-[#111827]" style={fondoPosterUrl ? { backgroundImage: `linear-gradient(rgba(244,247,242,.9), rgba(244,247,242,.96)), url("${fondoPosterUrl}")`, backgroundSize: "cover", backgroundPosition: "center", fontFamily: posterFontFamily } : { backgroundImage: "radial-gradient(circle at 12% 18%, rgba(212,160,23,.2), transparent 24%), radial-gradient(circle at 88% 84%, rgba(5,96,78,.18), transparent 24%), linear-gradient(145deg, #f8fbf7, #dde9e1 55%, #f8fbf7)", fontFamily: posterFontFamily }}>
         <div className="absolute inset-5 rounded-[26px] border-4 border-[#0B1620] pointer-events-none" />
         <div className="relative text-center mb-8">
           <p className="text-[14px] font-black uppercase tracking-[0.35em] text-[#9B7411]">Clasificacion oficial</p>
@@ -386,22 +386,31 @@ export default function EstadisticasPage() {
           <p className="text-[#9B7411] font-black uppercase text-base mt-1">Tabla de posiciones - {anioTorneo}</p>
           <div className="mt-5 mx-auto h-px max-w-2xl bg-[#C99A1A]/60" />
         </div>
-        <div className={`relative grid gap-5 ${Object.keys(posicionesPorGrupo).length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+        <div className="relative grid grid-cols-2 gap-5">
           {gruposOrdenados.map(([grupo, equipos]) => (
-            <div key={grupo} className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-[0_14px_34px_rgba(15,23,42,.20)]">
-              <div className="bg-[#0b0b0b] border-b border-[#D4A017]/50 px-3 py-2.5 flex justify-between">
-                <span className="text-white text-base font-black uppercase">Grupo {grupo}</span>
-                <span className="text-[#D4A017] text-[11px] font-black uppercase">PJ - GD - PTS</span>
+            <div key={grupo} className="position-poster-group overflow-hidden rounded-xl border border-[#12311f]/25 bg-white shadow-[0_14px_34px_rgba(15,23,42,.20)]">
+              <div className="flex items-center justify-between border-b border-[#D4A017]/50 bg-[#102016] px-4 py-3">
+                <span className="text-lg font-black uppercase text-white">Grupo {grupo}</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#E7C36B]">Clasificacion oficial</span>
               </div>
-              <div className="p-3">
+              <div className="grid grid-cols-[22px_28px_minmax(0,1fr)_24px_22px_22px_22px_25px_25px_29px_27px_34px] items-center gap-1 bg-[#e8efe9] px-3 py-2 text-center text-[8px] font-black uppercase text-[#405348]">
+                <span>#</span><span></span><span className="text-left">Equipo</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>FP</span><span>PTS</span>
+              </div>
+              <div className="px-3 py-1.5">
                 {equipos.map((team, index) => (
-                  <div key={team.id} className={`grid grid-cols-[24px_34px_1fr_30px_34px_38px] items-center gap-2 border-b border-slate-200 py-2.5 last:border-0 border-l-4 pl-2 ${team.classificationStatus === "qualified" ? "border-l-emerald-500" : team.classificationStatus === "repechage" ? "border-l-amber-400" : "border-l-slate-300"}`}>
-                    <span className="text-sm font-black text-slate-500 text-center">{index + 1}</span>
-                    {team.shield ? <Image src={team.shield} alt="" width={30} height={30} unoptimized crossOrigin="anonymous" className="w-8 h-8 object-contain" /> : <div className="w-8 h-8 rounded-full bg-slate-200" />}
-                    <span className="break-words text-[13px] text-[#111827] font-black uppercase leading-tight">{team.name}</span>
-                    <span className="text-sm text-slate-700 font-black text-center">{team.pj}</span>
-                    <span className="text-sm text-slate-700 font-black text-center">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
-                    <span className="text-base text-[#9B7411] font-black text-center">{team.pts}</span>
+                  <div key={team.id} className={`grid grid-cols-[22px_28px_minmax(0,1fr)_24px_22px_22px_22px_25px_25px_29px_27px_34px] items-center gap-1 border-b border-slate-200 border-l-4 py-2 pl-1 pr-0.5 text-center last:border-b-0 ${team.classificationStatus === "qualified" ? "border-l-emerald-500 bg-emerald-50/60" : team.classificationStatus === "repechage" ? "border-l-amber-400 bg-amber-50/60" : "border-l-slate-300"}`}>
+                    <span className="text-xs font-black text-slate-500">{index + 1}</span>
+                    {team.shield ? <Image src={team.shield} alt={`Escudo de ${team.name}`} width={26} height={26} unoptimized crossOrigin="anonymous" className="h-7 w-7 object-contain" /> : <div className="h-7 w-7 rounded-full bg-slate-200" />}
+                    <span className="min-w-0 break-words text-left text-[11px] font-black uppercase leading-tight text-[#111827]">{team.name}</span>
+                    <span className="text-[11px] font-black text-slate-700">{team.pj}</span>
+                    <span className="text-[11px] font-bold text-emerald-700">{team.pg}</span>
+                    <span className="text-[11px] font-bold text-amber-700">{team.pe}</span>
+                    <span className="text-[11px] font-bold text-red-700">{team.pp}</span>
+                    <span className="text-[11px] font-bold text-slate-700">{team.gf}</span>
+                    <span className="text-[11px] font-bold text-slate-700">{team.gc}</span>
+                    <span className="text-[11px] font-black text-slate-800">{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
+                    <span className="text-[11px] font-bold text-blue-700">{team.fairPlay}</span>
+                    <span className="text-sm font-black text-[#7A5808]">{team.pts}</span>
                   </div>
                 ))}
               </div>

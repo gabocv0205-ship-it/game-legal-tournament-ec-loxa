@@ -2,6 +2,7 @@ import html2canvas from "html2canvas";
 
 type PosterCaptureOptions = {
   backgroundColor?: string;
+  colorScheme?: "light" | "dark";
   scale?: number;
   maxDimension?: number;
   width?: number;
@@ -98,7 +99,7 @@ export async function capturePoster(root: HTMLElement, options: PosterCaptureOpt
   const adaptiveScale = Math.min(requestedScale, maxDimension / Math.max(width, height));
   const scale = Math.max(1, adaptiveScale);
   const previousColorScheme = root.style.colorScheme;
-  root.style.colorScheme = "light";
+  root.style.colorScheme = options.colorScheme ?? "light";
 
   try {
     return await html2canvas(root, {
