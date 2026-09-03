@@ -9,6 +9,13 @@ import { SponsorMarquee } from "@/components/SponsorMarquee";
 
 const WHATSAPP_NUMBER = "593960553548";
 
+const FEATURE_MODULES = [
+  { image: "/showcase/champions-loxa-partidos.webp", eyebrow: "Calendario", title: "Jornadas oficiales", icon: "fa-calendar-days" },
+  { image: "/showcase/champions-loxa-sorteo.jpg", eyebrow: "Competicion", title: "Sorteo y grupos", icon: "fa-layer-group" },
+  { image: "/showcase/champions-loxa-posiciones.webp", eyebrow: "En vivo", title: "Tabla de posiciones", icon: "fa-ranking-star" },
+  { image: "/showcase/champions-loxa-goleadores.webp", eyebrow: "Rendimiento", title: "Goleadores", icon: "fa-futbol" },
+];
+
 export default function PortalPrincipal() {
   const router = useRouter();
 
@@ -175,7 +182,13 @@ export default function PortalPrincipal() {
         .topbar-marquee { overflow: hidden; white-space: nowrap; }
         .topbar-marquee span { display: inline-block; padding-left: 100%; animation: marquee 30s linear infinite !important; animation-play-state: running !important; will-change: transform; }
         @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
-        .hero { position: relative; min-height: calc(100vh - 34px); display: flex; align-items: center; padding: clamp(56px, 8vw, 96px) clamp(18px, 5vw, 48px); overflow:hidden;}
+        .landing-nav { position:relative; z-index:20; border-bottom:1px solid rgba(255,255,255,.07); background:rgba(8,12,9,.78); backdrop-filter:blur(18px); }
+        .landing-nav-inner { width:min(1200px,calc(100% - 32px)); min-height:72px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+        .landing-brand { display:inline-flex; align-items:center; gap:12px; color:var(--white); text-decoration:none; }
+        .landing-brand-mark { width:42px; height:42px; display:grid; place-items:center; border:1px solid rgba(212,160,23,.48); border-radius:13px; color:var(--gold-light); background:linear-gradient(145deg,#203425,#080d09); box-shadow:0 12px 34px rgba(0,0,0,.36); }
+        .landing-brand strong { display:block; font-size:14px; letter-spacing:.15em; text-transform:uppercase; }.landing-brand small { display:block; margin-top:3px; color:var(--gray); font-size:9px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+        .landing-nav-actions { display:flex; align-items:center; gap:9px; }.landing-nav-link { min-height:40px; display:inline-flex; align-items:center; justify-content:center; padding:0 15px; border:1px solid rgba(255,255,255,.11); border-radius:999px; background:transparent; color:#dce5de; font:800 10px/1 var(--font-heading); letter-spacing:.1em; text-decoration:none; text-transform:uppercase; transition:transform .2s ease,border-color .2s ease,color .2s ease,background .2s ease; cursor:pointer; }.landing-nav-link:hover { transform:translateY(-2px); border-color:rgba(212,160,23,.7); color:var(--gold-light); }.landing-nav-link.primary { border-color:var(--gold); background:var(--gold); color:#11170f; }
+        .hero { position: relative; min-height: calc(100vh - 106px); display: flex; align-items: center; padding: clamp(56px, 8vw, 96px) clamp(18px, 5vw, 48px); overflow:hidden;}
         .hero-bg { position: absolute; inset: 0; background: radial-gradient(circle at 75% 28%, rgba(212,160,23,0.16), transparent 28%), radial-gradient(circle at center, rgba(27,107,47,0.22) 0%, var(--black) 78%); z-index: -1; }
         .hero-shell { z-index: 1; max-width: 1200px; margin: 0 auto; width: 100%; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(280px, .7fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
         .hero-copy { min-width: 0; }
@@ -187,6 +200,20 @@ export default function PortalPrincipal() {
         .hero-mini-card { min-height: 92px; border: 1px solid var(--dark3); border-radius: 18px; background: rgba(13,13,13,.72); padding: 16px; }
         .hero-mini-card strong { display:block; font-size: clamp(22px, 4vw, 32px); color: var(--gold); line-height:1; }
         .hero-mini-card span { display:block; color: var(--gray); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 8px; }
+        .guest-command { isolation:isolate; padding:15px; transform:perspective(1200px) rotateY(-2deg) rotateX(1deg); transition:transform .35s ease,box-shadow .35s ease; }
+        .guest-command:hover { transform:perspective(1200px) rotateY(0) rotateX(0) translateY(-4px); box-shadow:0 38px 100px rgba(0,0,0,.54),0 0 0 1px rgba(212,160,23,.11); }
+        .guest-command::before { content:''; position:absolute; z-index:0; width:280px; height:280px; right:-145px; top:-155px; border:1px solid rgba(212,160,23,.2); border-radius:50%; box-shadow:0 0 0 42px rgba(212,160,23,.025),0 0 0 84px rgba(39,160,74,.018); pointer-events:none; animation:command-orbit 16s linear infinite; }
+        @keyframes command-orbit { to { transform:rotate(360deg); } }
+        .guest-command-top { min-height:62px; display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:8px 9px 15px; }
+        .guest-command-brand { color:#fff; font-size:13px; font-weight:950; letter-spacing:.18em; text-transform:uppercase; }.guest-command-brand span { display:block; margin-top:5px; color:#91a095; font-size:8px; letter-spacing:.16em; }
+        .guest-command-tools { display:flex; gap:7px; }.guest-command-tools span { width:30px; height:30px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.1); border-radius:50%; color:#9eaea2; font-size:10px; background:rgba(255,255,255,.025); }
+        .guest-command-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+        .guest-command-card { position:relative; min-height:152px; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:17px; color:#fff; text-decoration:none; background:#07100b; box-shadow:inset 0 1px rgba(255,255,255,.05); transition:transform .28s ease,border-color .28s ease,box-shadow .28s ease; }
+        .guest-command-card:hover { transform:translateY(-4px) scale(1.012); border-color:rgba(212,160,23,.64); box-shadow:0 18px 35px rgba(0,0,0,.35); }
+        .guest-command-image { object-fit:cover; filter:saturate(.88) contrast(1.06) brightness(.72); transition:transform .45s ease,filter .35s ease; }.guest-command-card:hover .guest-command-image { transform:scale(1.055); filter:saturate(1) contrast(1.08) brightness(.82); }
+        .guest-command-shade { position:absolute; inset:0; background:linear-gradient(180deg,rgba(2,7,4,.05) 18%,rgba(2,7,4,.93) 100%); }
+        .guest-command-copy { position:absolute; z-index:2; inset:auto 13px 12px; display:flex; align-items:flex-end; justify-content:space-between; gap:10px; }.guest-command-copy small { display:block; color:#e3c464; font-size:8px; font-weight:900; letter-spacing:.16em; text-transform:uppercase; }.guest-command-copy strong { display:block; margin-top:4px; color:white; font-size:13px; line-height:1.08; text-transform:uppercase; }.guest-command-arrow { width:28px; height:28px; display:grid; flex:0 0 auto; place-items:center; border:1px solid rgba(255,255,255,.24); border-radius:50%; font-size:9px; }
+        .guest-command-footer { display:grid; grid-template-columns:1.35fr repeat(3,.65fr); margin-top:10px; overflow:hidden; border:1px solid rgba(255,255,255,.09); border-radius:15px; background:rgba(255,255,255,.025); }.guest-command-footer div { min-height:52px; display:flex; flex-direction:column; justify-content:center; padding:10px 12px; border-right:1px solid rgba(255,255,255,.07); }.guest-command-footer div:last-child { border:0; }.guest-command-footer small { color:#839287; font-size:7px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }.guest-command-footer strong { margin-top:4px; color:#fff; font-size:12px; text-transform:uppercase; }.guest-command-footer .live strong { color:#61e690; }.guest-command-footer b { color:var(--gold-light); font-size:18px; line-height:1; }
         .text-gold { color: var(--gold); }
         .btn-primary { background: linear-gradient(135deg, var(--gold) 0%, #A07810 100%); color: var(--black); padding: 12px 28px; border-radius: 4px; font-weight: bold; text-transform: uppercase; display: inline-block; transition: 0.3s; border: none; cursor: none;}
         .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(212,160,23,0.4); }
@@ -258,6 +285,7 @@ export default function PortalPrincipal() {
           .hero-panel { order: -1; }
         }
         @media (max-width: 560px) {
+          .landing-nav-inner { min-height:64px; }.landing-brand small,.landing-nav-link.secondary { display:none; }.landing-nav-link { min-height:38px; padding:0 12px; }
           .topbar { font-size: 11px; }
           .hero { padding: 34px 16px 48px; }
           .hero-panel-grid { grid-template-columns: 1fr; }
@@ -266,6 +294,7 @@ export default function PortalPrincipal() {
           .sponsors-track { gap: 16px; }
         .sponsor-logo { padding: 12px 18px; font-size: 12px; }
         }
+        @media (prefers-reduced-motion:reduce) { .guest-command::before { animation:none; }.guest-command,.guest-command:hover,.guest-command-card,.guest-command-card:hover,.guest-command-image,.guest-command-card:hover .guest-command-image { transform:none; transition:none; } }
         @media (max-width: 900px) { .demo-grid, .plans-grid { grid-template-columns:1fr; } .showcase-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } .plan-card.featured { transform:none; } }
       `}} />
 
@@ -277,6 +306,22 @@ export default function PortalPrincipal() {
           <span><i className="fa fa-trophy"></i> GAME-LEGAL — ¡DONDE NACEN LAS LEYENDAS! FORJA TU DESTINO EN LA CANCHA &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i className="fa fa-futbol"></i> DEMUESTRA TU TALENTO — GLORIA, TRANSPARENCIA Y PASIÓN 🔥</span>
         </div>
       </div>
+
+      <nav className="landing-nav" aria-label="Navegacion principal">
+        <div className="landing-nav-inner">
+          <Link href="/" className="landing-brand">
+            <span className="landing-brand-mark"><i className="fa fa-trophy" /></span>
+            <span><strong>Game-Legal</strong><small>Control deportivo profesional</small></span>
+          </Link>
+          <div className="landing-nav-actions">
+            <a href="#como-funciona" className="landing-nav-link secondary">Plataforma</a>
+            <a href="#torneos" className="landing-nav-link secondary">Torneos</a>
+            <button type="button" onClick={() => sesionActiva ? router.push("/dashboard/torneos") : setShowLogin(true)} className="landing-nav-link primary">
+              {sesionActiva ? "Volver al panel" : "Acceso organizador"}
+            </button>
+          </div>
+        </div>
+      </nav>
 
       <section className="hero">
         <div className="hero-bg"></div>
@@ -312,15 +357,30 @@ export default function PortalPrincipal() {
               <a href="#como-funciona" className="btn-secondary"><i className="fa fa-play"></i> Como funciona</a>
             </div>
           </div>
-          <PublicSpotlightCard className="hero-panel reveal premium-motion-card" style={{ transitionDelay: '0.12s' }}>
-            <div className="section-label">Centro publico</div>
-            <h2 style={{ fontSize: 'clamp(24px, 4vw, 42px)', lineHeight: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Gestion deportiva en vivo</h2>
-            <p style={{ color: 'var(--gray)', lineHeight: 1.7, fontSize: 14 }}>Consulta torneos, posiciones, goleadores, partidos y comunicados desde una experiencia limpia y preparada para cualquier pantalla.</p>
-            <div className="hero-panel-grid">
-              <div className="hero-mini-card"><strong>{torneosActivos.length}</strong><span>Torneos activos</span></div>
-              <div className="hero-mini-card"><strong>{visitas || 0}</strong><span>Visitas publicas</span></div>
-              <div className="hero-mini-card"><strong>24/7</strong><span>Consulta en linea</span></div>
-              <div className="hero-mini-card"><strong>GL</strong><span>Identidad oficial</span></div>
+          <PublicSpotlightCard className="hero-panel guest-command reveal premium-motion-card" style={{ transitionDelay: '0.12s' }}>
+            <div className="guest-command-top">
+              <div className="guest-command-brand">G-L Arena<span>Centro de competicion digital</span></div>
+              <div className="guest-command-tools" aria-hidden="true"><span><i className="fa fa-signal" /></span><span><i className="fa fa-shield-halved" /></span><span><i className="fa fa-grip" /></span></div>
+            </div>
+            <div className="guest-command-grid">
+              {FEATURE_MODULES.map((module, index) => (
+                <Link
+                  href={torneoDemo ? `/torneo/${torneoDemo.slug}` : "#demo-title"}
+                  key={module.title}
+                  className="guest-command-card"
+                  onClick={() => torneoDemo && void registrarConversion("demo_open", { tournament_id: torneoDemo.id, tournament_name: torneoDemo.name, source: "hero_visual_module", module: module.eyebrow })}
+                >
+                  <Image src={module.image} alt={module.title} fill priority={index === 0} sizes="(max-width: 900px) 44vw, 210px" className="guest-command-image" />
+                  <span className="guest-command-shade" />
+                  <span className="guest-command-copy"><span><small><i className={`fa ${module.icon}`} /> {module.eyebrow}</small><strong>{module.title}</strong></span><span className="guest-command-arrow"><i className="fa fa-arrow-up-right-from-square" /></span></span>
+                </Link>
+              ))}
+            </div>
+            <div className="guest-command-footer">
+              <div className="live"><small>Estado del sistema</small><strong>En linea</strong></div>
+              <div><small>Torneos</small><b>{torneosActivos.length}</b></div>
+              <div><small>Visitas</small><b>{visitas || 0}</b></div>
+              <div><small>Acceso</small><strong>24/7</strong></div>
             </div>
           </PublicSpotlightCard>
         </div>
