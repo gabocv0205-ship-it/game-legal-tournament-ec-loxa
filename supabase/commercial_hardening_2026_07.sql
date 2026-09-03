@@ -51,7 +51,8 @@ grant update (
 ) on public.profiles to authenticated;
 
 -- Vista minima: la pagina publica solo puede leer enlaces sociales del torneo.
-create or replace view public.public_tournament_social_links as
+create or replace view public.public_tournament_social_links
+with (security_invoker = true) as
 select
   t.id as tournament_id,
   t.slug,
@@ -67,8 +68,7 @@ from public.tournaments t
 left join public.profiles p on p.id = t.user_id
 where t.status is distinct from 'deleted';
 
-revoke all on public.public_tournament_social_links from public;
-grant select on public.public_tournament_social_links to anon, authenticated;
+revoke all on public.public_tournament_social_links from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Finanzas operativas del torneo. No comparte team_id ni financial_ledger.

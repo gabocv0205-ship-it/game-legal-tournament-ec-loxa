@@ -48,12 +48,11 @@ export default function PortalTorneoDinamico() {
         }
 
         setTorneoActual(tourney);
-        const { data: socialLinks } = await supabase
-          .from("public_tournament_social_links")
-          .select("full_name, facebook_url, instagram_url, whatsapp_url, tiktok_url, youtube_url, website_url, other_social_url")
-          .eq("slug", slug)
-          .maybeSingle();
-        setRedesSociales(socialLinks || {});
+        const socialResponse = await fetch(
+          `/api/public/tournaments/${encodeURIComponent(String(slug))}/social-links`,
+        ).catch(() => null);
+        const socialPayload = socialResponse?.ok ? await socialResponse.json() : null;
+        setRedesSociales(socialPayload?.socialLinks || {});
 
         const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tourney.id);
         setEquipos(teams || []);

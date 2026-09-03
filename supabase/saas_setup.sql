@@ -335,12 +335,13 @@ create policy players_manager_select
 revoke select on public.players from anon;
 grant select on public.players to authenticated;
 
-create or replace view public.public_players as
+create or replace view public.public_players
+with (security_invoker = true) as
   select id, tournament_id, team_id, full_name, photo_url
   from public.players;
 
-revoke all on public.public_players from public;
-grant select on public.public_players to anon, authenticated;
+revoke all on public.public_players from public, anon, authenticated;
+grant select on public.public_players to authenticated;
 
 drop policy if exists tournament_identity_upload on storage.objects;
 create policy tournament_identity_upload

@@ -23,9 +23,13 @@ alter table public.players
 alter table public.matches
   add column if not exists notes text;
 
-create or replace view public.public_players as
+create or replace view public.public_players
+with (security_invoker = true) as
   select id, tournament_id, team_id, full_name, photo_url
   from public.players;
+
+revoke all on public.public_players from public, anon, authenticated;
+grant select on public.public_players to authenticated;
 
 create or replace function public.create_owned_tournament(
   p_name text,

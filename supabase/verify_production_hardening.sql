@@ -40,3 +40,18 @@ left join expected e on e.tablename = p.tablename and e.policyname = p.policynam
 where p.schemaname = 'public'
   and p.tablename in ('tournaments','teams','players','matches','match_events','payments')
   and e.policyname is null;
+
+-- Debe devolver cero filas. Toda vista expuesta debe respetar permisos/RLS del invocador.
+select
+  n.nspname as schema_name,
+  c.relname as vista_insegura
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relkind = 'v'
+  and not coalesce(c.reloptions, array[]::text[]) @> array['security_invoker=true'];
+
+-- Debe devolver false para anon y true para authenticated.
+select
+  has_table_privilege('anon', 'public.public_players', 'select') as anon_puede_leer_jugadores,
+  has_table_privilege('authenticated', 'public.public_players', 'select') as usuario_autenticado_puede_leer;

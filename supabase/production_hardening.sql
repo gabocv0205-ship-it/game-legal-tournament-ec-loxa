@@ -97,6 +97,13 @@ using (public.can_manage_tournament(tournament_id, 'read'));
 revoke select on public.players from anon;
 grant select on public.players to authenticated;
 alter view if exists public.public_players set (security_invoker = true);
+do $$
+begin
+  if to_regclass('public.public_players') is not null then
+    execute 'revoke all on public.public_players from public, anon, authenticated';
+    execute 'grant select on public.public_players to authenticated';
+  end if;
+end $$;
 
 drop policy if exists matches_public_read on public.matches;
 create policy matches_public_read on public.matches for select to anon
@@ -418,7 +425,8 @@ create table if not exists public.app_error_log (
 alter table public.app_error_log enable row level security;
 revoke all on public.app_error_log from anon, authenticated;
 
-create or replace view public.security_policy_audit as
+create or replace view public.security_policy_audit
+with (security_invoker = true) as
 select schemaname, tablename, policyname, roles, cmd, qual, with_check
 from pg_policies where schemaname in ('public', 'storage')
 order by schemaname, tablename, policyname;
